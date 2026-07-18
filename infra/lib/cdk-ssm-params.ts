@@ -11,5 +11,6 @@
 // two different path strings.
 export const CDK_SSM_PARAMS = {
   authUserPoolId: '/ink-lingo-cdk/auth/user-pool-id',
-  authUserPoolClientId: '/ink-lingo-cdk/auth/user-pool-client-id'
+  authUserPoolClientId: '/ink-lingo-cdk/auth/user-pool-client-id',
+  frontendCloudFrontDomain: '/ink-lingo-cdk/frontend/cloudfront-domain'
 } as const;

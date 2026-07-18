@@ -2,6 +2,7 @@
 import * as cdk from 'aws-cdk-lib/core';
 import { AuthStack } from '../lib/stacks/auth-stack';
 import { ApiStack } from '../lib/stacks/api-stack';
+import { FrontendStack } from '../lib/stacks/frontend-stack';
 import { buildSelectedStacks } from '../lib/stack-selector';
 
 // eu-central-1 (Frankfurt): the sole user is in Poland, and
@@ -14,13 +15,17 @@ const app = new cdk.App();
 
 buildSelectedStacks(app, {
   factories: {
+    FrontendStack: () => new FrontendStack(app, 'FrontendStack', { env }),
     AuthStack: () => new AuthStack(app, 'AuthStack', { env }),
     ApiStack: () => new ApiStack(app, 'ApiStack', { env })
   },
-  // ApiStack reads AuthStack's output via SSM Parameter Store (not a
-  // live construct reference), so CDK can't auto-detect this ordering —
-  // see lib/stack-selector.ts.
+  // Both AuthStack (callback URLs) and ApiStack (CORS origin) read
+  // FrontendStack's CloudFront domain via SSM Parameter Store, and
+  // ApiStack separately reads AuthStack's Cognito IDs the same way —
+  // none of these are live construct references, so CDK can't
+  // auto-detect the ordering. See lib/stack-selector.ts.
   dependencies: {
-    ApiStack: ['AuthStack']
+    AuthStack: ['FrontendStack'],
+    ApiStack: ['AuthStack', 'FrontendStack']
   }
 });

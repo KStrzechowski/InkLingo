@@ -6,11 +6,14 @@
     "watch": "tsc -w",
     "test": "jest",
     "cdk": "cdk",
+    "diff:frontend": "cdk diff FrontendStack -c stack=FrontendStack",
     "diff:auth": "cdk diff AuthStack -c stack=AuthStack",
     "diff:api": "cdk diff ApiStack -c stack=ApiStack",
+    "deploy:frontend": "cdk deploy FrontendStack -c stack=FrontendStack",
     "deploy:auth": "cdk deploy AuthStack -c stack=AuthStack",
     "deploy:api": "cdk deploy ApiStack -c stack=ApiStack",
-    "deploy:all": "cdk deploy --all"
+    "deploy:all": "cdk deploy --all",
+    "write-frontend-env": "node scripts/write-frontend-env.mjs"
   },
   "devDependencies": {
     "@swc/core": "^1.15.0",

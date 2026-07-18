@@ -11,8 +11,8 @@ import * as path from 'node:path';
 import { CDK_SSM_PARAMS } from '../cdk-ssm-params';
 
 export interface ApiConstructProps {
-  // Tightened to the real CloudFront domain once frontend-construct.ts
-  // exists; defaults to '*' so local dev keeps working meanwhile.
+  // Overrides the SSM-derived CloudFront origin below — mainly for
+  // local/manual testing; leave unset in normal deploys.
   allowedOrigin?: string;
 }
 
@@ -31,15 +31,19 @@ export class ApiConstruct extends Construct {
 
     const region = Stack.of(this).region;
     const account = Stack.of(this).account;
-    const allowedOrigin = props.allowedOrigin ?? '*';
 
     // Resolved by CloudFormation at this stack's own deploy time — no
-    // custom lookup code, no props from bin/infra.ts. AuthStack must
-    // have been deployed at least once so the parameters exist.
+    // custom lookup code, no props from bin/infra.ts. AuthStack/
+    // FrontendStack must have been deployed at least once so the
+    // parameters exist.
     const userPoolId = ssm.StringParameter.valueForStringParameter(this, CDK_SSM_PARAMS.authUserPoolId);
     const userPoolClientId = ssm.StringParameter.valueForStringParameter(
       this, CDK_SSM_PARAMS.authUserPoolClientId
     );
+    const cloudFrontDomain = ssm.StringParameter.valueForStringParameter(
+      this, CDK_SSM_PARAMS.frontendCloudFrontDomain
+    );
+    const allowedOrigin = props.allowedOrigin ?? `https://${cloudFrontDomain}`;
 
     const userPool = cognito.UserPool.fromUserPoolId(this, 'ImportedUserPool', userPoolId);
     const userPoolClient = cognito.UserPoolClient.fromUserPoolClientId(

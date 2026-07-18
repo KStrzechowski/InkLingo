@@ -13,7 +13,17 @@ export class AuthStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const auth = new AuthConstruct(this, 'Auth');
+    // Same SSM cross-stack pattern as ApiStack reading this stack's own
+    // outputs — resolved by CloudFormation at THIS stack's deploy time,
+    // so FrontendStack must have been deployed at least once already.
+    const cloudFrontDomain = ssm.StringParameter.valueForStringParameter(
+      this, CDK_SSM_PARAMS.frontendCloudFrontDomain
+    );
+
+    const auth = new AuthConstruct(this, 'Auth', {
+      additionalCallbackUrls: [`https://${cloudFrontDomain}/callback`],
+      additionalLogoutUrls: [`https://${cloudFrontDomain}/`]
+    });
     this.userPool = auth.userPool;
     this.userPoolClient = auth.userPoolClient;
     this.hostedUiDomain = auth.hostedUiDomain;
