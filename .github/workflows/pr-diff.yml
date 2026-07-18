@@ -1,0 +1,63 @@
+name: PR Diff
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Trust condition is scoped to `pull_request` runs only, and can
+          # only assume the read-only cdk diff/lookup path — see
+          # infra/lib/constructs/github-oidc-construct.ts.
+          role-to-assume: ${{ vars.AWS_DIFF_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Build backend
+        working-directory: backend
+        run: |
+          npm ci
+          npm run build:ts
+
+      - name: Install infra deps
+        working-directory: infra
+        run: npm ci
+
+      - name: Package backend for Lambda
+        working-directory: infra
+        run: node scripts/package-backend.mjs
+
+      - name: Write frontend env from deployed stack outputs
+        working-directory: infra
+        run: node scripts/write-frontend-env.mjs
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Diff
+        working-directory: infra
+        run: |
+          echo '## CDK Diff' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          # Same three stacks deploy.yml actually deploys — GithubOidcStack
+          # is human-diffed/deployed only (npm run diff:github-oidc),
+          # never shown here, so this summary never implies a change that
+          # the merge pipeline won't actually apply.
+          npx cdk diff FrontendStack AuthStack ApiStack >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

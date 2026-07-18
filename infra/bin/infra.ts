@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib/core';
 import { AuthStack } from '../lib/stacks/auth-stack';
 import { ApiStack } from '../lib/stacks/api-stack';
 import { FrontendStack } from '../lib/stacks/frontend-stack';
+import { GithubOidcStack } from '../lib/stacks/github-oidc-stack';
 import { buildSelectedStacks } from '../lib/stack-selector';
 
 // eu-central-1 (Frankfurt): the sole user is in Poland, and
@@ -17,7 +18,8 @@ buildSelectedStacks(app, {
   factories: {
     FrontendStack: () => new FrontendStack(app, 'FrontendStack', { env }),
     AuthStack: () => new AuthStack(app, 'AuthStack', { env }),
-    ApiStack: () => new ApiStack(app, 'ApiStack', { env })
+    ApiStack: () => new ApiStack(app, 'ApiStack', { env }),
+    GithubOidcStack: () => new GithubOidcStack(app, 'GithubOidcStack', { env })
   },
   // Both AuthStack (callback URLs) and ApiStack (CORS origin) read
   // FrontendStack's CloudFront domain via SSM Parameter Store, and

@@ -1,0 +1,64 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# id-token: write is what lets GitHub mint the short-lived OIDC token
+# aws-actions/configure-aws-credentials exchanges for AWS credentials —
+# no long-lived AWS keys are ever stored as GitHub secrets.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # matches the Lambda runtime (NODEJS_22_X)
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Set once, after GithubOidcStack is deployed: GitHub repo ->
+          # Settings -> Secrets and variables -> Actions -> Variables.
+          # Not a secret — the role ARN alone grants nothing; the trust
+          # policy's `sub` condition (scoped to this repo, ref/refs/heads/main)
+          # is what actually restricts who can assume it.
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Build backend
+        working-directory: backend
+        run: |
+          npm ci
+          npm run build:ts
+
+      - name: Install infra deps
+        working-directory: infra
+        run: npm ci
+
+      - name: Package backend for Lambda
+        working-directory: infra
+        run: node scripts/package-backend.mjs
+
+      - name: Write frontend env from deployed stack outputs
+        working-directory: infra
+        run: node scripts/write-frontend-env.mjs
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy
+        working-directory: infra
+        # Explicit stack names, not --all: GithubOidcStack grants the very
+        # IAM roles this pipeline runs as, and stays human-deployed-only
+        # (see infra/package.json's deploy:github-oidc) — never part of
+        # the automated merge-to-main path.
+        run: npx cdk deploy FrontendStack AuthStack ApiStack --require-approval never
