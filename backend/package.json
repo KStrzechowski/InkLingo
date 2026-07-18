@@ -1,6 +1,6 @@
 {
   "type": "module",
-  "name": "bootstrap-scaffold-tmp",
+  "name": "ink-lingo-backend",
   "version": "1.0.0",
   "description": "This project was bootstrapped with Fastify-CLI.",
   "main": "app.ts",
@@ -19,18 +19,22 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "fastify": "^5.0.0",
-    "fastify-plugin": "^5.0.0",
+    "@aws-sdk/client-ssm": "^3.1090.0",
     "@fastify/autoload": "^6.0.0",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/rate-limit": "^11.1.0",
     "@fastify/sensible": "^6.0.0",
-    "fastify-cli": "^8.0.0"
+    "@neondatabase/serverless": "^1.1.0",
+    "fastify": "^5.0.0",
+    "fastify-cli": "^8.0.0",
+    "fastify-plugin": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
     "c8": "^11.0.0",
-    "ts-node": "^10.4.0",
     "concurrently": "^9.0.0",
     "fastify-tsconfig": "^3.0.0",
+    "ts-node": "^10.4.0",
     "typescript": "~5.9.2"
   }
 }
