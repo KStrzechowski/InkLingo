@@ -58,7 +58,7 @@ jobs:
         run: |
           echo '## CDK Diff — review before approving the deploy job below' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          npx cdk diff FrontendStack AuthStack ApiStack >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+          npx cdk diff InkLingo-FrontendStack InkLingo-AuthStack InkLingo-ApiStack >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   # Gated by the "production" GitHub Environment's required reviewers —
@@ -117,4 +117,4 @@ jobs:
         # IAM roles this pipeline runs as, and stays human-deployed-only
         # (see infra/package.json's deploy:github-oidc) — never part of
         # the automated merge-to-main path.
-        run: npx cdk deploy FrontendStack AuthStack ApiStack --require-approval never
+        run: npx cdk deploy InkLingo-FrontendStack InkLingo-AuthStack InkLingo-ApiStack --require-approval never

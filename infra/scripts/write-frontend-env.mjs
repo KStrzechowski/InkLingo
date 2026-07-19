@@ -25,9 +25,9 @@ function stackOutputs (stackName) {
   return Object.fromEntries(outputs.map((o) => [o.OutputKey, o.OutputValue]))
 }
 
-const frontendOutputs = stackOutputs('FrontendStack')
-const authOutputs = stackOutputs('AuthStack')
-const apiOutputs = stackOutputs('ApiStack')
+const frontendOutputs = stackOutputs('InkLingo-FrontendStack')
+const authOutputs = stackOutputs('InkLingo-AuthStack')
+const apiOutputs = stackOutputs('InkLingo-ApiStack')
 
 const env = {
   VITE_API_BASE_URL: apiOutputs.ApiUrl.replace(/\/$/, ''),
