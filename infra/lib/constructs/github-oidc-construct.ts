@@ -61,8 +61,21 @@ export class GithubOidcConstruct extends Construct {
     // Separate role, not a widened trust on deployRole: widening
     // deployRole to also cover `pull_request` would let any PR —
     // including future ones from less-trusted contributors — assume a
-    // role that can actually deploy. This one can only assume the same
-    // bootstrap roles for a read-only `cdk diff`.
+    // role that can actually deploy.
+    //
+    // This role must NOT be able to assume the cdk-*-deploy-role or
+    // cdk-*-file-publishing-role: those grant effectively full
+    // CloudFormation/IAM/S3/Lambda permissions, so `sts:AssumeRole` on
+    // them is a deploy capability regardless of what the workflow *says*
+    // it runs (`cdk diff` vs `cdk deploy` is just a CLI arg — nothing at
+    // the IAM layer enforces it). A PR that gets arbitrary code to run in
+    // this job (e.g. via a malicious postinstall script) would otherwise
+    // be able to `cdk deploy` with these credentials.
+    //
+    // `cdk diff` only needs to (a) read the deployed stack's template to
+    // compare against, and (b) resolve context lookups (AZs, SSM params,
+    // etc.) via the bootstrap lookup-role, which is intentionally
+    // provisioned as read-only.
     this.diffRole = new iam.Role(this, 'GitHubActionsDiffRole', {
       roleName: 'GitHubActionsDiffRole',
       assumedBy: new iam.OpenIdConnectPrincipal(provider, {
@@ -73,7 +86,23 @@ export class GithubOidcConstruct extends Construct {
     });
     this.diffRole.addToPolicy(new iam.PolicyStatement({
       actions: ['sts:AssumeRole'],
-      resources: cdkBootstrapRoleArns
+      resources: [cdkBootstrapRoleArns[2]] // lookup-role only, read-only by design
+    }));
+    // Wildcarded across all stacks in the account/region, not pinned to
+    // today's three — these actions are read-only (Describe*/GetTemplate/
+    // List*), so widening the resource scope only lets the role read
+    // metadata for future stacks too; it can't create, modify, or delete
+    // anything. Pinning to explicit stack ARNs here would mean redeploying
+    // GithubOidcStack every time a new stack is added, for no real
+    // security benefit given these actions can't mutate state.
+    this.diffRole.addToPolicy(new iam.PolicyStatement({
+      actions: [
+        'cloudformation:DescribeStacks',
+        'cloudformation:GetTemplate',
+        'cloudformation:DescribeStackEvents',
+        'cloudformation:ListStacks'
+      ],
+      resources: [`arn:aws:cloudformation:${region}:${account}:stack/*/*`]
     }));
   }
 }
