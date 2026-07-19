@@ -11,7 +11,11 @@ export class GithubOidcStack extends cdk.Stack {
 
     const oidc = new GithubOidcConstruct(this, 'GithubOidc', {
       githubOrg: 'KStrzechowski',
-      githubRepo: 'InkLingo'
+      githubRepo: 'InkLingo',
+      // Immutable numeric owner/repo IDs — confirmed via CloudTrail
+      // (the actual sub claim GitHub sends for this repo's runs).
+      githubOrgId: '57865141',
+      githubRepoId: '1305080748'
     });
 
     new cdk.CfnOutput(this, 'GitHubActionsDeployRoleArn', { value: oidc.deployRole.roleArn });

@@ -5,6 +5,17 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 export interface GithubOidcConstructProps {
   githubOrg: string;
   githubRepo: string;
+  // GitHub's immutable numeric owner/repo IDs (rolled out 2026-04-23:
+  // https://github.blog/changelog/2026-04-23-immutable-subject-claims-for-github-actions-oidc-tokens/).
+  // This repo is on the new format, confirmed via CloudTrail — the real
+  // `sub` claim GitHub sends is `repo:OWNER@OWNER_ID/REPO@REPO_ID:...`,
+  // not the plain `repo:OWNER/REPO:...` most existing tutorials assume.
+  // Pinning to these IDs (not just names) is the security upgrade this
+  // GitHub feature is actually for: names can be renamed/transferred,
+  // IDs can't, so this is what protects the trust policy from a
+  // repo-rename hijack, not merely what makes matching work.
+  githubOrgId: string;
+  githubRepoId: string;
 }
 
 const CDK_BOOTSTRAP_QUALIFIER = 'hnb659fds';
@@ -18,7 +29,7 @@ export class GithubOidcConstruct extends Construct {
 
     const region = Stack.of(this).region;
     const account = Stack.of(this).account;
-    const repoSlug = `${props.githubOrg}/${props.githubRepo}`;
+    const repoSlug = `${props.githubOrg}@${props.githubOrgId}/${props.githubRepo}@${props.githubRepoId}`;
 
     // Confirmed via `aws iam list-open-id-connect-providers` before
     // writing this that no GitHub provider exists yet in this account —
