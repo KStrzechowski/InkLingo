@@ -17,8 +17,13 @@ function stackOutputs (stackName) {
       `aws cloudformation describe-stacks --stack-name ${stackName} --region ${region} --query "Stacks[0].Outputs" --output json`,
       { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }
     )
-  } catch {
-    console.error(`${stackName} isn't deployed yet in ${region} — deploy it first.`)
+  } catch (err) {
+    // Surface the real AWS CLI error (permissions, wrong region, etc.)
+    // instead of always assuming "not deployed" — that swallowed a real
+    // AccessDenied once and made a permissions bug look like a
+    // deployment-ordering issue.
+    const stderr = err.stderr?.toString() ?? err.message
+    console.error(`Failed to read outputs for ${stackName} in ${region}:\n${stderr}`)
     process.exit(1)
   }
   const outputs = JSON.parse(json)

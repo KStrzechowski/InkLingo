@@ -75,6 +75,19 @@ export class GithubOidcConstruct extends Construct {
       actions: ['sts:AssumeRole'],
       resources: cdkBootstrapRoleArns
     }));
+    // Needed for scripts/write-frontend-env.mjs, which calls
+    // `aws cloudformation describe-stacks` directly rather than through
+    // the CDK CLI. `cdk deploy`/`cdk diff` don't need this grant
+    // themselves — they internally chain through the bootstrap roles
+    // above — but a plain AWS CLI call from a script runs as this role's
+    // own identity, which otherwise has zero direct CloudFormation
+    // permissions. Read-only, and harmless to add regardless: this role
+    // already has far more effective power via the bootstrap roles it
+    // can assume.
+    this.deployRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['cloudformation:DescribeStacks'],
+      resources: [`arn:aws:cloudformation:${region}:${account}:stack/*/*`]
+    }));
 
     // Separate role, not a widened trust on deployRole: widening
     // deployRole to also cover `pull_request` would let any PR —
