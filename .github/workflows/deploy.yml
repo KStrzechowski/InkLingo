@@ -12,8 +12,64 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  # Runs immediately on every push to main, no approval gate — this is
+  # what the deploy job's reviewer actually reads before approving, so
+  # approval isn't a blind click.
+  diff:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DIFF_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Build backend
+        working-directory: backend
+        run: |
+          npm ci
+          npm run build:ts
+
+      - name: Install infra deps
+        working-directory: infra
+        run: npm ci
+
+      - name: Package backend for Lambda
+        working-directory: infra
+        run: node scripts/package-backend.mjs
+
+      - name: Write frontend env from deployed stack outputs
+        working-directory: infra
+        run: node scripts/write-frontend-env.mjs
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Diff
+        working-directory: infra
+        run: |
+          echo '## CDK Diff — review before approving the deploy job below' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          npx cdk diff FrontendStack AuthStack ApiStack >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # Gated by the "production" GitHub Environment's required reviewers —
+  # this job pauses here until manually approved in the Actions UI, even
+  # though it already triggered on a push to main. Rebuilds independently
+  # rather than sharing artifacts with the diff job, same pattern as
+  # pr-diff.yml, to avoid artifact-plumbing complexity for a solo PoC.
+  deploy:
+    needs: diff
+    runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v4
 
