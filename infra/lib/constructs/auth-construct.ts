@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { Stack } from 'aws-cdk-lib/core';
+import { RemovalPolicy, Stack } from 'aws-cdk-lib/core';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 
 export interface AuthConstructProps {
@@ -26,7 +26,13 @@ export class AuthConstruct extends Construct {
       autoVerify: { email: true },
       standardAttributes: {
         email: { required: true, mutable: true }
-      }
+      },
+      // CDK's default for UserPool is RETAIN (protects real user data
+      // from accidental deletion) — deliberately overridden for this
+      // disposable PoC stack, matching the S3 bucket's DESTROY policy in
+      // frontend-construct.ts, so `cdk destroy AuthStack` actually tears
+      // the pool down instead of leaving it orphaned.
+      removalPolicy: RemovalPolicy.DESTROY
     });
 
     this.userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {

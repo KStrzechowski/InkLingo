@@ -1,6 +1,7 @@
 import { Construct } from 'constructs';
-import { Duration, Stack } from 'aws-cdk-lib/core';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib/core';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
@@ -50,6 +51,15 @@ export class ApiConstruct extends Construct {
       this, 'ImportedUserPoolClient', userPoolClientId
     );
 
+    // CDK's default LogGroup removal policy is RETAIN — overridden for
+    // this disposable PoC stack so `cdk destroy ApiStack` doesn't leave
+    // an orphaned log group behind. Short retention too, since nothing
+    // here needs indefinite log history.
+    const logGroup = new logs.LogGroup(this, 'BackendFunctionLogGroup', {
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: RemovalPolicy.DESTROY
+    });
+
     this.lambdaFunction = new lambda.Function(this, 'BackendFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       architecture: lambda.Architecture.X86_64,
@@ -58,6 +68,7 @@ export class ApiConstruct extends Construct {
       // @fastify/autoload's directory scan survives.
       code: lambda.Code.fromAsset(path.join(__dirname, '..', '..', '.build', 'lambda')),
       handler: 'run.sh',
+      logGroup,
       layers: [
         lambda.LayerVersion.fromLayerVersionArn(this, 'LwaLayer', lwaLayerArn(region))
       ],

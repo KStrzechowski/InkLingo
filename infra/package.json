@@ -15,6 +15,12 @@
     "deploy:api": "cdk deploy ApiStack -c stack=ApiStack",
     "deploy:github-oidc": "cdk deploy GithubOidcStack -c stack=GithubOidcStack",
     "deploy:all": "cdk deploy --all",
+    "destroy:frontend": "cdk destroy FrontendStack -c stack=FrontendStack",
+    "destroy:auth": "cdk destroy AuthStack -c stack=AuthStack",
+    "destroy:api": "cdk destroy ApiStack -c stack=ApiStack",
+    "destroy:github-oidc": "cdk destroy GithubOidcStack -c stack=GithubOidcStack",
+    "destroy:app": "cdk destroy ApiStack AuthStack FrontendStack",
+    "destroy:all": "cdk destroy --all",
     "write-frontend-env": "node scripts/write-frontend-env.mjs"
   },
   "devDependencies": {
