@@ -53,16 +53,23 @@ export class GithubOidcConstruct extends Construct {
       `arn:aws:iam::${account}:role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-lookup-role-${account}-${region}`
     ];
 
-    // Trust condition scoped to pushes on main only — GitHub's `sub`
-    // claim format differs for branch-ref vs. pull_request runs, so this
-    // will never match a PR-triggered run.
+    // Trust condition scoped to the deploy.yml `deploy` job specifically.
+    // GitHub changes the sub claim format for any job that targets a
+    // GitHub Environment (`environment: production` in the workflow) —
+    // it becomes `repo:OWNER/REPO:environment:ENV_NAME`, NOT the
+    // ref-based `repo:OWNER/REPO:ref:refs/heads/BRANCH` format a plain
+    // push-triggered job gets. Confirmed via CloudTrail: the real claim
+    // was `repo:...:environment:production`, not `:ref:refs/heads/main`
+    // — the deploy job runs with `environment: production` (that's the
+    // whole point of the approval gate), so this is the only sub shape
+    // it will ever actually present.
     this.deployRole = new iam.Role(this, 'GitHubActionsDeployRole', {
       roleName: 'GitHubActionsDeployRole',
       assumedBy: new iam.OpenIdConnectPrincipal(provider, {
         StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
-        StringLike: { 'token.actions.githubusercontent.com:sub': `repo:${repoSlug}:ref:refs/heads/main` }
+        StringLike: { 'token.actions.githubusercontent.com:sub': `repo:${repoSlug}:environment:production` }
       }),
-      description: 'Assumed by GitHub Actions on pushes to main to run cdk deploy'
+      description: 'Assumed by GitHub Actions on the environment-gated deploy job to run cdk deploy'
     });
     this.deployRole.addToPolicy(new iam.PolicyStatement({
       actions: ['sts:AssumeRole'],
