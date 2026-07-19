@@ -74,9 +74,14 @@ export class ApiConstruct extends Construct {
       ],
       timeout: Duration.seconds(29), // API Gateway HTTP API's own hard cap
       memorySize: 256,
-      // The free, precise circuit breaker from the risk register — caps
-      // both blast radius and worst-case AWS bill of a request flood.
-      reservedConcurrentExecutions: 5,
+      // The risk register calls for reserved concurrency as a free,
+      // precise circuit breaker on request floods — but this account's
+      // actual Lambda concurrency limit in eu-central-1 is only 10 total
+      // (confirmed via `aws lambda get-account-settings`), and AWS
+      // requires 10 to always stay unreserved. There's no room to
+      // reserve anything until that quota is raised (a standard AWS
+      // Support request) — API Gateway's own throttling below is the
+      // only blast-radius cap in effect until then.
       environment: {
         AWS_LWA_PORT: '8080',
         PORT: '8080',
