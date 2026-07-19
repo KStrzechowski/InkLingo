@@ -80,9 +80,20 @@ export class GithubOidcConstruct extends Construct {
       roleName: 'GitHubActionsDiffRole',
       assumedBy: new iam.OpenIdConnectPrincipal(provider, {
         StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
-        StringLike: { 'token.actions.githubusercontent.com:sub': `repo:${repoSlug}:pull_request` }
+        // Both trigger contexts that actually run `cdk diff` with this
+        // role: pr-diff.yml (sub ends in `:pull_request`) and
+        // deploy.yml's own pre-approval diff job, which runs on a push
+        // to main (sub is `:ref:refs/heads/main` there, same as the
+        // deploy role's condition) — safe to grant both since this
+        // role's attached permissions stay read-only-only either way.
+        StringLike: {
+          'token.actions.githubusercontent.com:sub': [
+            `repo:${repoSlug}:pull_request`,
+            `repo:${repoSlug}:ref:refs/heads/main`
+          ]
+        }
       }),
-      description: 'Assumed by GitHub Actions on pull requests to run cdk diff (read-only)'
+      description: 'Assumed by GitHub Actions on PRs and pushes to main to run cdk diff (read-only)'
     });
     this.diffRole.addToPolicy(new iam.PolicyStatement({
       actions: ['sts:AssumeRole'],
