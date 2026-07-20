@@ -203,22 +203,22 @@ No existing data to migrate — this is the first schema InkLingo has ever had.
 
 #### Automated
 
-- [x] 1.1 Dependencies install cleanly: `npm install`
-- [x] 1.2 Migration CLI is reachable and reports status with zero migrations applied
-- [x] 1.3 Type checking passes: `npm run build:ts`
+- [x] 1.1 Dependencies install cleanly: `npm install` — f5b78ee
+- [x] 1.2 Migration CLI is reachable and reports status with zero migrations applied — f5b78ee
+- [x] 1.3 Type checking passes: `npm run build:ts` — f5b78ee
 
 #### Manual
 
-- [x] 1.4 `npm run migrate:create test_migration` scaffolds a file using the confirmed working module format, then is deleted
+- [x] 1.4 `npm run migrate:create test_migration` scaffolds a file using the confirmed working module format, then is deleted — f5b78ee
 
 ### Phase 2: Schema Migration
 
 #### Automated
 
-- [ ] 2.1 Migration applies cleanly: `npm run migrate:up`
-- [ ] 2.2 Migration reverses cleanly: `npm run migrate:down`
-- [ ] 2.3 Re-applying after rollback is idempotent
-- [ ] 2.4 Type checking passes: `npm run build:ts`
+- [x] 2.1 Migration applies cleanly: `npm run migrate:up`
+- [x] 2.2 Migration reverses cleanly: `npm run migrate:down`
+- [x] 2.3 Re-applying after rollback is idempotent
+- [x] 2.4 Type checking passes: `npm run build:ts`
 
 #### Manual
 
