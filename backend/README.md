@@ -18,6 +18,17 @@ For production mode
 
 Run the test cases.
 
+## Local environment variables
+
+`npm run dev`, `npm test`, and `npm run migrate:up`/`migrate:down` all read `NEON_DATABASE_URL` (and, for `dev`/`test`, `ANTHROPIC_API_KEY`) from a local `backend/.env` file (gitignored via `*.env`):
+
+```
+NEON_DATABASE_URL=postgresql://...
+ANTHROPIC_API_KEY=...
+```
+
+`src/app.ts` loads this file via `dotenv/config` on startup, so no shell export is required. In Lambda, these are instead resolved from SSM (see `src/plugins/config.ts`) — `.env` is local-dev only and is never deployed.
+
 ## Database migrations
 
 Schema migrations are managed by [`node-pg-migrate`](https://salsita.github.io/node-pg-migrate/), reusing the same `NEON_DATABASE_URL` env var the app already requires (no separate migration-only variable).
@@ -26,7 +37,7 @@ Schema migrations are managed by [`node-pg-migrate`](https://salsita.github.io/n
 - `npm run migrate:up` — apply all pending migrations
 - `npm run migrate:down` — roll back the most recently applied migration
 
-`migrate:up`/`migrate:down` read `NEON_DATABASE_URL` from a local `backend/.env` file (`NEON_DATABASE_URL=postgresql://...`, gitignored via `*.env`) rather than requiring it to be exported in your shell. `NEON_DATABASE_URL` can be either Neon's pooled or direct connection string — both were verified to work with `node-pg-migrate`'s locking mechanism, so no separate direct-connection variable is needed.
+`NEON_DATABASE_URL` can be either Neon's pooled or direct connection string — both were verified to work with `node-pg-migrate`'s locking mechanism, so no separate direct-connection variable is needed.
 
 ## Learn More
 

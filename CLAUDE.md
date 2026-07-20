@@ -15,7 +15,7 @@ InkLingo is a decoupled two-app project — `frontend/` and `backend/` are indep
 - `npm run build:ts` / `npm run watch:ts` — compile to `dist/`
 - `npm start` — build then run the compiled `dist/app.js`
 - `npm test` — compiles, then runs `node --test` with coverage over `test/**/*.ts`
-- Single test file: `npm run build:ts && tsc -p test/tsconfig.json && FASTIFY_AUTOLOAD_TYPESCRIPT=1 node --test --experimental-test-coverage --loader ts-node/esm test/routes/root.test.ts`
+- Single test file: `npm run build:ts && tsc -p test/tsconfig.json && cross-env FASTIFY_AUTOLOAD_TYPESCRIPT=1 node --import ./test/register-loader.mjs --test --experimental-test-coverage test/routes/root.test.ts`
 
 ### Frontend (`frontend/`, Vite + React + TypeScript)
 

@@ -2,7 +2,15 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "noEmit": false,
+    // This step only type-checks (see the "test" npm script) — it never
+    // needs to emit, and emitting here would redundantly recompile all of
+    // src/ into dist/ right after `build:ts` already did.
+    "noEmit": true,
+    // fastify-cli@8's helper.d.ts uses `export =` inside a `declare module`
+    // block, which verbatimModuleSyntax (../tsconfig.json) treats as an
+    // invalid module augmentation (TS2666). skipLibCheck is the standard,
+    // intended fix for a vendor .d.ts we don't control — it does not affect
+    // checking of our own src/test files, only third-party declarations.
     "skipLibCheck": true
   },
   "include": ["../src/**/*.ts", "**/*.ts"]

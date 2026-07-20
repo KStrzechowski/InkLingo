@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import * as path from 'node:path'
 import AutoLoad, { type AutoloadPluginOptions } from '@fastify/autoload'
 import { type FastifyPluginAsync } from 'fastify'
