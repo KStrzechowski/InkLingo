@@ -215,22 +215,22 @@ No existing data to migrate — this is the first schema InkLingo has ever had.
 
 #### Automated
 
-- [x] 2.1 Migration applies cleanly: `npm run migrate:up`
-- [x] 2.2 Migration reverses cleanly: `npm run migrate:down`
-- [x] 2.3 Re-applying after rollback is idempotent
-- [x] 2.4 Type checking passes: `npm run build:ts`
+- [x] 2.1 Migration applies cleanly: `npm run migrate:up` — 1ba534e
+- [x] 2.2 Migration reverses cleanly: `npm run migrate:down` — 1ba534e
+- [x] 2.3 Re-applying after rollback is idempotent — 1ba534e
+- [x] 2.4 Type checking passes: `npm run build:ts` — 1ba534e
 
 #### Manual
 
-- [ ] 2.5 Inspect the created tables and confirm they match the contract
+- [x] 2.5 Inspect the created tables and confirm they match the contract — 1ba534e
 
 ### Phase 3: Verification Tests
 
 #### Automated
 
-- [ ] 3.1 Full test suite passes: `npm test`
-- [ ] 3.2 New schema tests specifically pass
+- [x] 3.1 Full test suite passes: `npm test`
+- [x] 3.2 New schema tests specifically pass
 
 #### Manual
 
-- [ ] 3.3 Run the test suite twice in a row against the same database with no leftover-data failures
+- [x] 3.3 Run the test suite twice in a row against the same database with no leftover-data failures
