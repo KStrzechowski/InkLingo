@@ -228,9 +228,9 @@ No existing data to migrate — this is the first schema InkLingo has ever had.
 
 #### Automated
 
-- [x] 3.1 Full test suite passes: `npm test`
-- [x] 3.2 New schema tests specifically pass
+- [x] 3.1 Full test suite passes: `npm test` — b625099
+- [x] 3.2 New schema tests specifically pass — b625099
 
 #### Manual
 
-- [x] 3.3 Run the test suite twice in a row against the same database with no leftover-data failures
+- [x] 3.3 Run the test suite twice in a row against the same database with no leftover-data failures — b625099
