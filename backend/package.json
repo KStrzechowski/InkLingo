@@ -13,7 +13,10 @@
     "build:ts": "tsc",
     "watch:ts": "tsc -w",
     "dev": "fastify start -l info src/app.ts",
-    "dev:start": "fastify start --ignore-watch=.ts$ -w -l info -P dist/app.js"
+    "dev:start": "fastify start --ignore-watch=.ts$ -w -l info -P dist/app.js",
+    "migrate:up": "node-pg-migrate -d NEON_DATABASE_URL --envPath .env up",
+    "migrate:down": "node-pg-migrate -d NEON_DATABASE_URL --envPath .env down",
+    "migrate:create": "node-pg-migrate -j ts create"
   },
   "keywords": [],
   "author": "",
@@ -27,12 +30,16 @@
     "@neondatabase/serverless": "^1.1.0",
     "fastify": "^5.0.0",
     "fastify-cli": "^8.0.0",
-    "fastify-plugin": "^5.0.0"
+    "fastify-plugin": "^5.0.0",
+    "node-pg-migrate": "^9.0.0",
+    "pg": "^8.22.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
+    "@types/pg": "^8.20.0",
     "c8": "^11.0.0",
     "concurrently": "^9.0.0",
+    "dotenv": "^17.4.2",
     "fastify-tsconfig": "^3.0.0",
     "ts-node": "^10.4.0",
     "typescript": "~5.9.2"
