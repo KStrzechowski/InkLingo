@@ -3,7 +3,7 @@ project: "InkLingo"
 version: 1
 status: draft
 created: 2026-07-19
-updated: 2026-07-19
+updated: 2026-07-21
 prd_version: 1
 main_goal: speed
 top_blocker: time
@@ -32,8 +32,9 @@ Osoba ucząca się języka obcego, natrafiając na nieznane słowo podczas czyta
 | F-01 | core-data-schema | (foundation) minimalny schemat Postgres (users, collections, entries) + narzędzie migracji | — | Access Control, FR-004, FR-005, FR-013 | ready |
 | S-01 | account-auth | user can zarejestrować konto, zalogować się i wylogować się | — | FR-001, FR-002, FR-003, Access Control | ready |
 | S-02 | word-collections | user can ręcznie utworzyć zbiór i przeglądać listę zbiorów wraz z ich zawartością | S-01, F-01 | FR-004, FR-005 | proposed |
-| S-03 | capture-translate-save | user can przechwycić słowo/frazę w wtyczce, otrzymać warianty tłumaczenia i przykładowe zdania od AI (z regeneracją) i zapisać wpis do zbioru | S-01, S-02, F-01 | US-01, FR-006, FR-007, FR-009, FR-010, FR-011, FR-012, FR-013, NFR (czas odpowiedzi), NFR (tylko Firefox) | proposed |
+| S-03 | capture-translate-save | user can przechwycić słowo/frazę w wtyczce, otrzymać warianty tłumaczenia, transkrypcję fonetyczną i przykładowe zdania od AI (z regeneracją) i zapisać wpis do zbioru | S-01, S-02, F-01 | US-01, FR-006, FR-007, FR-009, FR-010, FR-011, FR-012, FR-013, FR-015, NFR (czas odpowiedzi), NFR (tylko Firefox) | proposed |
 | S-04 | printable-export | user can wygenerować czytelny, gotowy do druku dokument A4 dla wybranego zbioru | S-03 | FR-014 | proposed |
+| S-05 | pronunciation-playback | user can odtworzyć wymowę (audio) wprowadzanego słowa/frazy oraz wybranego przykładowego zdania | S-03 | FR-016, NFR (odtwarzanie bez zauważalnego opóźnienia) | proposed |
 
 ## Streams
 
@@ -44,6 +45,7 @@ Nawigacyjna pomoc — grupuje elementy dzielące ten sam łańcuch zależności.
 | A | Tożsamość | `S-01` | Samodzielny — nie zależy od żadnego fundamentu; może ruszyć równolegle z F-01. |
 | B | Zbiory i dane | `F-01` → `S-02` | Dołącza do Stream A przy `S-02` (potrzebuje i S-01, i F-01). |
 | C | Rdzeń przechwytywania | `S-03` → `S-04` | Dołącza do Stream B przy `S-03` — to jest gwiazda przewodnia i jej konsument (eksport). |
+| D | Wymowa | `S-03` → `S-05` | Dołącza do Stream C przy `S-03`; równoległa z `S-04` (obie są niezależnymi konsumentami gwiazdy przewodniej). |
 
 ## Baseline
 
@@ -123,6 +125,19 @@ Fundamenty poniżej zakładają, że to jest już na miejscu i NIE odtwarzają t
 - **Risk:** Eksport ma sens dopiero, gdy istnieją zapisane wpisy — stąd na końcu, jako konsument tego, co dostarcza S-03.
 - **Status:** proposed (Prerequisite S-03 jeszcze nie ukończony; Unknown powyżej nie blokuje planowania)
 
+### S-05: Odtwarzanie wymowy
+
+- **Outcome:** user can odtworzyć wymowę (audio) wprowadzanego w wtyczce słowa/frazy oraz wybranego przykładowego zdania.
+- **Change ID:** pronunciation-playback
+- **PRD refs:** FR-016, NFR (odtwarzanie bez zauważalnego opóźnienia)
+- **Prerequisites:** S-03 (potrzebuje słowa/frazy i wybranego zdania już widocznych w okienku wtyczki)
+- **Parallel with:** S-04 (obie są niezależnymi konsumentami S-03; żadna nie blokuje drugiej)
+- **Blockers:** —
+- **Unknowns:**
+  - Mechanizm generowania audio — przeglądarkowe Web Speech API (darmowe, jakość zależna od systemu użytkownika) czy płatne API TTS (wyższa/spójniejsza jakość, koszt + integracja backendu)? Owner: użytkownik / downstream `/10x-plan`. Block: no (analogicznie do S-04, akceptowalne jest dowolne podejście na start).
+- **Risk:** Nowa techniczna zależność (silnik TTS) dodana po ustaleniu reszty MVP — sekwencjonowana równolegle z eksportem, żeby nie wydłużać ścieżki krytycznej do north star.
+- **Status:** proposed (Prerequisite S-03 jeszcze nie ukończony; Unknown powyżej nie blokuje planowania)
+
 ## Backlog Handoff
 
 | Roadmap ID | Change ID | Suggested issue title | Ready for `/10x-plan` | Notes | Jira Epic | Jira Subtasks |
@@ -132,12 +147,14 @@ Fundamenty poniżej zakładają, że to jest już na miejscu i NIE odtwarzają t
 | S-02 | word-collections | Zbiory: tworzenie i przeglądanie | no | Czeka na S-01 i F-01 | [IL-3](https://kondi827.atlassian.net/browse/IL-3) | IL-12, IL-13, IL-14 |
 | S-03 | capture-translate-save | Przechwytywanie słowa + tłumaczenie AI + zapis (gwiazda przewodnia) | no | Czeka na S-01, S-02, F-01 | [IL-4](https://kondi827.atlassian.net/browse/IL-4) | IL-15, IL-16, IL-17, IL-18 |
 | S-04 | printable-export | Eksport zbioru do druku A4 | no | Czeka na S-03 | [IL-5](https://kondi827.atlassian.net/browse/IL-5) | IL-19, IL-20 |
+| S-05 | pronunciation-playback | Odtwarzanie wymowy słowa/frazy/zdania | no | Czeka na S-03 | [IL-21](https://kondi827.atlassian.net/browse/IL-21) | IL-22, IL-23 |
 
-Jira project: **IL** (InkLingo), site `kondi827.atlassian.net`. Epic priorities: F-01/S-01 = Highest, S-02/S-03 = High, S-04 = Medium (mirrors roadmap dependency order, not business weight — S-03 is the north star but is sequenced after S-02).
+Jira project: **IL** (InkLingo), site `kondi827.atlassian.net`. Epic priorities: F-01/S-01 = Highest, S-02/S-03 = High, S-04/S-05 = Medium (mirrors roadmap dependency order, not business weight — S-03 is the north star but is sequenced after S-02; S-04 and S-05 sit at the same readiness tier, both blocked only by S-03).
 
 ## Open Roadmap Questions
 
 1. **Mechanizm generowania wydruku (FR-014)** — dedykowany plik generowany po stronie serwera, czy widok tabeli w przeglądarce + druk (Ctrl+P)? Owner: użytkownik / downstream `/10x-plan`. Block: S-04 (nieblokujące — PRD świadomo zostawia to otwarte, akceptowalne jest dowolne podejście, o ile wydruk jest czytelny i dobrej jakości).
+2. **Mechanizm generowania audio wymowy (FR-016)** — przeglądarkowe Web Speech API czy płatne API TTS? Owner: użytkownik / downstream `/10x-plan`. Block: S-05 (nieblokujące — analogicznie do pytania 1).
 
 ## Parked
 
