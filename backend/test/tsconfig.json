@@ -13,5 +13,5 @@
     // checking of our own src/test files, only third-party declarations.
     "skipLibCheck": true
   },
-  "include": ["../src/**/*.ts", "**/*.ts"]
+  "include": ["../src/**/*.ts", "../migrations/**/*.ts", "**/*.ts"]
 }

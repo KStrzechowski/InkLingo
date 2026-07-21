@@ -195,6 +195,13 @@ No existing data to migrate — this is the first schema InkLingo has ever had.
 - Existing Neon wiring: `backend/src/plugins/neon.ts`, `backend/src/plugins/config.ts`
 - Existing test convention: `backend/test/helper.ts`, `backend/test/routes/root.test.ts`
 
+## Addendum
+
+Changes that landed outside the original Changes Required above, discovered during review rather than planned upfront. Recorded here so the plan stays an accurate as-built reference.
+
+- **Commit `797002a`** (found via `/code-review`): `backend/src/app.ts` (added `dotenv/config` import so `npm run dev`/`npm test` pick up `.env`, not just migrations), `backend/package.json` (moved `dotenv` to `dependencies` — Lambda packaging omits devDependencies), `backend/test/tsconfig.json` (`noEmit: true`, documented `skipLibCheck`), `backend/README.md` (documented `.env` covers dev/test), `CLAUDE.md` (fixed a stale single-test-file command).
+- **`/10x-impl-review` triage (2026-07-21)**: `backend/.env` and `backend/README.md` (switched `NEON_DATABASE_URL` to Neon's direct/unpooled connection string — the pooled string doesn't reliably support `node-pg-migrate`'s session-level advisory lock; F1), `backend/test/tsconfig.json` (added `../migrations/**/*.ts` to `include` so migration files are actually type-checked; F2), `backend/package.json` (added a `premigrate:down` npm hook that prints a warning before every `migrate:down` run, since it drops all 5 tables unconditionally with no environment guard; F3). Full detail in `context/changes/minimal-database/reviews/impl-review.md`.
+
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles. See `references/progress-format.md`.

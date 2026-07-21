@@ -15,6 +15,7 @@
     "dev": "fastify start -l info src/app.ts",
     "dev:start": "fastify start --ignore-watch=.ts$ -w -l info -P dist/app.js",
     "migrate:up": "node-pg-migrate -d NEON_DATABASE_URL --envPath .env up",
+    "premigrate:down": "node -e \"console.warn('WARNING: migrate:down will DROP ALL TABLES in the database at NEON_DATABASE_URL (backend/.env). Make sure this is NOT the same database the deployed Lambda reads from SSM (see backend/src/plugins/config.ts) before continuing.')\"",
     "migrate:down": "node-pg-migrate -d NEON_DATABASE_URL --envPath .env down",
     "migrate:create": "node-pg-migrate -j ts create"
   },

@@ -37,7 +37,9 @@ Schema migrations are managed by [`node-pg-migrate`](https://salsita.github.io/n
 - `npm run migrate:up` — apply all pending migrations
 - `npm run migrate:down` — roll back the most recently applied migration
 
-`NEON_DATABASE_URL` can be either Neon's pooled or direct connection string — both were verified to work with `node-pg-migrate`'s locking mechanism, so no separate direct-connection variable is needed.
+`NEON_DATABASE_URL` must be Neon's **direct (unpooled)** connection string, not the pooled/PgBouncer one — `node-pg-migrate` takes a session-level advisory lock to prevent concurrent migration runs, and Neon's pooled endpoint (transaction-mode PgBouncer) doesn't reliably preserve session state across statements, which can make that lock fail or hang. `@neondatabase/serverless`'s HTTP driver (used everywhere else in the app) works fine with either string, so a single direct `NEON_DATABASE_URL` covers both the app and migrations — no separate migration-only variable is needed. In the Neon dashboard, the direct string is the connection string *without* `-pooler` in the endpoint hostname.
+
+`migrate:down` drops all 5 tables unconditionally and has no environment check — it always runs against whatever `NEON_DATABASE_URL` is currently in `.env`. A `premigrate:down` npm hook prints a warning before every `migrate:down` run as a reminder, but it does not block execution: never point local `.env` at the same database the deployed Lambda's SSM parameter uses.
 
 ## Learn More
 
