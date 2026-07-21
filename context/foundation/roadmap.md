@@ -29,7 +29,7 @@ Osoba ucząca się języka obcego, natrafiając na nieznane słowo podczas czyta
 
 | ID | Change ID | Outcome (user can …) | Prerequisites | PRD refs | Status |
 | --- | --- | --- | --- | --- | --- |
-| F-01 | core-data-schema | (foundation) minimalny schemat Postgres (users, collections, entries) + narzędzie migracji | — | Access Control, FR-004, FR-005, FR-013 | ready |
+| F-01 | minimal-database | (foundation) minimalny schemat Postgres (users, collections, entries) + narzędzie migracji | — | Access Control, FR-004, FR-005, FR-013 | done |
 | S-01 | account-auth | user can zarejestrować konto, zalogować się i wylogować się | — | FR-001, FR-002, FR-003, Access Control | ready |
 | S-02 | word-collections | user can ręcznie utworzyć zbiór i przeglądać listę zbiorów wraz z ich zawartością | S-01, F-01 | FR-004, FR-005 | proposed |
 | S-03 | capture-translate-save | user can przechwycić słowo/frazę w wtyczce, otrzymać warianty tłumaczenia, transkrypcję fonetyczną i przykładowe zdania od AI (z regeneracją) i zapisać wpis do zbioru | S-01, S-02, F-01 | US-01, FR-006, FR-007, FR-009, FR-010, FR-011, FR-012, FR-013, FR-015, NFR (czas odpowiedzi), NFR (tylko Firefox) | proposed |
@@ -64,7 +64,7 @@ Fundamenty poniżej zakładają, że to jest już na miejscu i NIE odtwarzają t
 ### F-01: Minimalny schemat danych (users, collections, entries)
 
 - **Outcome:** (foundation) w bazie Postgres istnieje minimalny schemat i narzędzie migracji dla użytkowników, zbiorów i zapisanych wpisów (słowo/fraza + tłumaczenie + zdanie); żadna logika biznesowa jeszcze go nie używa.
-- **Change ID:** core-data-schema
+- **Change ID:** minimal-database
 - **PRD refs:** Access Control, FR-004, FR-005, FR-013
 - **Unlocks:** S-02 (zbiory potrzebują trwałego zapisu), S-03 (wpisy potrzebują tabeli entries), S-04 (eksport czyta z entries)
 - **Prerequisites:** — (baseline: sterownik Neon już połączony, brak schematu)
@@ -72,7 +72,7 @@ Fundamenty poniżej zakładają, że to jest już na miejscu i NIE odtwarzają t
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Bez tego żadna funkcja nie może trwale zapisać danych — sekwencjonowany najwcześniej, równolegle z S-01, żeby nie blokować startu prac nad kontem.
-- **Status:** ready
+- **Status:** done
 
 ## Slices
 
@@ -142,7 +142,7 @@ Fundamenty poniżej zakładają, że to jest już na miejscu i NIE odtwarzają t
 
 | Roadmap ID | Change ID | Suggested issue title | Ready for `/10x-plan` | Notes | Jira Epic | Jira Subtasks |
 | --- | --- | --- | --- | --- | --- | --- |
-| F-01 | core-data-schema | Minimalny schemat danych: users, collections, entries | yes | Uruchom `/10x-plan core-data-schema` | [IL-1](https://kondi827.atlassian.net/browse/IL-1) | IL-6, IL-7, IL-8 |
+| F-01 | minimal-database | Minimalny schemat danych: users, collections, entries | done | Zarchiwizowane — `context/archive/2026-07-20-minimal-database/` | [IL-1](https://kondi827.atlassian.net/browse/IL-1) | IL-6, IL-7, IL-8 |
 | S-01 | account-auth | Konto: rejestracja, logowanie, wylogowanie | yes | Uruchom `/10x-plan account-auth` | [IL-2](https://kondi827.atlassian.net/browse/IL-2) | IL-9, IL-10, IL-11 |
 | S-02 | word-collections | Zbiory: tworzenie i przeglądanie | no | Czeka na S-01 i F-01 | [IL-3](https://kondi827.atlassian.net/browse/IL-3) | IL-12, IL-13, IL-14 |
 | S-03 | capture-translate-save | Przechwytywanie słowa + tłumaczenie AI + zapis (gwiazda przewodnia) | no | Czeka na S-01, S-02, F-01 | [IL-4](https://kondi827.atlassian.net/browse/IL-4) | IL-15, IL-16, IL-17, IL-18 |
@@ -167,4 +167,4 @@ Jira project: **IL** (InkLingo), site `kondi827.atlassian.net`. Epic priorities:
 
 ## Done
 
-(Puste przy pierwszej generacji. `/10x-archive` dopisze tu wpis — i przełączy `Status` odpowiedniego elementu na `done` — gdy zmiana o pasującym `Change ID` zostanie zarchiwizowana.)
+- **F-01: (foundation) minimalny schemat Postgres (users, collections, entries) + narzędzie migracji** — Archived 2026-07-21 → `context/archive/2026-07-20-minimal-database/`. Lesson: roadmap's Change ID was generated as `core-data-schema` but the change was actually created as `minimal-database` (`/10x-new` wasn't given the roadmap's suggested slug) — fixed here to match; worth double-checking the suggested Change ID is actually used when running `/10x-new` off a roadmap row.
