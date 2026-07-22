@@ -39,7 +39,9 @@ const app: FastifyPluginAsync<AppOptions> = async (
   void fastify.register(AutoLoad, {
     dir: path.join(__dirname, 'routes'),
     options: opts,
-    forceESM: true
+    forceESM: true,
+    autoHooks: true,
+    cascadeHooks: true
   })
 }
 

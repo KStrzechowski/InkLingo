@@ -16,6 +16,9 @@ dist-ssr
 # outputs — never committed, always regenerated after a deploy.
 .env.production
 
+# Local dev config (Cognito IDs, local API URL) — machine-specific, never committed.
+.env.development
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
