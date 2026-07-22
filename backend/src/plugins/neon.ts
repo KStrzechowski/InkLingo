@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin'
-import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
+import { neon } from '@neondatabase/serverless'
 
 export interface NeonPluginOptions {
   // Specify Neon plugin options here
@@ -14,9 +14,3 @@ export default fp<NeonPluginOptions>(async (fastify) => {
 
   fastify.decorate('sql', sql)
 }, { name: 'neon', dependencies: ['config'] })
-
-declare module 'fastify' {
-  export interface FastifyInstance {
-    sql: NeonQueryFunction<false, false>;
-  }
-}

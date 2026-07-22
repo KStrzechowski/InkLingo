@@ -57,9 +57,3 @@ export default fp<ConfigPluginOptions>(async (fastify) => {
 
   fastify.decorate('config', config)
 }, { name: 'config' })
-
-declare module 'fastify' {
-  export interface FastifyInstance {
-    config: AppConfig;
-  }
-}

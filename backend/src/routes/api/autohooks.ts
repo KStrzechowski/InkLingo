@@ -1,11 +1,5 @@
 import { type FastifyPluginAsync } from 'fastify'
 
-export interface AuthUser {
-  id: string
-  cognitoSub: string
-  email: string | undefined
-}
-
 const BEARER_PREFIX = 'Bearer '
 
 // Cascades (via @fastify/autoload's autoHooks + cascadeHooks, see app.ts) to
@@ -26,7 +20,8 @@ const authHooks: FastifyPluginAsync = async (fastify): Promise<void> => {
     let payload
     try {
       payload = await fastify.jwtVerifier.verify(token)
-    } catch {
+    } catch (err) {
+      fastify.log.warn({ err }, 'jwt verification failed')
       return reply.unauthorized()
     }
 
@@ -45,9 +40,3 @@ const authHooks: FastifyPluginAsync = async (fastify): Promise<void> => {
 }
 
 export default authHooks
-
-declare module 'fastify' {
-  export interface FastifyRequest {
-    authUser: AuthUser;
-  }
-}
