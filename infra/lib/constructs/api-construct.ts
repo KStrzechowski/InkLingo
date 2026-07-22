@@ -4,9 +4,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as path from 'node:path';
 import { CDK_SSM_PARAMS } from '../cdk-ssm-params';
@@ -45,11 +43,6 @@ export class ApiConstruct extends Construct {
       this, CDK_SSM_PARAMS.frontendCloudFrontDomain
     );
     const allowedOrigin = props.allowedOrigin ?? `https://${cloudFrontDomain}`;
-
-    const userPool = cognito.UserPool.fromUserPoolId(this, 'ImportedUserPool', userPoolId);
-    const userPoolClient = cognito.UserPoolClient.fromUserPoolClientId(
-      this, 'ImportedUserPoolClient', userPoolClientId
-    );
 
     // CDK's default LogGroup removal policy is RETAIN — overridden for
     // this disposable PoC stack so `cdk destroy ApiStack` doesn't leave
@@ -126,18 +119,13 @@ export class ApiConstruct extends Construct {
       integration
     });
 
-    // userPoolClients passed explicitly — omitting it makes the
-    // authorizer accept tokens from *any* client in the pool, not just
-    // this app's.
-    const authorizer = new HttpUserPoolAuthorizer('CognitoAuthorizer', userPool, {
-      userPoolClients: [userPoolClient]
-    });
-
+    // No CDK-level authorizer: app-level JWT verification (routes/api/
+    // autohooks.ts, backend) is the sole gate for this route and every
+    // route after it — no legacy exception.
     this.httpApi.addRoutes({
-      path: '/api/ping',
+      path: '/api/me',
       methods: [apigatewayv2.HttpMethod.GET],
-      integration,
-      authorizer
+      integration
     });
   }
 }

@@ -248,25 +248,25 @@ No schema migration needed — `users.cognito_sub` already exists from the F-01 
 
 #### Automated
 
-- [x] 1.1 Type checking passes: `cd backend && npm run build:ts`
-- [x] 1.2 Standalone plugin test passes: `cd backend && npm test`
+- [x] 1.1 Type checking passes: `cd backend && npm run build:ts` — d3408a1
+- [x] 1.2 Standalone plugin test passes: `cd backend && npm test` — d3408a1
 
 #### Manual
 
-- [x] 1.3 `npm run dev` starts without config errors with the two new `.env` values
-- [x] 1.4 `/api/ping` returns 401 without a token and 200 with a valid one, proving the hook cascade is active
+- [x] 1.3 `npm run dev` starts without config errors with the two new `.env` values — d3408a1
+- [x] 1.4 `/api/ping` returns 401 without a token and 200 with a valid one, proving the hook cascade is active — d3408a1
 
 ### Phase 2: Wire `/api/me` + delete `/api/ping` + CDK route
 
 #### Automated
 
-- [ ] 2.1 Type checking passes: `cd backend && npm run build:ts`
-- [ ] 2.2 Backend test suite passes: `cd backend && npm test`
-- [ ] 2.3 CDK synthesizes cleanly: `cd infra && npm run build && npx cdk synth InkLingo-ApiStack -c stack=ApiStack`
+- [x] 2.1 Type checking passes: `cd backend && npm run build:ts`
+- [x] 2.2 Backend test suite passes: `cd backend && npm test`
+- [x] 2.3 CDK synthesizes cleanly: `cd infra && npm run build && npx cdk synth InkLingo-ApiStack -c stack=ApiStack`
 
 #### Manual
 
-- [ ] 2.4 `cd infra && npm run diff:api` shows `/api/me` added (no authorizer) and `/api/ping` + its authorizer removed, nothing else
+- [x] 2.4 `cd infra && npm run diff:api` shows `/api/me` added (no authorizer) and `/api/ping` + its authorizer removed, nothing else
 
 ### Phase 3: Self-signed-JWKS automated tests + manual verification
 
