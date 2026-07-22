@@ -272,8 +272,8 @@ No schema migration needed — `users.cognito_sub` already exists from the F-01 
 
 #### Automated
 
-- [x] 3.1 Full backend suite passes with coverage: `cd backend && npm test`
-- [x] 3.2 Type checking passes: `cd backend && npm run build:ts`
+- [x] 3.1 Full backend suite passes with coverage: `cd backend && npm test` — 288a6f6
+- [x] 3.2 Type checking passes: `cd backend && npm run build:ts` — 288a6f6
 
 #### Manual
 
