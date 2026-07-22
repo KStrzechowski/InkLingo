@@ -48,4 +48,4 @@
 - **Location**: backend/test/routes/api/me.test.ts
 - **Detail**: The verifier is configured with a fixed `tokenUse: 'id'`, so a syntactically valid access token would correctly fail `validateCognitoJwtFields`'s token-use check and get caught into the same uniform 401 — this is confirmed correct by inspection, but it's a distinct validation branch from the 8 cases already tested and isn't exercised by any test. This wasn't part of the plan's Phase 3 test contract, so it's not a plan violation — just a coverage gap worth a conscious decision.
 - **Fix**: Add one more case mirroring the existing wrong-issuer/wrong-audience tests: `signToken({ tokenUse: 'access' })` → expect 401.
-- **Decision**: PENDING
+- **Decision**: FIXED — added in backend/test/routes/api/me.test.ts, confirmed the rejection happens at the token_use equality check (23/23 tests pass)

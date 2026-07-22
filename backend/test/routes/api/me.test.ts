@@ -84,6 +84,14 @@ test('GET /api/me with the wrong audience returns 401', async (t) => {
   assert.equal(res.statusCode, 401)
 })
 
+test('GET /api/me with an access token (wrong token_use) returns 401', async (t) => {
+  const app = await build(t)
+  app.jwtVerifier.cacheJwks(jwks)
+  const token = await signToken({ tokenUse: 'access' })
+  const res = await app.inject({ url: '/api/me', headers: { authorization: `Bearer ${token}` } })
+  assert.equal(res.statusCode, 401)
+})
+
 test('GET /api/ping is gone', async (t) => {
   const app = await build(t)
   const res = await app.inject({ url: '/api/ping' })
