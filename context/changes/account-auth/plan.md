@@ -277,7 +277,7 @@ No schema migration needed — `users.cognito_sub` already exists from the F-01 
 
 #### Manual
 
-- [ ] 3.3 Real Cognito test account returns correct identity from the deployed app
-- [ ] 3.4 Logging out/in twice does not create a duplicate `users` row
-- [ ] 3.5 Unauthenticated request is rejected against the deployed `/api/me` API Gateway endpoint
-- [ ] 3.6 `GET /api/ping` returns 404 against the deployed API Gateway endpoint
+- [x] 3.3 Real Cognito test account returns correct identity from the deployed app — 7719fd3
+- [x] 3.4 Logging out/in twice does not create a duplicate `users` row — 7719fd3
+- [x] 3.5 Unauthenticated request is rejected against the deployed `/api/me` API Gateway endpoint — 7719fd3
+- [x] 3.6 `GET /api/ping` returns 404 against the deployed API Gateway endpoint — 7719fd3
