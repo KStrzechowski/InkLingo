@@ -260,20 +260,20 @@ No schema migration needed — `users.cognito_sub` already exists from the F-01 
 
 #### Automated
 
-- [x] 2.1 Type checking passes: `cd backend && npm run build:ts`
-- [x] 2.2 Backend test suite passes: `cd backend && npm test`
-- [x] 2.3 CDK synthesizes cleanly: `cd infra && npm run build && npx cdk synth InkLingo-ApiStack -c stack=ApiStack`
+- [x] 2.1 Type checking passes: `cd backend && npm run build:ts` — b708192
+- [x] 2.2 Backend test suite passes: `cd backend && npm test` — b708192
+- [x] 2.3 CDK synthesizes cleanly: `cd infra && npm run build && npx cdk synth InkLingo-ApiStack -c stack=ApiStack` — b708192
 
 #### Manual
 
-- [x] 2.4 `cd infra && npm run diff:api` shows `/api/me` added (no authorizer) and `/api/ping` + its authorizer removed, nothing else
+- [x] 2.4 `cd infra && npm run diff:api` shows `/api/me` added (no authorizer) and `/api/ping` + its authorizer removed, nothing else — b708192
 
 ### Phase 3: Self-signed-JWKS automated tests + manual verification
 
 #### Automated
 
-- [ ] 3.1 Full backend suite passes with coverage: `cd backend && npm test`
-- [ ] 3.2 Type checking passes: `cd backend && npm run build:ts`
+- [x] 3.1 Full backend suite passes with coverage: `cd backend && npm test`
+- [x] 3.2 Type checking passes: `cd backend && npm run build:ts`
 
 #### Manual
 
