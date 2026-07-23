@@ -4,7 +4,9 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as path from 'node:path';
 import { CDK_SSM_PARAMS } from '../cdk-ssm-params';
@@ -43,6 +45,11 @@ export class ApiConstruct extends Construct {
       this, CDK_SSM_PARAMS.frontendCloudFrontDomain
     );
     const allowedOrigin = props.allowedOrigin ?? `https://${cloudFrontDomain}`;
+
+    const userPool = cognito.UserPool.fromUserPoolId(this, 'ImportedUserPool', userPoolId);
+    const userPoolClient = cognito.UserPoolClient.fromUserPoolClientId(
+      this, 'ImportedUserPoolClient', userPoolClientId
+    );
 
     // CDK's default LogGroup removal policy is RETAIN — overridden for
     // this disposable PoC stack so `cdk destroy ApiStack` doesn't leave
@@ -92,8 +99,22 @@ export class ApiConstruct extends Construct {
       resources: [`arn:aws:ssm:${region}:${account}:parameter/ink-lingo/*`]
     }));
 
+    // userPoolClients passed explicitly — omitting it makes the
+    // authorizer accept tokens from *any* client in the pool, not just
+    // this app's.
+    const authorizer = new HttpUserPoolAuthorizer('CognitoAuthorizer', userPool, {
+      userPoolClients: [userPoolClient]
+    });
+
     this.httpApi = new apigatewayv2.HttpApi(this, 'HttpApi', {
       apiName: 'ink-lingo-api',
+      // Every route is gated by this authorizer unless it explicitly
+      // opts out (see /health below) — secure by default, no per-route
+      // wiring needed. Defense-in-depth on top of the app-level JWT
+      // verification (routes/api/autohooks.ts, backend), which remains
+      // the sole source of `request.authUser`/JIT user-provisioning —
+      // this authorizer only rejects bad tokens earlier, at the edge.
+      defaultAuthorizer: authorizer,
       corsPreflight: {
         allowOrigins: [allowedOrigin],
         allowMethods: [
@@ -117,15 +138,19 @@ export class ApiConstruct extends Construct {
 
     // Explicit paths, not a {proxy+} catch-all — simpler to verify each
     // route individually as they're added.
+    // The one deliberate public route: explicitly opts out of
+    // defaultAuthorizer so external health checks don't need a token.
     this.httpApi.addRoutes({
       path: '/health',
       methods: [apigatewayv2.HttpMethod.GET],
-      integration
+      integration,
+      authorizer: new apigatewayv2.HttpNoneAuthorizer()
     });
 
-    // No CDK-level authorizer: app-level JWT verification (routes/api/
-    // autohooks.ts, backend) is the sole gate for this route and every
-    // route after it — no legacy exception.
+    // No explicit authorizer here — inherits defaultAuthorizer above.
+    // App-level JWT verification (routes/api/autohooks.ts, backend)
+    // still runs behind it for JIT user-provisioning/`request.authUser`;
+    // the CDK authorizer is an added edge-layer gate, not a replacement.
     this.httpApi.addRoutes({
       path: '/api/me',
       methods: [apigatewayv2.HttpMethod.GET],
