@@ -1,71 +1,94 @@
 import { useEffect, useState } from 'react'
-import type { User } from 'oidc-client-ts'
-import { getUser, handleLoginCallback, login, logout, userManager } from './auth/cognito'
+import { Navigate, Outlet, Route, Routes, useNavigate } from 'react-router'
+import axios from 'axios'
+import { AuthProvider } from './auth/AuthContext'
+import { useAuth } from './auth/useAuth'
+import { handleLoginCallback, login, logout } from './auth/cognito'
+import { apiClient } from './api/client'
 import './App.css'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
-
-function App() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [apiResult, setApiResult] = useState<string | null>(null)
-  const [apiError, setApiError] = useState<string | null>(null)
+function CallbackPage () {
+  const navigate = useNavigate()
+  const { refresh } = useAuth()
 
   useEffect(() => {
-    async function init() {
-      if (window.location.pathname === '/callback') {
-        const loggedInUser = await handleLoginCallback()
-        window.history.replaceState({}, '', '/')
-        setUser(loggedInUser)
-      } else {
-        setUser(await getUser())
-      }
-      setLoading(false)
+    async function completeLogin () {
+      await handleLoginCallback()
+      await refresh()
+      navigate('/', { replace: true })
     }
-    void init()
-  }, [])
+    void completeLogin()
+  }, [navigate, refresh])
 
-  async function callApi() {
-    setApiError(null)
-    setApiResult(null)
+  return <p>Loading…</p>
+}
 
-    const currentUser = await userManager.getUser()
-    if (!currentUser) {
-      setApiError('Not signed in')
-      return
-    }
-
-    const res = await fetch(`${API_BASE_URL}/api/me`, {
-      headers: { Authorization: `Bearer ${currentUser.id_token}` }
-    })
-
-    if (!res.ok) {
-      setApiError(`${res.status} ${res.statusText}`)
-      return
-    }
-
-    setApiResult(JSON.stringify(await res.json(), null, 2))
-  }
+function AuthenticatedLayout () {
+  const { user, loading } = useAuth()
 
   if (loading) {
     return <p>Loading…</p>
   }
 
+  if (!user) {
+    return (
+      <section id="center">
+        <h1>InkLingo</h1>
+        <button type="button" onClick={() => void login()}>Log in</button>
+      </section>
+    )
+  }
+
   return (
     <section id="center">
       <h1>InkLingo</h1>
-      {user ? (
-        <>
-          <p>Signed in as {user.profile.email}</p>
-          <button type="button" onClick={() => void logout()}>Log out</button>
-          <button type="button" onClick={() => void callApi()}>Call API</button>
-          {apiResult && <pre>{apiResult}</pre>}
-          {apiError && <p style={{ color: 'red' }}>{apiError}</p>}
-        </>
-      ) : (
-        <button type="button" onClick={() => void login()}>Log in</button>
-      )}
+      <p>Signed in as {user.profile.email}</p>
+      <button type="button" onClick={() => void logout()}>Log out</button>
+      <Outlet />
     </section>
+  )
+}
+
+function HomePage () {
+  const [apiResult, setApiResult] = useState<string | null>(null)
+  const [apiError, setApiError] = useState<string | null>(null)
+
+  async function callApi () {
+    setApiError(null)
+    setApiResult(null)
+
+    try {
+      const res = await apiClient.get('/api/me')
+      setApiResult(JSON.stringify(res.data, null, 2))
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response) {
+        setApiError(`${err.response.status} ${err.response.statusText}`)
+      } else {
+        setApiError('Request failed')
+      }
+    }
+  }
+
+  return (
+    <>
+      <button type="button" onClick={() => void callApi()}>Call API</button>
+      {apiResult && <pre>{apiResult}</pre>}
+      {apiError && <p style={{ color: 'red' }}>{apiError}</p>}
+    </>
+  )
+}
+
+function App () {
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route path="/callback" element={<CallbackPage />} />
+        <Route element={<AuthenticatedLayout />}>
+          <Route path="/" element={<HomePage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthProvider>
   )
 }
 

@@ -314,19 +314,19 @@ The new migration only adds an index — `collections` has no rows in any enviro
 
 #### Automated
 
-- [x] 2.1 Infra type checking passes: `cd infra && npm run build`
-- [x] 2.2 CDK synthesizes cleanly: `cd infra && npx cdk synth InkLingo-ApiStack -c stack=ApiStack`
+- [x] 2.1 Infra type checking passes: `cd infra && npm run build` — 36285a8
+- [x] 2.2 CDK synthesizes cleanly: `cd infra && npx cdk synth InkLingo-ApiStack -c stack=ApiStack` — 36285a8
 
 #### Manual
 
-- [ ] 2.3 `cd infra && npm run diff:api` shows exactly the 2 new routes added and the CORS method list updated, nothing else
+- [x] 2.3 `cd infra && npm run diff:api` shows exactly the 2 new routes added and the CORS method list updated, nothing else — 36285a8
 
 ### Phase 3: Frontend — routing & API infrastructure
 
 #### Automated
 
-- [ ] 3.1 Build passes: `cd frontend && npm run build`
-- [ ] 3.2 Lint passes: `cd frontend && npm run lint`
+- [x] 3.1 Build passes: `cd frontend && npm run build`
+- [x] 3.2 Lint passes: `cd frontend && npm run lint`
 
 #### Manual
 
