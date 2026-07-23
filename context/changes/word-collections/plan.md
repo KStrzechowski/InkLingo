@@ -337,13 +337,13 @@ The new migration only adds an index — `collections` has no rows in any enviro
 
 #### Automated
 
-- [x] 4.1 Build passes: `cd frontend && npm run build`
-- [x] 4.2 Lint passes: `cd frontend && npm run lint`
+- [x] 4.1 Build passes: `cd frontend && npm run build` — 02838da
+- [x] 4.2 Lint passes: `cd frontend && npm run lint` — 02838da
 
 #### Manual
 
-- [x] 4.3 Log in, create a collection, see it appear in the list
-- [x] 4.4 Attempt to create a duplicate name and see the inline error
-- [x] 4.5 Attempt to create a blank name and see the inline error
-- [x] 4.6 Click into a collection with no entries and see the empty-state message
-- [x] 4.7 After manually inserting a test entry + translation + sentence, click into that collection and confirm the nested data renders correctly
+- [x] 4.3 Log in, create a collection, see it appear in the list — 02838da
+- [x] 4.4 Attempt to create a duplicate name and see the inline error — 02838da
+- [x] 4.5 Attempt to create a blank name and see the inline error — 02838da
+- [x] 4.6 Click into a collection with no entries and see the empty-state message — 02838da
+- [x] 4.7 After manually inserting a test entry + translation + sentence, click into that collection and confirm the nested data renders correctly — 02838da

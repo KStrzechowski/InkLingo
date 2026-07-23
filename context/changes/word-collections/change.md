@@ -1,7 +1,7 @@
 ---
 change_id: word-collections
 title: Word collections
-status: implementing
+status: implemented
 created: 2026-07-23
 updated: 2026-07-23
 archived_at: null
