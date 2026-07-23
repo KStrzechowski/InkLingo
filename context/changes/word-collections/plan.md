@@ -325,25 +325,25 @@ The new migration only adds an index — `collections` has no rows in any enviro
 
 #### Automated
 
-- [x] 3.1 Build passes: `cd frontend && npm run build`
-- [x] 3.2 Lint passes: `cd frontend && npm run lint`
+- [x] 3.1 Build passes: `cd frontend && npm run build` — 8338aa7
+- [x] 3.2 Lint passes: `cd frontend && npm run lint` — 8338aa7
 
 #### Manual
 
-- [ ] 3.3 Log in, confirm the existing "Call API" button still successfully hits `/api/me` through the new axios client
-- [ ] 3.4 Log out, log back in, confirm the Cognito `/callback` redirect still completes correctly through the new route
+- [x] 3.3 Log in, confirm the existing "Call API" button still successfully hits `/api/me` through the new axios client — 8338aa7
+- [x] 3.4 Log out, log back in, confirm the Cognito `/callback` redirect still completes correctly through the new route — 8338aa7
 
 ### Phase 4: Frontend — collections UI
 
 #### Automated
 
-- [ ] 4.1 Build passes: `cd frontend && npm run build`
-- [ ] 4.2 Lint passes: `cd frontend && npm run lint`
+- [x] 4.1 Build passes: `cd frontend && npm run build`
+- [x] 4.2 Lint passes: `cd frontend && npm run lint`
 
 #### Manual
 
-- [ ] 4.3 Log in, create a collection, see it appear in the list
-- [ ] 4.4 Attempt to create a duplicate name and see the inline error
-- [ ] 4.5 Attempt to create a blank name and see the inline error
-- [ ] 4.6 Click into a collection with no entries and see the empty-state message
-- [ ] 4.7 After manually inserting a test entry + translation + sentence, click into that collection and confirm the nested data renders correctly
+- [x] 4.3 Log in, create a collection, see it appear in the list
+- [x] 4.4 Attempt to create a duplicate name and see the inline error
+- [x] 4.5 Attempt to create a blank name and see the inline error
+- [x] 4.6 Click into a collection with no entries and see the empty-state message
+- [x] 4.7 After manually inserting a test entry + translation + sentence, click into that collection and confirm the nested data renders correctly

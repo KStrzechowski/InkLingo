@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Navigate, Outlet, Route, Routes, useNavigate } from 'react-router'
-import axios from 'axios'
 import { AuthProvider } from './auth/AuthContext'
 import { useAuth } from './auth/useAuth'
 import { handleLoginCallback, login, logout } from './auth/cognito'
-import { apiClient } from './api/client'
+import CollectionsListPage from './pages/CollectionsListPage'
+import CollectionDetailPage from './pages/CollectionDetailPage'
 import './App.css'
 
 function CallbackPage () {
@@ -49,42 +49,14 @@ function AuthenticatedLayout () {
   )
 }
 
-function HomePage () {
-  const [apiResult, setApiResult] = useState<string | null>(null)
-  const [apiError, setApiError] = useState<string | null>(null)
-
-  async function callApi () {
-    setApiError(null)
-    setApiResult(null)
-
-    try {
-      const res = await apiClient.get('/api/me')
-      setApiResult(JSON.stringify(res.data, null, 2))
-    } catch (err) {
-      if (axios.isAxiosError(err) && err.response) {
-        setApiError(`${err.response.status} ${err.response.statusText}`)
-      } else {
-        setApiError('Request failed')
-      }
-    }
-  }
-
-  return (
-    <>
-      <button type="button" onClick={() => void callApi()}>Call API</button>
-      {apiResult && <pre>{apiResult}</pre>}
-      {apiError && <p style={{ color: 'red' }}>{apiError}</p>}
-    </>
-  )
-}
-
 function App () {
   return (
     <AuthProvider>
       <Routes>
         <Route path="/callback" element={<CallbackPage />} />
         <Route element={<AuthenticatedLayout />}>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<CollectionsListPage />} />
+          <Route path="/collections/:id" element={<CollectionDetailPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
