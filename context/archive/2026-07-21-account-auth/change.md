@@ -1,10 +1,10 @@
 ---
 change_id: account-auth
 title: Account auth
-status: impl_reviewed
+status: archived
 created: 2026-07-21
 updated: 2026-07-23
-archived_at: null
+archived_at: 2026-07-23T11:23:49Z
 ---
 
 ## Notes
