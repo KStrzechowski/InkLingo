@@ -301,21 +301,21 @@ The new migration only adds an index — `collections` has no rows in any enviro
 
 #### Automated
 
-- [x] 1.1 Migration applies and reverses cleanly: `cd backend && npm run migrate:up` then `npm run migrate:down` then `npm run migrate:up` again
-- [x] 1.2 Type checking passes: `cd backend && npm run build:ts`
-- [x] 1.3 Full backend test suite passes: `cd backend && npm test`
+- [x] 1.1 Migration applies and reverses cleanly: `cd backend && npm run migrate:up` then `npm run migrate:down` then `npm run migrate:up` again — 9697432
+- [x] 1.2 Type checking passes: `cd backend && npm run build:ts` — 9697432
+- [x] 1.3 Full backend test suite passes: `cd backend && npm test` — 9697432
 
 #### Manual
 
-- [ ] 1.4 Inspect the new unique index in a Postgres client after `migrate:up` and confirm it matches the contract
-- [ ] 1.5 Hit all 3 endpoints locally with a real Cognito test token and confirm response shapes match the contract
+- [x] 1.4 Inspect the new unique index in a Postgres client after `migrate:up` and confirm it matches the contract — 9697432
+- [x] 1.5 Hit all 3 endpoints locally with a real Cognito test token and confirm response shapes match the contract — 9697432
 
 ### Phase 2: Infra — CDK route registration
 
 #### Automated
 
-- [ ] 2.1 Infra type checking passes: `cd infra && npm run build`
-- [ ] 2.2 CDK synthesizes cleanly: `cd infra && npx cdk synth InkLingo-ApiStack -c stack=ApiStack`
+- [x] 2.1 Infra type checking passes: `cd infra && npm run build`
+- [x] 2.2 CDK synthesizes cleanly: `cd infra && npx cdk synth InkLingo-ApiStack -c stack=ApiStack`
 
 #### Manual
 

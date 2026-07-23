@@ -96,7 +96,11 @@ export class ApiConstruct extends Construct {
       apiName: 'ink-lingo-api',
       corsPreflight: {
         allowOrigins: [allowedOrigin],
-        allowMethods: [apigatewayv2.CorsHttpMethod.GET, apigatewayv2.CorsHttpMethod.OPTIONS],
+        allowMethods: [
+          apigatewayv2.CorsHttpMethod.GET,
+          apigatewayv2.CorsHttpMethod.POST,
+          apigatewayv2.CorsHttpMethod.OPTIONS
+        ],
         allowHeaders: ['authorization', 'content-type']
       }
     });
@@ -111,8 +115,8 @@ export class ApiConstruct extends Construct {
 
     const integration = new HttpLambdaIntegration('BackendIntegration', this.lambdaFunction);
 
-    // Explicit paths, not a {proxy+} catch-all — simpler to verify with
-    // exactly two known routes at this stage.
+    // Explicit paths, not a {proxy+} catch-all — simpler to verify each
+    // route individually as they're added.
     this.httpApi.addRoutes({
       path: '/health',
       methods: [apigatewayv2.HttpMethod.GET],
@@ -124,6 +128,18 @@ export class ApiConstruct extends Construct {
     // route after it — no legacy exception.
     this.httpApi.addRoutes({
       path: '/api/me',
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration
+    });
+
+    this.httpApi.addRoutes({
+      path: '/api/collections',
+      methods: [apigatewayv2.HttpMethod.GET, apigatewayv2.HttpMethod.POST],
+      integration
+    });
+
+    this.httpApi.addRoutes({
+      path: '/api/collections/{id}',
       methods: [apigatewayv2.HttpMethod.GET],
       integration
     });
