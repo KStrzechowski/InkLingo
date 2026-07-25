@@ -3,7 +3,7 @@ project: "InkLingo"
 version: 1
 status: draft
 created: 2026-07-19
-updated: 2026-07-23
+updated: 2026-07-25
 prd_version: 1
 main_goal: speed
 top_blocker: time
@@ -31,7 +31,7 @@ Osoba ucząca się języka obcego, natrafiając na nieznane słowo podczas czyta
 | --- | --- | --- | --- | --- | --- |
 | F-01 | minimal-database | (foundation) minimalny schemat Postgres (users, collections, entries) + narzędzie migracji | — | Access Control, FR-004, FR-005, FR-013 | done |
 | S-01 | account-auth | user can zarejestrować konto, zalogować się i wylogować się | — | FR-001, FR-002, FR-003, Access Control | done |
-| S-02 | word-collections | user can ręcznie utworzyć zbiór i przeglądać listę zbiorów wraz z ich zawartością | S-01, F-01 | FR-004, FR-005 | proposed |
+| S-02 | word-collections | user can ręcznie utworzyć zbiór i przeglądać listę zbiorów wraz z ich zawartością | S-01, F-01 | FR-004, FR-005 | done |
 | S-03 | capture-translate-save | user can przechwycić słowo/frazę w wtyczce, otrzymać warianty tłumaczenia, transkrypcję fonetyczną i przykładowe zdania od AI (z regeneracją) i zapisać wpis do zbioru | S-01, S-02, F-01 | US-01, FR-006, FR-007, FR-009, FR-010, FR-011, FR-012, FR-013, FR-015, NFR (czas odpowiedzi), NFR (tylko Firefox) | proposed |
 | S-04 | printable-export | user can wygenerować czytelny, gotowy do druku dokument A4 dla wybranego zbioru | S-03 | FR-014 | proposed |
 | S-05 | pronunciation-playback | user can odtworzyć wymowę (audio) wprowadzanego słowa/frazy oraz wybranego przykładowego zdania | S-03 | FR-016, NFR (odtwarzanie bez zauważalnego opóźnienia) | proposed |
@@ -98,7 +98,7 @@ Fundamenty poniżej zakładają, że to jest już na miejscu i NIE odtwarzają t
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Gwiazda przewodnia (S-03) zapisuje wpisy do zbioru, więc przynajmniej jeden zbiór musi dać się utworzyć i zobaczyć zanim przechwytywanie ma sens — stąd bezpośrednio przed S-03.
-- **Status:** proposed (Prerequisites S-01/F-01 jeszcze nie ukończone; brak blokujących niewiadomych)
+- **Status:** done
 
 ### S-03: Przechwytywanie + tłumaczenie AI + zapis (gwiazda przewodnia)
 
@@ -169,3 +169,4 @@ Jira project: **IL** (InkLingo), site `kondi827.atlassian.net`. Epic priorities:
 
 - **F-01: (foundation) minimalny schemat Postgres (users, collections, entries) + narzędzie migracji** — Archived 2026-07-21 → `context/archive/2026-07-20-minimal-database/`. Lesson: roadmap's Change ID was generated as `core-data-schema` but the change was actually created as `minimal-database` (`/10x-new` wasn't given the roadmap's suggested slug) — fixed here to match; worth double-checking the suggested Change ID is actually used when running `/10x-new` off a roadmap row.
 - **S-01: user can zarejestrować konto, zalogować się i wylogować się** — Archived 2026-07-23 → `context/archive/2026-07-21-account-auth/`. Lesson: —.
+- **S-02: user can ręcznie utworzyć nowy zbiór (folder) oraz przeglądać listę swoich zbiorów i zawartość każdego z nich** — Archived 2026-07-25 → `context/archive/2026-07-23-word-collections/`. Lesson: —.

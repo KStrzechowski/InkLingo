@@ -1,10 +1,10 @@
 ---
 change_id: word-collections
 title: Word collections
-status: impl_reviewed
+status: archived
 created: 2026-07-23
-updated: 2026-07-23
-archived_at: null
+updated: 2026-07-25
+archived_at: 2026-07-25T15:39:25Z
 ---
 
 ## Notes
