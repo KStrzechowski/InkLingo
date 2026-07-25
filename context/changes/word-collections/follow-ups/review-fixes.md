@@ -1,6 +1,6 @@
 # Review follow-ups (word-collections)
 
-## Pre-existing test-flakiness bug in `backend/test/helpers/jwks.ts` — not fixed yet
+## Pre-existing test-flakiness bug in `backend/test/helpers/jwks.ts` — fixed
 
 - **Found**: during word-collections' impl-review triage, while investigating an unrelated failing test (`GET /api/me with a tampered signature returns 401`, in `backend/test/routes/api/me.test.ts`).
 - **Root cause**: `tamperSignature()` flips only the last base64url character of the JWT signature. For a 256-byte RS256 signature, that last character sits in a "padding-only" bit position ignored by Node's base64url decoder — verified empirically at a **25.08% collision rate** across 100,000 simulated signatures (i.e. ~1-in-4 chance the "tampered" token decodes to the exact same signature bytes as the original, silently no-op'ing the tamper).
@@ -14,4 +14,4 @@
     return `${header}.${payload}.${bytes.toString('base64url')}`
   }
   ```
-- **Status**: NOT applied. Out of scope for word-collections' plan (belongs to account-auth's already-archived test helper). User asked to leave before deciding fix-now vs. follow-up; queued here per the impl-review skill's follow-up convention.
+- **Status**: Applied. `tamperSignature()` in `backend/test/helpers/jwks.ts` now flips the first byte of the decoded signature buffer instead of the last base64url character. Re-verified: 0/500 collisions in a fresh simulation, full backend suite passes (32/32), and `me.test.ts` run in isolation 5 times consecutively with no failures.

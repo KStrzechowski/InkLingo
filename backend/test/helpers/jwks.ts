@@ -51,6 +51,7 @@ export async function signToken (overrides: SignTokenOverrides = {}): Promise<st
 
 export function tamperSignature (token: string): string {
   const [header, payload, signature] = token.split('.')
-  const flippedChar = signature.at(-1) === 'A' ? 'B' : 'A'
-  return `${header}.${payload}.${signature.slice(0, -1)}${flippedChar}`
+  const bytes = Buffer.from(signature, 'base64url')
+  bytes[0] ^= 0xFF
+  return `${header}.${payload}.${bytes.toString('base64url')}`
 }
