@@ -2,35 +2,7 @@ import { test } from 'node:test'
 import * as assert from 'node:assert'
 import { randomUUID } from 'node:crypto'
 import { build } from '../helper.js'
-
-async function createUser (app: Awaited<ReturnType<typeof build>>, t: Parameters<typeof build>[0]): Promise<string> {
-  const cognitoSub = `test-${randomUUID()}`
-  const rows = await app.sql.query(
-    'INSERT INTO users (cognito_sub) VALUES ($1) RETURNING id',
-    [cognitoSub]
-  ) as Array<{ id: string }>
-  const userId = rows[0].id
-  t.after(async () => {
-    await app.sql.query('DELETE FROM users WHERE id = $1', [userId])
-  })
-  return userId
-}
-
-async function createCollection (app: Awaited<ReturnType<typeof build>>, userId: string): Promise<string> {
-  const rows = await app.sql.query(
-    'INSERT INTO collections (user_id, name) VALUES ($1, $2) RETURNING id',
-    [userId, 'Test collection']
-  ) as Array<{ id: string }>
-  return rows[0].id
-}
-
-async function createEntry (app: Awaited<ReturnType<typeof build>>, collectionId: string): Promise<string> {
-  const rows = await app.sql.query(
-    'INSERT INTO entries (collection_id, word_or_phrase, source_language_code) VALUES ($1, $2, $3) RETURNING id',
-    [collectionId, 'jedzenie', 'pl']
-  ) as Array<{ id: string }>
-  return rows[0].id
-}
+import { createUserRow, createCollectionRow, createEntryRow } from '../helpers/fixtures.js'
 
 test('users.cognito_sub is unique', async (t) => {
   const app = await build(t)
@@ -67,9 +39,9 @@ test('entries.collection_id foreign key rejects a nonexistent collection', async
 
 test('entry_translations rejects a duplicate (entry_id, language_code) pair', async (t) => {
   const app = await build(t)
-  const userId = await createUser(app, t)
-  const collectionId = await createCollection(app, userId)
-  const entryId = await createEntry(app, collectionId)
+  const userId = await createUserRow(app, t)
+  const collectionId = await createCollectionRow(app, userId, 'Test collection')
+  const entryId = await createEntryRow(app, collectionId, 'jedzenie')
 
   await app.sql.query(
     'INSERT INTO entry_translations (entry_id, language_code, meaning_text) VALUES ($1, $2, $3)',
@@ -86,9 +58,9 @@ test('entry_translations rejects a duplicate (entry_id, language_code) pair', as
 
 test('entry_translations allows the same entry in multiple languages', async (t) => {
   const app = await build(t)
-  const userId = await createUser(app, t)
-  const collectionId = await createCollection(app, userId)
-  const entryId = await createEntry(app, collectionId)
+  const userId = await createUserRow(app, t)
+  const collectionId = await createCollectionRow(app, userId, 'Test collection')
+  const entryId = await createEntryRow(app, collectionId, 'jedzenie')
 
   await app.sql.query(
     'INSERT INTO entry_translations (entry_id, language_code, meaning_text) VALUES ($1, $2, $3)',
@@ -108,9 +80,9 @@ test('entry_translations allows the same entry in multiple languages', async (t)
 
 test('entry_sentences.sentence_text rejects null', async (t) => {
   const app = await build(t)
-  const userId = await createUser(app, t)
-  const collectionId = await createCollection(app, userId)
-  const entryId = await createEntry(app, collectionId)
+  const userId = await createUserRow(app, t)
+  const collectionId = await createCollectionRow(app, userId, 'Test collection')
+  const entryId = await createEntryRow(app, collectionId, 'jedzenie')
 
   await assert.rejects(
     app.sql.query(
@@ -122,9 +94,9 @@ test('entry_sentences.sentence_text rejects null', async (t) => {
 
 test('deleting a collection cascades to its entries, translations, and sentences', async (t) => {
   const app = await build(t)
-  const userId = await createUser(app, t)
-  const collectionId = await createCollection(app, userId)
-  const entryId = await createEntry(app, collectionId)
+  const userId = await createUserRow(app, t)
+  const collectionId = await createCollectionRow(app, userId, 'Test collection')
+  const entryId = await createEntryRow(app, collectionId, 'jedzenie')
   await app.sql.query(
     'INSERT INTO entry_translations (entry_id, language_code, meaning_text) VALUES ($1, $2, $3)',
     [entryId, 'en', 'food']
@@ -147,8 +119,8 @@ test('deleting a collection cascades to its entries, translations, and sentences
 
 test('deleting a user cascades to their collections', async (t) => {
   const app = await build(t)
-  const userId = await createUser(app, t)
-  const collectionId = await createCollection(app, userId)
+  const userId = await createUserRow(app, t)
+  const collectionId = await createCollectionRow(app, userId, 'Test collection')
 
   await app.sql.query('DELETE FROM users WHERE id = $1', [userId])
 

@@ -3,6 +3,7 @@ import * as assert from 'node:assert'
 import { randomUUID } from 'node:crypto'
 import { build } from '../../helper.js'
 import { jwks, signToken } from '../../helpers/jwks.js'
+import { createUserRow, createCollectionRow, createEntryRow } from '../../helpers/fixtures.js'
 
 async function authedUser (app: Awaited<ReturnType<typeof build>>, t: Parameters<typeof build>[0]): Promise<{ sub: string, token: string }> {
   app.jwtVerifier.cacheJwks(jwks)
@@ -10,32 +11,6 @@ async function authedUser (app: Awaited<ReturnType<typeof build>>, t: Parameters
   t.after(async () => { await app.sql.query('DELETE FROM users WHERE cognito_sub = $1', [sub]) })
   const token = await signToken({ sub })
   return { sub, token }
-}
-
-async function createUserRow (app: Awaited<ReturnType<typeof build>>, t: Parameters<typeof build>[0], cognitoSub = `test-${randomUUID()}`): Promise<string> {
-  const rows = await app.sql.query(
-    'INSERT INTO users (cognito_sub) VALUES ($1) RETURNING id',
-    [cognitoSub]
-  ) as Array<{ id: string }>
-  const userId = rows[0].id
-  t.after(async () => { await app.sql.query('DELETE FROM users WHERE id = $1', [userId]) })
-  return userId
-}
-
-async function createCollectionRow (app: Awaited<ReturnType<typeof build>>, userId: string, name: string): Promise<string> {
-  const rows = await app.sql.query(
-    'INSERT INTO collections (user_id, name) VALUES ($1, $2) RETURNING id',
-    [userId, name]
-  ) as Array<{ id: string }>
-  return rows[0].id
-}
-
-async function createEntryRow (app: Awaited<ReturnType<typeof build>>, collectionId: string, wordOrPhrase: string): Promise<string> {
-  const rows = await app.sql.query(
-    'INSERT INTO entries (collection_id, word_or_phrase, source_language_code) VALUES ($1, $2, $3) RETURNING id',
-    [collectionId, wordOrPhrase, 'pl']
-  ) as Array<{ id: string }>
-  return rows[0].id
 }
 
 test('GET /api/collections returns an empty list for a fresh user', async (t) => {
@@ -126,6 +101,24 @@ test('GET /api/collections/:id returns 404 for a collection owned by a different
   const res = await app.inject({ url: `/api/collections/${collectionId}`, headers: { authorization: `Bearer ${token}` } })
 
   assert.equal(res.statusCode, 404)
+})
+
+test('GET /api/collections/:id returns an empty entries array for a collection with no entries', async (t) => {
+  const app = await build(t)
+  const { token } = await authedUser(app, t)
+
+  const createRes = await app.inject({
+    url: '/api/collections',
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { name: 'Empty collection' }
+  })
+  const created = JSON.parse(createRes.payload) as { id: string }
+
+  const res = await app.inject({ url: `/api/collections/${created.id}`, headers: { authorization: `Bearer ${token}` } })
+  assert.equal(res.statusCode, 200)
+  const body = JSON.parse(res.payload) as { entries: unknown[] }
+  assert.deepStrictEqual(body.entries, [])
 })
 
 test('GET /api/collections/:id returns correctly nested translations/sentences for entries with more than one of each', async (t) => {

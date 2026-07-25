@@ -1,15 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
-import axios from 'axios'
 import { createCollection, listCollections, type Collection } from '../api/collections'
-
-function extractErrorMessage (err: unknown): string {
-  if (axios.isAxiosError(err) && err.response) {
-    const data = err.response.data as { message?: string } | undefined
-    return data?.message ?? `${err.response.status} ${err.response.statusText}`
-  }
-  return 'Request failed'
-}
+import { extractErrorMessage } from '../api/errors'
 
 function CollectionsListPage () {
   const [collections, setCollections] = useState<Collection[]>([])

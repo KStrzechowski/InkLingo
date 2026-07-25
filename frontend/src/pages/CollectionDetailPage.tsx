@@ -2,35 +2,59 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import axios from 'axios'
 import { getCollection, type CollectionDetail } from '../api/collections'
+import { extractErrorMessage } from '../api/errors'
 
 function CollectionDetailPage () {
   const { id } = useParams<{ id: string }>()
   const [collection, setCollection] = useState<CollectionDetail | null>(null)
   const [notFound, setNotFound] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!id) {
       return
     }
+    let cancelled = false
     setLoading(true)
     setNotFound(false)
+    setError(null)
     getCollection(id)
-      .then((data) => setCollection(data))
-      .catch((err: unknown) => {
-        if (axios.isAxiosError(err) && err.response?.status === 404) {
-          setNotFound(true)
+      .then((data) => {
+        if (!cancelled) {
+          setCollection(data)
         }
       })
-      .finally(() => setLoading(false))
+      .catch((err: unknown) => {
+        if (cancelled) {
+          return
+        }
+        if (axios.isAxiosError(err) && err.response?.status === 404) {
+          setNotFound(true)
+        } else {
+          setError(extractErrorMessage(err))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
   }, [id])
 
   if (loading) {
     return <p>Loading…</p>
   }
 
-  if (notFound || !collection) {
+  if (notFound) {
     return <p>Collection not found.</p>
+  }
+
+  if (error || !collection) {
+    return <p style={{ color: 'red' }}>{error ?? 'Something went wrong.'}</p>
   }
 
   return (

@@ -64,7 +64,16 @@ const collections: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
   })
 
-  fastify.get<{ Params: CollectionParams }>('/:id', async (request, reply) => {
+  fastify.get<{ Params: CollectionParams }>('/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' }
+        }
+      }
+    }
+  }, async (request, reply) => {
     const [collection] = await fastify.sql`
       SELECT id, name, created_at
       FROM collections
