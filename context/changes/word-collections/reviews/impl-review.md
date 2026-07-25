@@ -106,7 +106,7 @@
 - **Location**: backend/test/routes/api/collections.test.ts, backend/test/schema/core-schema.test.ts
 - **Detail**: `createUserRow`/`createCollectionRow`/`createEntryRow`-style fixture helpers are re-declared in both files rather than shared. Consistent with this codebase's current per-file-self-contained test convention, so not a violation — just a DRY opportunity if this area grows.
 - **Fix**: Optional — factor into a shared test-fixture module if a third test file needs the same fixtures.
-- **Decision**: PENDING
+- **Decision**: FIXED — extracted `createUserRow`/`createCollectionRow`/`createEntryRow` into `backend/test/helpers/fixtures.ts`, imported by both `collections.test.ts` and `core-schema.test.ts` in place of the duplicated local definitions.
 
 ## Scope check ("What We're NOT Doing")
 
