@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import { type FastifyInstance } from 'fastify'
 import { type FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { NeonDbError } from '@neondatabase/serverless'
 import { SUPPORTED_LANGUAGE_CODES } from '../../../languages.ts'
-import { createCollectionBodySchema, collectionParamsSchema, translateBodySchema } from './schemas.ts'
+import { createCollectionBodySchema, collectionParamsSchema, translateBodySchema, createEntryBodySchema } from './schemas.ts'
 import { generateTranslation } from '../../../ai/translate.ts'
 
 const UNIQUE_VIOLATION = '23505'
@@ -116,12 +117,12 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
     const entryIds = entries.map((entry) => entry.id)
 
     const translations = await fastify.sql`
-      SELECT id, entry_id, language_code, meaning_text
+      SELECT id, entry_id, language_code, meaning_text, phonetic_transcription
       FROM entry_translations
       WHERE entry_id = ANY(${entryIds})
     `
     const sentences = await fastify.sql`
-      SELECT id, entry_id, language_code, sentence_text, created_at
+      SELECT id, entry_id, language_code, sentence_text, native_gloss_text, created_at
       FROM entry_sentences
       WHERE entry_id = ANY(${entryIds})
     `
@@ -142,7 +143,8 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
           .map((translation) => ({
             id: translation.id,
             languageCode: translation.language_code,
-            meaningText: translation.meaning_text
+            meaningText: translation.meaning_text,
+            phoneticTranscription: translation.phonetic_transcription
           })),
         sentences: sentences
           .filter((sentence) => sentence.entry_id === entry.id)
@@ -150,6 +152,7 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
             id: sentence.id,
             languageCode: sentence.language_code,
             sentenceText: sentence.sentence_text,
+            nativeGlossText: sentence.native_gloss_text,
             createdAt: sentence.created_at
           }))
       }))
@@ -201,6 +204,105 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
     } finally {
       clearTimeout(timeout)
     }
+  })
+
+  fastify.post('/:id/entries', {
+    schema: {
+      params: collectionParamsSchema,
+      body: createEntryBodySchema
+    }
+  }, async (request, reply) => {
+    const wordOrPhrase = request.body.wordOrPhrase.trim()
+    if (wordOrPhrase.length === 0) {
+      return reply.badRequest('wordOrPhrase must not be blank')
+    }
+
+    const translations = request.body.translations.map((translation) => ({
+      languageCode: translation.languageCode.trim().toLowerCase(),
+      meaningText: translation.meaningText.trim(),
+      phoneticTranscription: translation.phoneticTranscription?.trim() ?? ''
+    }))
+    const sentences = request.body.sentences.map((sentence) => ({
+      languageCode: sentence.languageCode.trim().toLowerCase(),
+      sentenceText: sentence.sentenceText.trim(),
+      nativeGlossText: sentence.nativeGlossText.trim()
+    }))
+    if (
+      translations.some((translation) => translation.meaningText.length === 0) ||
+      sentences.some((sentence) => sentence.sentenceText.length === 0 || sentence.nativeGlossText.length === 0)
+    ) {
+      return reply.badRequest('translation and sentence texts must not be blank')
+    }
+
+    const [collection] = await fastify.sql`
+      SELECT id, native_language_code
+      FROM collections
+      WHERE id = ${request.params.id} AND user_id = ${request.authUser.id}
+    `
+    if (collection === undefined) {
+      return reply.notFound()
+    }
+
+    // A saved translation/sentence only makes sense in a language the
+    // collection is actually configured to teach. Compared case-insensitively:
+    // POST / lowercases on write, but rows created before that normalization
+    // landed still hold codes like 'EN'.
+    const targetLanguages = await targetLanguagesByCollectionId(fastify, [collection.id])
+    const targetLanguageCodes = targetLanguages.map((target) => target.language_code.toLowerCase())
+    if (
+      translations.some((translation) => !targetLanguageCodes.includes(translation.languageCode)) ||
+      sentences.some((sentence) => !targetLanguageCodes.includes(sentence.languageCode))
+    ) {
+      return reply.badRequest('language code is not one of the collection\'s target languages')
+    }
+
+    // The entry id is generated here rather than by the column default so
+    // all three inserts can be built upfront and submitted as one
+    // non-interactive transaction — the Neon HTTP driver can't feed a
+    // RETURNING value from one statement into the next.
+    const entryId = randomUUID()
+    const [entryRows, ...rest] = await fastify.sql.transaction([
+      // source_language_code is always the parent collection's native
+      // language, never taken from the request body.
+      fastify.sql`
+        INSERT INTO entries (id, collection_id, word_or_phrase, source_language_code)
+        VALUES (${entryId}, ${collection.id}, ${wordOrPhrase}, ${collection.native_language_code})
+        RETURNING id, word_or_phrase, source_language_code, created_at
+      `,
+      ...translations.map((translation) => fastify.sql`
+        INSERT INTO entry_translations (entry_id, language_code, meaning_text, phonetic_transcription)
+        VALUES (${entryId}, ${translation.languageCode}, ${translation.meaningText}, ${translation.phoneticTranscription.length === 0 ? null : translation.phoneticTranscription})
+        RETURNING id, language_code, meaning_text, phonetic_transcription
+      `),
+      ...sentences.map((sentence) => fastify.sql`
+        INSERT INTO entry_sentences (entry_id, language_code, sentence_text, native_gloss_text)
+        VALUES (${entryId}, ${sentence.languageCode}, ${sentence.sentenceText}, ${sentence.nativeGlossText})
+        RETURNING id, language_code, sentence_text, native_gloss_text, created_at
+      `)
+    ])
+    const [entry] = entryRows
+    const translationRows = rest.slice(0, translations.length).map(([row]) => row)
+    const sentenceRows = rest.slice(translations.length).map(([row]) => row)
+
+    return await reply.code(201).send({
+      id: entry.id,
+      wordOrPhrase: entry.word_or_phrase,
+      sourceLanguageCode: entry.source_language_code,
+      createdAt: entry.created_at,
+      translations: translationRows.map((row) => ({
+        id: row.id,
+        languageCode: row.language_code,
+        meaningText: row.meaning_text,
+        phoneticTranscription: row.phonetic_transcription
+      })),
+      sentences: sentenceRows.map((row) => ({
+        id: row.id,
+        languageCode: row.language_code,
+        sentenceText: row.sentence_text,
+        nativeGlossText: row.native_gloss_text,
+        createdAt: row.created_at
+      }))
+    })
   })
 }
 

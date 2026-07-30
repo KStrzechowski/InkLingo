@@ -12,12 +12,14 @@ export interface EntryTranslation {
   id: string
   languageCode: string
   meaningText: string
+  phoneticTranscription: string | null
 }
 
 export interface EntrySentence {
   id: string
   languageCode: string
   sentenceText: string
+  nativeGlossText: string | null
   createdAt: string
 }
 

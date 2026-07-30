@@ -406,29 +406,29 @@ Both new migrations (Phase 1: collection languages; Phase 3: phonetics/gloss) ar
 
 #### Automated
 
-- [x] 2.1 Backend type checking passes: `cd backend && npm run build:ts`
-- [x] 2.2 Backend test suite passes: `cd backend && npm test`
+- [x] 2.1 Backend type checking passes: `cd backend && npm run build:ts` — 3b2ed69
+- [x] 2.2 Backend test suite passes: `cd backend && npm test` — 3b2ed69
 
 #### Manual
 
-- [x] 2.3 POST /api/collections/:id/translate returns several variants with phonetics and nested sentence candidates with native glosses
-- [x] 2.4 Re-calling translate ("regenerate") returns a fresh set of sentences
-- [x] 2.5 Exceeding the rate limit returns 429
-- [x] 2.6 An artificially short timeout demonstrates the clean-error path
+- [x] 2.3 POST /api/collections/:id/translate returns several variants with phonetics and nested sentence candidates with native glosses — 3b2ed69
+- [x] 2.4 Re-calling translate ("regenerate") returns a fresh set of sentences — 3b2ed69
+- [x] 2.5 Exceeding the rate limit returns 429 — 3b2ed69
+- [x] 2.6 An artificially short timeout demonstrates the clean-error path — 3b2ed69
 
 ### Phase 3: Backend — Save endpoint & entry schema extensions
 
 #### Automated
 
-- [ ] 3.1 Migration applies and reverses cleanly: `cd backend && npm run migrate:up` then `npm run migrate:down` then `npm run migrate:up` again
-- [ ] 3.2 Backend type checking passes: `cd backend && npm run build:ts`
-- [ ] 3.3 Backend test suite passes: `cd backend && npm test`
+- [x] 3.1 Migration applies and reverses cleanly: `cd backend && npm run migrate:up` then `npm run migrate:down` then `npm run migrate:up` again
+- [x] 3.2 Backend type checking passes: `cd backend && npm run build:ts`
+- [x] 3.3 Backend test suite passes: `cd backend && npm test`
 
 #### Manual
 
-- [ ] 3.4 Saving via curl/Postman creates entries + entry_translations (with phonetics) + entry_sentences (with native gloss) rows, confirmed against Postgres
-- [ ] 3.5 GET /api/collections/:id in the web app shows phonetics and the bilingual sentence pair for a freshly-saved entry
-- [ ] 3.6 Deleting the parent collection still cascades cleanly through entries → translations/sentences
+- [x] 3.4 Saving via curl/Postman creates entries + entry_translations (with phonetics) + entry_sentences (with native gloss) rows, confirmed against Postgres
+- [x] 3.5 GET /api/collections/:id in the web app shows phonetics and the bilingual sentence pair for a freshly-saved entry
+- [x] 3.6 Deleting the parent collection still cascades cleanly through entries → translations/sentences
 
 ### Phase 4: Extension — scaffold, auth, capture UI
 

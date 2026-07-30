@@ -69,12 +69,18 @@ function CollectionDetailPage () {
               <strong>{entry.wordOrPhrase}</strong> ({entry.sourceLanguageCode})
               <ul>
                 {entry.translations.map((translation) => (
-                  <li key={translation.id}>{translation.languageCode}: {translation.meaningText}</li>
+                  <li key={translation.id}>
+                    {translation.languageCode}: {translation.meaningText}
+                    {translation.phoneticTranscription && <em> {translation.phoneticTranscription}</em>}
+                  </li>
                 ))}
               </ul>
               <ul>
                 {entry.sentences.map((sentence) => (
-                  <li key={sentence.id}>{sentence.languageCode}: {sentence.sentenceText}</li>
+                  <li key={sentence.id}>
+                    {sentence.languageCode}: {sentence.sentenceText}
+                    {sentence.nativeGlossText && <em> — {sentence.nativeGlossText}</em>}
+                  </li>
                 ))}
               </ul>
             </li>

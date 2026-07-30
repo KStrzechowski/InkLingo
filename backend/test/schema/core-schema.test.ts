@@ -78,6 +78,34 @@ test('entry_translations allows the same entry in multiple languages', async (t)
   assert.deepStrictEqual(rows.map((row) => row.language_code), ['en', 'ru'])
 })
 
+test('entry_translations.phonetic_transcription and entry_sentences.native_gloss_text are nullable', async (t) => {
+  const app = await build(t)
+  const userId = await createUserRow(app, t)
+  const collectionId = await createCollectionRow(app, userId, 'Test collection')
+  const entryId = await createEntryRow(app, collectionId, 'jedzenie')
+
+  await app.sql.query(
+    'INSERT INTO entry_translations (entry_id, language_code, meaning_text) VALUES ($1, $2, $3)',
+    [entryId, 'en', 'food']
+  )
+  await app.sql.query(
+    'INSERT INTO entry_sentences (entry_id, language_code, sentence_text) VALUES ($1, $2, $3)',
+    [entryId, 'en', 'I like this food.']
+  )
+
+  const translationRows = await app.sql.query(
+    'SELECT phonetic_transcription FROM entry_translations WHERE entry_id = $1',
+    [entryId]
+  ) as Array<{ phonetic_transcription: string | null }>
+  const sentenceRows = await app.sql.query(
+    'SELECT native_gloss_text FROM entry_sentences WHERE entry_id = $1',
+    [entryId]
+  ) as Array<{ native_gloss_text: string | null }>
+
+  assert.deepStrictEqual(translationRows, [{ phonetic_transcription: null }])
+  assert.deepStrictEqual(sentenceRows, [{ native_gloss_text: null }])
+})
+
 test('entry_sentences.sentence_text rejects null', async (t) => {
   const app = await build(t)
   const userId = await createUserRow(app, t)
