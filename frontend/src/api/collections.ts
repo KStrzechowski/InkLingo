@@ -3,6 +3,8 @@ import { apiClient } from './client'
 export interface Collection {
   id: string
   name: string
+  nativeLanguageCode: string
+  targetLanguageCodes: string[]
   createdAt: string
 }
 
@@ -37,8 +39,8 @@ export async function listCollections (): Promise<Collection[]> {
   return res.data.collections
 }
 
-export async function createCollection (name: string): Promise<Collection> {
-  const res = await apiClient.post<Collection>('/api/collections', { name })
+export async function createCollection (name: string, nativeLanguageCode: string, targetLanguageCodes: string[]): Promise<Collection> {
+  const res = await apiClient.post<Collection>('/api/collections', { name, nativeLanguageCode, targetLanguageCodes })
   return res.data
 }
 

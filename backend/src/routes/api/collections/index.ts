@@ -1,59 +1,83 @@
-import { type FastifyPluginAsync } from 'fastify'
+import { type FastifyInstance } from 'fastify'
+import { type FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { NeonDbError } from '@neondatabase/serverless'
+import { SUPPORTED_LANGUAGE_CODES } from '../../../languages.ts'
+import { createCollectionBodySchema, collectionParamsSchema } from './schemas.ts'
 
 const UNIQUE_VIOLATION = '23505'
 
-interface CreateCollectionBody {
-  name: string
+interface TargetLanguageRow {
+  collection_id: string
+  language_code: string
 }
 
-interface CollectionParams {
-  id: string
+async function targetLanguagesByCollectionId (fastify: FastifyInstance, collectionIds: string[]): Promise<TargetLanguageRow[]> {
+  return await fastify.sql`
+    SELECT collection_id, language_code
+    FROM collection_target_languages
+    WHERE collection_id = ANY(${collectionIds})
+  ` as TargetLanguageRow[]
 }
 
-const collections: FastifyPluginAsync = async (fastify): Promise<void> => {
+const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> => {
   fastify.get('/', async (request) => {
     const rows = await fastify.sql`
-      SELECT id, name, created_at
+      SELECT id, name, native_language_code, created_at
       FROM collections
       WHERE user_id = ${request.authUser.id}
       ORDER BY name ASC
     `
+    const collectionIds = rows.map((row) => row.id)
+    const targetLanguages = await targetLanguagesByCollectionId(fastify, collectionIds)
 
     return {
       collections: rows.map((row) => ({
         id: row.id,
         name: row.name,
+        nativeLanguageCode: row.native_language_code,
+        targetLanguageCodes: targetLanguages
+          .filter((target) => target.collection_id === row.id)
+          .map((target) => target.language_code),
         createdAt: row.created_at
       }))
     }
   })
 
-  fastify.post<{ Body: CreateCollectionBody }>('/', {
+  fastify.post('/', {
     schema: {
-      body: {
-        type: 'object',
-        required: ['name'],
-        properties: {
-          name: { type: 'string', minLength: 1, maxLength: 100 }
-        }
-      }
+      body: createCollectionBodySchema
     }
   }, async (request, reply) => {
     const name = request.body.name.trim()
     if (name.length === 0) {
       return reply.badRequest('name must not be blank')
     }
+    const nativeLanguageCode = request.body.nativeLanguageCode.trim().toLowerCase()
+    const targetLanguageCodes = request.body.targetLanguageCodes.map((code) => code.trim().toLowerCase())
+    if (
+      !SUPPORTED_LANGUAGE_CODES.includes(nativeLanguageCode) ||
+      targetLanguageCodes.some((code) => !SUPPORTED_LANGUAGE_CODES.includes(code))
+    ) {
+      return reply.badRequest('unsupported language code')
+    }
 
     try {
       const [row] = await fastify.sql`
-        INSERT INTO collections (user_id, name)
-        VALUES (${request.authUser.id}, ${name})
-        RETURNING id, name, created_at
+        INSERT INTO collections (user_id, name, native_language_code)
+        VALUES (${request.authUser.id}, ${name}, ${nativeLanguageCode})
+        RETURNING id, name, native_language_code, created_at
       `
+      for (const languageCode of targetLanguageCodes) {
+        await fastify.sql`
+          INSERT INTO collection_target_languages (collection_id, language_code)
+          VALUES (${row.id}, ${languageCode})
+        `
+      }
       return await reply.code(201).send({
         id: row.id,
         name: row.name,
+        nativeLanguageCode: row.native_language_code,
+        targetLanguageCodes,
         createdAt: row.created_at
       })
     } catch (err) {
@@ -64,24 +88,21 @@ const collections: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
   })
 
-  fastify.get<{ Params: CollectionParams }>('/:id', {
+  fastify.get('/:id', {
     schema: {
-      params: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', format: 'uuid' }
-        }
-      }
+      params: collectionParamsSchema
     }
   }, async (request, reply) => {
     const [collection] = await fastify.sql`
-      SELECT id, name, created_at
+      SELECT id, name, native_language_code, created_at
       FROM collections
       WHERE id = ${request.params.id} AND user_id = ${request.authUser.id}
     `
     if (collection === undefined) {
       return reply.notFound()
     }
+
+    const targetLanguages = await targetLanguagesByCollectionId(fastify, [collection.id])
 
     const entries = await fastify.sql`
       SELECT id, word_or_phrase, source_language_code, created_at
@@ -105,6 +126,8 @@ const collections: FastifyPluginAsync = async (fastify): Promise<void> => {
     return {
       id: collection.id,
       name: collection.name,
+      nativeLanguageCode: collection.native_language_code,
+      targetLanguageCodes: targetLanguages.map((target) => target.language_code),
       createdAt: collection.created_at,
       entries: entries.map((entry) => ({
         id: entry.id,

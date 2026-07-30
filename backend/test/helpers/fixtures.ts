@@ -18,13 +18,22 @@ export async function createUserRow (
 export async function createCollectionRow (
   app: Awaited<ReturnType<typeof build>>,
   userId: string,
-  name: string
+  name: string,
+  nativeLanguageCode = 'pl',
+  targetLanguageCodes = ['en']
 ): Promise<string> {
   const rows = await app.sql.query(
-    'INSERT INTO collections (user_id, name) VALUES ($1, $2) RETURNING id',
-    [userId, name]
+    'INSERT INTO collections (user_id, name, native_language_code) VALUES ($1, $2, $3) RETURNING id',
+    [userId, name, nativeLanguageCode]
   ) as Array<{ id: string }>
-  return rows[0].id
+  const collectionId = rows[0].id
+  for (const languageCode of targetLanguageCodes) {
+    await app.sql.query(
+      'INSERT INTO collection_target_languages (collection_id, language_code) VALUES ($1, $2)',
+      [collectionId, languageCode]
+    )
+  }
+  return collectionId
 }
 
 export async function createEntryRow (

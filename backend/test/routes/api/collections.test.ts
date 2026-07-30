@@ -32,17 +32,63 @@ test('a created collection appears in a subsequent list call', async (t) => {
     url: '/api/collections',
     method: 'POST',
     headers: { authorization: `Bearer ${token}` },
-    payload: { name: 'Food words' }
+    payload: { name: 'Food words', nativeLanguageCode: 'pl', targetLanguageCodes: ['en'] }
   })
   assert.equal(createRes.statusCode, 201)
-  const created = JSON.parse(createRes.payload) as { id: string, name: string, createdAt: string }
+  const created = JSON.parse(createRes.payload) as { id: string, name: string, nativeLanguageCode: string, targetLanguageCodes: string[], createdAt: string }
   assert.equal(created.name, 'Food words')
+  assert.equal(created.nativeLanguageCode, 'pl')
+  assert.deepStrictEqual(created.targetLanguageCodes, ['en'])
   assert.ok(created.id)
   assert.ok(created.createdAt)
 
   const listRes = await app.inject({ url: '/api/collections', headers: { authorization: `Bearer ${token}` } })
-  const body = JSON.parse(listRes.payload) as { collections: Array<{ id: string, name: string }> }
+  const body = JSON.parse(listRes.payload) as { collections: Array<{ id: string, name: string, nativeLanguageCode: string, targetLanguageCodes: string[] }> }
   assert.deepStrictEqual(body.collections.map((c) => c.id), [created.id])
+  assert.equal(body.collections[0].nativeLanguageCode, 'pl')
+  assert.deepStrictEqual(body.collections[0].targetLanguageCodes, ['en'])
+})
+
+test('POST /api/collections rejects a missing nativeLanguageCode/targetLanguageCodes with 400', async (t) => {
+  const app = await build(t)
+  const { token } = await authedUser(app, t)
+
+  const res = await app.inject({
+    url: '/api/collections',
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { name: 'No languages' }
+  })
+  assert.equal(res.statusCode, 400)
+})
+
+test('POST /api/collections rejects an unsupported language code with 400', async (t) => {
+  const app = await build(t)
+  const { token } = await authedUser(app, t)
+
+  const res = await app.inject({
+    url: '/api/collections',
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { name: 'Garbage language', nativeLanguageCode: 'SFEFZESF', targetLanguageCodes: ['en'] }
+  })
+  assert.equal(res.statusCode, 400)
+})
+
+test('POST /api/collections accepts a supported language code regardless of case', async (t) => {
+  const app = await build(t)
+  const { token } = await authedUser(app, t)
+
+  const res = await app.inject({
+    url: '/api/collections',
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { name: 'Mixed case language', nativeLanguageCode: 'PL', targetLanguageCodes: ['En'] }
+  })
+  assert.equal(res.statusCode, 201)
+  const created = JSON.parse(res.payload) as { nativeLanguageCode: string, targetLanguageCodes: string[] }
+  assert.equal(created.nativeLanguageCode, 'pl')
+  assert.deepStrictEqual(created.targetLanguageCodes, ['en'])
 })
 
 test('POST /api/collections rejects a duplicate name for the same user, case-insensitively, with 409', async (t) => {
@@ -53,7 +99,7 @@ test('POST /api/collections rejects a duplicate name for the same user, case-ins
     url: '/api/collections',
     method: 'POST',
     headers: { authorization: `Bearer ${token}` },
-    payload: { name: 'Travel phrases' }
+    payload: { name: 'Travel phrases', nativeLanguageCode: 'pl', targetLanguageCodes: ['en'] }
   })
   assert.equal(first.statusCode, 201)
 
@@ -61,7 +107,7 @@ test('POST /api/collections rejects a duplicate name for the same user, case-ins
     url: '/api/collections',
     method: 'POST',
     headers: { authorization: `Bearer ${token}` },
-    payload: { name: 'travel phrases' }
+    payload: { name: 'travel phrases', nativeLanguageCode: 'pl', targetLanguageCodes: ['en'] }
   })
   assert.equal(second.statusCode, 409)
 })
@@ -74,7 +120,7 @@ test('POST /api/collections rejects a blank/whitespace-only name with 400', asyn
     url: '/api/collections',
     method: 'POST',
     headers: { authorization: `Bearer ${token}` },
-    payload: { name: '   ' }
+    payload: { name: '   ', nativeLanguageCode: 'pl', targetLanguageCodes: ['en'] }
   })
   assert.equal(res.statusCode, 400)
 })
@@ -87,7 +133,7 @@ test('POST /api/collections rejects an over-max-length name with 400', async (t)
     url: '/api/collections',
     method: 'POST',
     headers: { authorization: `Bearer ${token}` },
-    payload: { name: 'a'.repeat(101) }
+    payload: { name: 'a'.repeat(101), nativeLanguageCode: 'pl', targetLanguageCodes: ['en'] }
   })
   assert.equal(res.statusCode, 400)
 })
@@ -111,14 +157,16 @@ test('GET /api/collections/:id returns an empty entries array for a collection w
     url: '/api/collections',
     method: 'POST',
     headers: { authorization: `Bearer ${token}` },
-    payload: { name: 'Empty collection' }
+    payload: { name: 'Empty collection', nativeLanguageCode: 'pl', targetLanguageCodes: ['en'] }
   })
   const created = JSON.parse(createRes.payload) as { id: string }
 
   const res = await app.inject({ url: `/api/collections/${created.id}`, headers: { authorization: `Bearer ${token}` } })
   assert.equal(res.statusCode, 200)
-  const body = JSON.parse(res.payload) as { entries: unknown[] }
+  const body = JSON.parse(res.payload) as { entries: unknown[], nativeLanguageCode: string, targetLanguageCodes: string[] }
   assert.deepStrictEqual(body.entries, [])
+  assert.equal(body.nativeLanguageCode, 'pl')
+  assert.deepStrictEqual(body.targetLanguageCodes, ['en'])
 })
 
 test('GET /api/collections/:id returns correctly nested translations/sentences for entries with more than one of each', async (t) => {

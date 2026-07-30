@@ -2,11 +2,14 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { createCollection, listCollections, type Collection } from '../api/collections'
 import { extractErrorMessage } from '../api/errors'
+import { SUPPORTED_LANGUAGES } from '../languages'
 
 function CollectionsListPage () {
   const [collections, setCollections] = useState<Collection[]>([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
+  const [nativeLanguageCode, setNativeLanguageCode] = useState(SUPPORTED_LANGUAGES[0].code)
+  const [targetLanguageCode, setTargetLanguageCode] = useState(SUPPORTED_LANGUAGES[1].code)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -22,7 +25,7 @@ function CollectionsListPage () {
     setError(null)
     setSubmitting(true)
     try {
-      const created = await createCollection(name)
+      const created = await createCollection(name, nativeLanguageCode, [targetLanguageCode])
       setCollections((prev) => [...prev, created])
       setName('')
     } catch (err) {
@@ -46,6 +49,16 @@ function CollectionsListPage () {
           onChange={(event) => setName(event.target.value)}
           placeholder="Collection name"
         />
+        <select value={nativeLanguageCode} onChange={(event) => setNativeLanguageCode(event.target.value)}>
+          {SUPPORTED_LANGUAGES.map((language) => (
+            <option key={language.code} value={language.code}>{language.label}</option>
+          ))}
+        </select>
+        <select value={targetLanguageCode} onChange={(event) => setTargetLanguageCode(event.target.value)}>
+          {SUPPORTED_LANGUAGES.map((language) => (
+            <option key={language.code} value={language.code}>{language.label}</option>
+          ))}
+        </select>
         <button type="submit" disabled={submitting}>Create</button>
       </form>
       {error && <p style={{ color: 'red' }}>{error}</p>}
