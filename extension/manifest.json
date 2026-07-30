@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "InkLingo",
+  "version": "0.1.0",
+  "description": "Capture a word or phrase, get AI translation variants with IPA phonetics and bilingual example sentences, and save it to a collection.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "inklingo@inklingo.app",
+      "strict_min_version": "128.0"
+    }
+  },
+  "permissions": ["identity", "storage"],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://*.execute-api.eu-central-1.amazonaws.com/*",
+    "https://*.auth.eu-central-1.amazoncognito.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "type": "module"
+  },
+  "action": {
+    "default_title": "InkLingo",
+    "default_popup": "popup.html"
+  }
+}

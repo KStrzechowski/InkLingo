@@ -420,30 +420,30 @@ Both new migrations (Phase 1: collection languages; Phase 3: phonetics/gloss) ar
 
 #### Automated
 
-- [x] 3.1 Migration applies and reverses cleanly: `cd backend && npm run migrate:up` then `npm run migrate:down` then `npm run migrate:up` again
-- [x] 3.2 Backend type checking passes: `cd backend && npm run build:ts`
-- [x] 3.3 Backend test suite passes: `cd backend && npm test`
+- [x] 3.1 Migration applies and reverses cleanly: `cd backend && npm run migrate:up` then `npm run migrate:down` then `npm run migrate:up` again — eb1afae
+- [x] 3.2 Backend type checking passes: `cd backend && npm run build:ts` — eb1afae
+- [x] 3.3 Backend test suite passes: `cd backend && npm test` — eb1afae
 
 #### Manual
 
-- [x] 3.4 Saving via curl/Postman creates entries + entry_translations (with phonetics) + entry_sentences (with native gloss) rows, confirmed against Postgres
-- [x] 3.5 GET /api/collections/:id in the web app shows phonetics and the bilingual sentence pair for a freshly-saved entry
-- [x] 3.6 Deleting the parent collection still cascades cleanly through entries → translations/sentences
+- [x] 3.4 Saving via curl/Postman creates entries + entry_translations (with phonetics) + entry_sentences (with native gloss) rows, confirmed against Postgres — eb1afae
+- [x] 3.5 GET /api/collections/:id in the web app shows phonetics and the bilingual sentence pair for a freshly-saved entry — eb1afae
+- [x] 3.6 Deleting the parent collection still cascades cleanly through entries → translations/sentences — eb1afae
 
 ### Phase 4: Extension — scaffold, auth, capture UI
 
 #### Automated
 
-- [ ] 4.1 No new backend/frontend regressions: `cd backend && npm test`, `cd frontend && npm run build && npm run lint`
-- [ ] 4.2 CDK synthesizes cleanly with the new callback URL: `cd infra && npx cdk synth InkLingo-AuthStack -c stack=AuthStack`
+- [x] 4.1 No new backend/frontend regressions: `cd backend && npm test`, `cd frontend && npm run build && npm run lint`
+- [x] 4.2 CDK synthesizes cleanly with the new callback URL: `cd infra && npx cdk synth InkLingo-AuthStack -c stack=AuthStack`
 
 #### Manual
 
-- [ ] 4.3 Loading the unpacked extension in Firefox succeeds with no manifest errors
-- [ ] 4.4 Logging in completes launchWebAuthFlow and lands back in the popup authenticated
-- [ ] 4.5 Typing a native-language word and a target-language word each produce a normalized, correct result
-- [ ] 4.6 Capturing, picking a variant + sentence, and saving creates a real entry visible in the web app
-- [ ] 4.7 Regenerating sentences replaces only the sentences shown, not the variants/phonetics
+- [x] 4.3 Loading the unpacked extension in Firefox succeeds with no manifest errors
+- [x] 4.4 Logging in completes launchWebAuthFlow and lands back in the popup authenticated
+- [x] 4.5 Typing a native-language word and a target-language word each produce a normalized, correct result
+- [x] 4.6 Capturing, picking a variant + sentence, and saving creates a real entry visible in the web app
+- [x] 4.7 Regenerating sentences replaces only the sentences shown, not the variants/phonetics
 - [ ] 4.8 A deliberately-triggered rate-limit shows a clean, non-crashing error state in the popup
 
 ### Phase 5: Multi-language expansion (deferred)

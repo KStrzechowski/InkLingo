@@ -1,0 +1,8 @@
+node_modules
+dist
+
+# Cognito IDs and the API base URL for whichever environment this build
+# targets — same convention as frontend/, never committed. Copy
+# .env.example and fill it in.
+.env.development
+.env.production

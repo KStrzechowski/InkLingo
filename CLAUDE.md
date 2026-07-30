@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project layout
 
-InkLingo is a decoupled two-app project — `frontend/` and `backend/` are independent npm projects with no workspace linking and no root `package.json`. Install and run each separately.
+InkLingo is a decoupled multi-app project — `frontend/`, `backend/`, `extension/` (Firefox add-on) and `infra/` (AWS CDK) are independent npm projects with no workspace linking and no root `package.json`. Install and run each separately.
 
 ## Commands
 
@@ -25,10 +25,19 @@ InkLingo is a decoupled two-app project — `frontend/` and `backend/` are indep
 - `npm run lint` — oxlint (not eslint)
 - `npm run preview` — preview the production build
 
+### Extension (`extension/`, Firefox MV3 + Vite + React + TypeScript)
+
+- `npm install`
+- `npm run build` — `tsc -b && vite build`, output in `dist/` (load `dist/manifest.json` via `about:debugging`)
+- `npm run dev` — `vite build --watch` against `.env.development` (local backend)
+- `npm run lint` — oxlint
+- See `extension/README.md` for the pinned add-on ID ↔ Cognito callback URL coupling.
+
 ## Architecture
 
 - **Backend**: routes and plugins are autoloaded from `src/routes/` and `src/plugins/` via `@fastify/autoload`, wired in `src/app.ts` — add an endpoint by dropping a new file/folder under `src/routes/`, no manual registration needed. `src/plugins/` is for cross-cutting concerns (decorators, hooks) shared across all routes. Tests build a full app instance per file via `test/helper.ts`'s `build(t)` helper (`fastify-cli/helper.js`), tearing it down in `t.after`.
-- The two apps talk over plain HTTP; there is no shared-types package or RPC layer between them.
+- **Extension**: Vite builds two entry points — `src/background.ts` (event page) and `popup.html` → `src/popup/`. Every backend call runs in the background script so it goes out under `host_permissions` and skips page-level CORS; the popup reaches it via `browser.runtime.sendMessage` with the contract in `extension/src/messages.ts`.
+- The apps talk over plain HTTP; there is no shared-types package or RPC layer between them, so response shapes are duplicated per client (`frontend/src/api/collections.ts`, `extension/src/types.ts`).
 - Target deployment is containerized, self-hosted on AWS/GCP, with Postgres as the intended datastore — neither is wired up in either app yet.
 
 ## The `context/` directory

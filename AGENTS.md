@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-InkLingo is a language-learning app in early scaffolding: a Fastify + TypeScript API in `backend/` and a Vite + React + TypeScript client in `frontend/`, developed as two independent npm projects (no root `package.json`, no workspace linking).
+InkLingo is a language-learning app in early scaffolding: a Fastify + TypeScript API in `backend/`, a Vite + React + TypeScript client in `frontend/`, a Firefox MV3 add-on in `extension/`, and AWS CDK definitions in `infra/` — developed as independent npm projects (no root `package.json`, no workspace linking).
 
 ## Hard Rules
 
@@ -12,6 +12,7 @@ InkLingo is a language-learning app in early scaffolding: a Fastify + TypeScript
 
 - `backend/src/routes/` and `backend/src/plugins/` are autoloaded by `@fastify/autoload` (wired in `backend/src/app.ts`) — new endpoints and shared decorators are picked up with no manual registration.
 - `frontend/src/` is a stock Vite + React scaffold (`App.tsx`, `main.tsx`); no routing or data-layer library is wired up yet.
+- `extension/src/` builds to two entry points: `background.ts` (the event page that owns every backend call) and `popup/` (the capture UI). See `extension/README.md` — the pinned add-on ID in `manifest.json` determines the Cognito callback URL registered in `infra/lib/stacks/auth-stack.ts`.
 - `context/foundation/` holds living docs (`prd.md`, `shape-notes.md`, `tech-stack.md`); `context/changes/<change-id>/` holds in-flight work; `context/changes/bootstrap-verification/` holds the scaffold audit logs (`verification-backend.md`, `verification-frontend.md`).
 - See `@CLAUDE.md` for the full 10xDevs toolkit workflow this repo follows.
 
@@ -19,6 +20,7 @@ InkLingo is a language-learning app in early scaffolding: a Fastify + TypeScript
 
 - Backend (`backend/`): `npm run dev` (hot reload), `npm test` (compiles, then runs `node --test` with coverage), `npm run build:ts`.
 - Frontend (`frontend/`): `npm run dev`, `npm run build` (`tsc -b && vite build`), `npm run lint` (oxlint, not ESLint).
+- Extension (`extension/`): `npm run build` (`tsc -b && vite build` → `dist/`), `npm run dev` (`vite build --watch` against the local backend), `npm run lint` (oxlint).
 
 ## Coding Style & Naming Conventions
 

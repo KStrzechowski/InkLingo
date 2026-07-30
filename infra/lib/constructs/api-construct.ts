@@ -168,5 +168,20 @@ export class ApiConstruct extends Construct {
       methods: [apigatewayv2.HttpMethod.GET],
       integration
     });
+
+    // Sub-resources need their own entries — HTTP API route keys match a
+    // full path template, so /api/collections/{id} does not cover
+    // anything below it.
+    this.httpApi.addRoutes({
+      path: '/api/collections/{id}/translate',
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration
+    });
+
+    this.httpApi.addRoutes({
+      path: '/api/collections/{id}/entries',
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration
+    });
   }
 }

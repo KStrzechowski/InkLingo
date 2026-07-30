@@ -2,8 +2,24 @@ import * as cdk from 'aws-cdk-lib/core';
 import { Construct } from 'constructs';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import { createHash } from 'node:crypto';
 import { AuthConstruct } from '../constructs/auth-construct';
 import { CDK_SSM_PARAMS } from '../cdk-ssm-params';
+
+// Must match browser_specific_settings.gecko.id in extension/manifest.json.
+const FIREFOX_EXTENSION_ID = 'inklingo@inklingo.app';
+
+// The redirect URI the Firefox extension authenticates with. Firefox's
+// identity API derives it from the add-on ID as
+// https://<sha1(id)>.extensions.allizom.org/ and launchWebAuthFlow
+// refuses any other value, so this is computed rather than hardcoded —
+// it has to stay identical to what extension/src/auth.ts gets back from
+// browser.identity.getRedirectURL() at runtime. A moz-extension:// URL
+// can't be used instead: that UUID is regenerated on every install.
+function firefoxExtensionRedirectUrl (extensionId: string): string {
+  const hash = createHash('sha1').update(extensionId).digest('hex');
+  return `https://${hash}.extensions.allizom.org/`;
+}
 
 export class AuthStack extends cdk.Stack {
   public readonly userPool: cognito.UserPool;
@@ -21,7 +37,13 @@ export class AuthStack extends cdk.Stack {
     );
 
     const auth = new AuthConstruct(this, 'Auth', {
-      additionalCallbackUrls: [`https://${cloudFrontDomain}/callback`],
+      additionalCallbackUrls: [
+        `https://${cloudFrontDomain}/callback`,
+        firefoxExtensionRedirectUrl(FIREFOX_EXTENSION_ID)
+      ],
+      // No extension entry: the extension's logout is local-only (it just
+      // drops the tokens in browser.storage.local), so it never redirects
+      // through Cognito's /logout endpoint.
       additionalLogoutUrls: [`https://${cloudFrontDomain}/`]
     });
     this.userPool = auth.userPool;
