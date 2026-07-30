@@ -390,31 +390,31 @@ Both new migrations (Phase 1: collection languages; Phase 3: phonetics/gloss) ar
 
 #### Automated
 
-- [x] 1.1 Migration applies and reverses cleanly: `cd backend && npm run migrate:up` then `npm run migrate:down` then `npm run migrate:up` again
-- [x] 1.2 Backend type checking passes: `cd backend && npm run build:ts`
-- [x] 1.3 Backend test suite passes: `cd backend && npm test`
-- [x] 1.4 Frontend build passes: `cd frontend && npm run build`
-- [x] 1.5 Frontend lint passes: `cd frontend && npm run lint`
+- [x] 1.1 Migration applies and reverses cleanly: `cd backend && npm run migrate:up` then `npm run migrate:down` then `npm run migrate:up` again — 68f7d4b
+- [x] 1.2 Backend type checking passes: `cd backend && npm run build:ts` — 68f7d4b
+- [x] 1.3 Backend test suite passes: `cd backend && npm test` — 68f7d4b
+- [x] 1.4 Frontend build passes: `cd frontend && npm run build` — 68f7d4b
+- [x] 1.5 Frontend lint passes: `cd frontend && npm run lint` — 68f7d4b
 
 #### Manual
 
-- [x] 1.6 Creating a collection without language fields returns 400; with them returns 201 with fields echoed back
-- [x] 1.7 GET endpoints include nativeLanguageCode/targetLanguageCodes on each collection
-- [x] 1.8 Creating a collection through the updated web app form works end-to-end and survives a reload
+- [x] 1.6 Creating a collection without language fields returns 400; with them returns 201 with fields echoed back — 68f7d4b
+- [x] 1.7 GET endpoints include nativeLanguageCode/targetLanguageCodes on each collection — 68f7d4b
+- [x] 1.8 Creating a collection through the updated web app form works end-to-end and survives a reload — 68f7d4b
 
 ### Phase 2: Backend — AI translation/generation endpoint
 
 #### Automated
 
-- [ ] 2.1 Backend type checking passes: `cd backend && npm run build:ts`
-- [ ] 2.2 Backend test suite passes: `cd backend && npm test`
+- [x] 2.1 Backend type checking passes: `cd backend && npm run build:ts`
+- [x] 2.2 Backend test suite passes: `cd backend && npm test`
 
 #### Manual
 
-- [ ] 2.3 POST /api/collections/:id/translate returns several variants with phonetics and nested sentence candidates with native glosses
-- [ ] 2.4 Re-calling translate ("regenerate") returns a fresh set of sentences
-- [ ] 2.5 Exceeding the rate limit returns 429
-- [ ] 2.6 An artificially short timeout demonstrates the clean-error path
+- [x] 2.3 POST /api/collections/:id/translate returns several variants with phonetics and nested sentence candidates with native glosses
+- [x] 2.4 Re-calling translate ("regenerate") returns a fresh set of sentences
+- [x] 2.5 Exceeding the rate limit returns 429
+- [x] 2.6 An artificially short timeout demonstrates the clean-error path
 
 ### Phase 3: Backend — Save endpoint & entry schema extensions
 

@@ -1,6 +1,7 @@
 import type { AppConfig } from './plugins/config.ts'
 import type { NeonQueryFunction } from '@neondatabase/serverless'
 import type { CognitoJwtVerifier } from 'aws-jwt-verify'
+import type { Anthropic } from '@anthropic-ai/sdk'
 
 type CognitoVerifierProperties = {
   userPoolId: string
@@ -25,6 +26,7 @@ declare module 'fastify' {
     config: AppConfig;
     sql: NeonQueryFunction<false, false>;
     jwtVerifier: ReturnType<typeof CognitoJwtVerifier.create<CognitoVerifierProperties>>;
+    anthropicClient: Anthropic;
   }
 
   export interface FastifyRequest {

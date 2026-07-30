@@ -2,9 +2,12 @@ import { type FastifyInstance } from 'fastify'
 import { type FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { NeonDbError } from '@neondatabase/serverless'
 import { SUPPORTED_LANGUAGE_CODES } from '../../../languages.ts'
-import { createCollectionBodySchema, collectionParamsSchema } from './schemas.ts'
+import { createCollectionBodySchema, collectionParamsSchema, translateBodySchema } from './schemas.ts'
+import { generateTranslation } from '../../../ai/translate.ts'
 
 const UNIQUE_VIOLATION = '23505'
+const TRANSLATE_TIMEOUT_MS = 15_000
+const TRANSLATE_RATE_LIMIT_MAX = 20
 
 interface TargetLanguageRow {
   collection_id: string
@@ -150,6 +153,53 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
             createdAt: sentence.created_at
           }))
       }))
+    }
+  })
+
+  fastify.post('/:id/translate', {
+    schema: {
+      params: collectionParamsSchema,
+      body: translateBodySchema
+    },
+    config: {
+      rateLimit: {
+        max: TRANSLATE_RATE_LIMIT_MAX,
+        timeWindow: '1 minute',
+        keyGenerator: (request) => request.authUser.id
+      }
+    }
+  }, async (request, reply) => {
+    const text = request.body.text.trim()
+    if (text.length === 0) {
+      return reply.badRequest('text must not be blank')
+    }
+
+    const [collection] = await fastify.sql`
+      SELECT id, native_language_code
+      FROM collections
+      WHERE id = ${request.params.id} AND user_id = ${request.authUser.id}
+    `
+    if (collection === undefined) {
+      return reply.notFound()
+    }
+
+    const targetLanguages = await targetLanguagesByCollectionId(fastify, [collection.id])
+    const [targetLanguageCode] = targetLanguages.map((target) => target.language_code)
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => { controller.abort() }, TRANSLATE_TIMEOUT_MS)
+    try {
+      return await generateTranslation(fastify.anthropicClient, {
+        text,
+        nativeLanguageCode: collection.native_language_code,
+        targetLanguageCode,
+        signal: controller.signal
+      })
+    } catch (err) {
+      fastify.log.error({ err }, 'anthropic translate call failed')
+      return reply.badGateway('could not generate a translation — try again')
+    } finally {
+      clearTimeout(timeout)
     }
   })
 }

@@ -12,7 +12,7 @@
     "start": "npm run build:ts && fastify start -l info dist/app.js",
     "build:ts": "tsc",
     "watch:ts": "tsc -w",
-    "dev": "fastify start -l info src/app.ts",
+    "dev": "fastify start -l info -P src/app.ts",
     "dev:start": "fastify start --ignore-watch=.ts$ -w -l info -P dist/app.js",
     "migrate:up": "node-pg-migrate -d NEON_DATABASE_URL --envPath .env up",
     "premigrate:down": "node -e \"console.warn('WARNING: migrate:down will DROP ALL TABLES in the database at NEON_DATABASE_URL (backend/.env). Make sure this is NOT the same database the deployed Lambda reads from SSM (see backend/src/plugins/config.ts) before continuing.')\"",
@@ -23,6 +23,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@aws-sdk/client-ssm": "^3.1090.0",
     "@fastify/autoload": "^6.0.0",
     "@fastify/cors": "^11.3.0",

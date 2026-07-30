@@ -14,3 +14,8 @@ export const collectionParamsSchema = Type.Object({
   id: Type.String({ format: 'uuid' })
 })
 export type CollectionParams = Static<typeof collectionParamsSchema>
+
+export const translateBodySchema = Type.Object({
+  text: Type.String({ minLength: 1 })
+})
+export type TranslateBody = Static<typeof translateBodySchema>
