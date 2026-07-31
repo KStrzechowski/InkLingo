@@ -19,6 +19,22 @@ function stubAnthropicSuccess (app: App, input: unknown): void {
   } as unknown as Anthropic
 }
 
+// Returns each supplied payload in turn, then repeats the last one. Lets a
+// test drive the empty-then-populated sequence the retry exists for.
+function stubAnthropicSequence (app: App, inputs: unknown[]): { calls: () => number } {
+  let calls = 0
+  app.anthropicClient = {
+    messages: {
+      create: async () => {
+        const input = inputs[Math.min(calls, inputs.length - 1)]
+        calls++
+        return { content: [{ type: 'tool_use', name: TRANSLATION_TOOL_NAME, input }] }
+      }
+    }
+  } as unknown as Anthropic
+  return { calls: () => calls }
+}
+
 function stubAnthropicFailure (app: App): void {
   app.anthropicClient = {
     messages: {
@@ -127,6 +143,99 @@ test('POST /api/collections/:id/translate reorders and backfills what the model 
   assert.equal(body.languages[0].variants[0].meaningText, 'dog')
   assert.deepStrictEqual(body.languages[1].variants, [])
   assert.equal(body.languages[2].variants[0].meaningText, 'chien')
+})
+
+// The real model intermittently returns a structurally-valid response with
+// every `variants` array empty (~3 in 34 measured calls). That's a bad roll,
+// not an answer, so the client asks once more rather than rendering nothing.
+test('POST /api/collections/:id/translate retries once when every language comes back empty', async (t) => {
+  const app = await build(t)
+  const sub = randomUUID()
+  const userId = await createUserRow(app, t, sub)
+  const collectionId = await createCollectionRow(app, userId, 'Empty then populated', 'pl', ['en', 'de'])
+
+  const empty = {
+    normalizedNativeText: 'pies',
+    languages: [{ languageCode: 'en', variants: [] }, { languageCode: 'de', variants: [] }]
+  }
+  const populated = {
+    normalizedNativeText: 'pies',
+    languages: [
+      { languageCode: 'en', variants: [variant('dog')] },
+      { languageCode: 'de', variants: [variant('Hund')] }
+    ]
+  }
+  const stub = stubAnthropicSequence(app, [empty, populated])
+
+  app.jwtVerifier.cacheJwks(jwks)
+  const token = await signToken({ sub })
+
+  const res = await app.inject({
+    url: `/api/collections/${collectionId}/translate`,
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { text: 'pies' }
+  })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(stub.calls(), 2)
+  const body = JSON.parse(res.payload) as TranslationResult
+  assert.equal(body.languages[0].variants[0].meaningText, 'dog')
+  assert.equal(body.languages[1].variants[0].meaningText, 'Hund')
+})
+
+test('POST /api/collections/:id/translate stops retrying after one extra attempt', async (t) => {
+  const app = await build(t)
+  const sub = randomUUID()
+  const userId = await createUserRow(app, t, sub)
+  const collectionId = await createCollectionRow(app, userId, 'Always empty', 'pl', ['en'])
+
+  const stub = stubAnthropicSequence(app, [
+    { normalizedNativeText: 'pies', languages: [{ languageCode: 'en', variants: [] }] }
+  ])
+
+  app.jwtVerifier.cacheJwks(jwks)
+  const token = await signToken({ sub })
+
+  const res = await app.inject({
+    url: `/api/collections/${collectionId}/translate`,
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { text: 'pies' }
+  })
+
+  // Two attempts total, then it gives up and hands back what it has rather
+  // than looping or erroring — the popup renders the empty-language copy.
+  assert.equal(stub.calls(), 2)
+  assert.equal(res.statusCode, 200)
+  const body = JSON.parse(res.payload) as TranslationResult
+  assert.deepStrictEqual(body.languages[0].variants, [])
+})
+
+// A partially-populated response is a real answer, not a bad roll.
+test('POST /api/collections/:id/translate does not retry when only some languages are empty', async (t) => {
+  const app = await build(t)
+  const sub = randomUUID()
+  const userId = await createUserRow(app, t, sub)
+  const collectionId = await createCollectionRow(app, userId, 'Partially populated', 'pl', ['en', 'de'])
+
+  const stub = stubAnthropicSequence(app, [{
+    normalizedNativeText: 'pies',
+    languages: [{ languageCode: 'en', variants: [variant('dog')] }, { languageCode: 'de', variants: [] }]
+  }])
+
+  app.jwtVerifier.cacheJwks(jwks)
+  const token = await signToken({ sub })
+
+  const res = await app.inject({
+    url: `/api/collections/${collectionId}/translate`,
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { text: 'pies' }
+  })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(stub.calls(), 1)
 })
 
 test('POST /api/collections/:id/translate rejects a blank text with 400', async (t) => {
