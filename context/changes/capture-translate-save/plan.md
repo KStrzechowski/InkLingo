@@ -434,16 +434,16 @@ Both new migrations (Phase 1: collection languages; Phase 3: phonetics/gloss) ar
 
 #### Automated
 
-- [x] 4.1 No new backend/frontend regressions: `cd backend && npm test`, `cd frontend && npm run build && npm run lint`
-- [x] 4.2 CDK synthesizes cleanly with the new callback URL: `cd infra && npx cdk synth InkLingo-AuthStack -c stack=AuthStack`
+- [x] 4.1 No new backend/frontend regressions: `cd backend && npm test`, `cd frontend && npm run build && npm run lint` — 8da3a52
+- [x] 4.2 CDK synthesizes cleanly with the new callback URL: `cd infra && npx cdk synth InkLingo-AuthStack -c stack=AuthStack` — 8da3a52
 
 #### Manual
 
-- [x] 4.3 Loading the unpacked extension in Firefox succeeds with no manifest errors
-- [x] 4.4 Logging in completes launchWebAuthFlow and lands back in the popup authenticated
-- [x] 4.5 Typing a native-language word and a target-language word each produce a normalized, correct result
-- [x] 4.6 Capturing, picking a variant + sentence, and saving creates a real entry visible in the web app
-- [x] 4.7 Regenerating sentences replaces only the sentences shown, not the variants/phonetics
+- [x] 4.3 Loading the unpacked extension in Firefox succeeds with no manifest errors — 8da3a52
+- [x] 4.4 Logging in completes launchWebAuthFlow and lands back in the popup authenticated — 8da3a52
+- [x] 4.5 Typing a native-language word and a target-language word each produce a normalized, correct result — 8da3a52
+- [x] 4.6 Capturing, picking a variant + sentence, and saving creates a real entry visible in the web app — 8da3a52
+- [x] 4.7 Regenerating sentences replaces only the sentences shown, not the variants/phonetics — 8da3a52
 - [ ] 4.8 A deliberately-triggered rate-limit shows a clean, non-crashing error state in the popup
 
 ### Phase 5: Multi-language expansion (deferred)

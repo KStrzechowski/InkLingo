@@ -72,7 +72,27 @@ single-origin CORS allowlist
 popup talks to it over `browser.runtime.sendMessage`; the contract is in
 `src/messages.ts`.
 
-`host_permissions` is scoped to `localhost:3000` plus the
-`execute-api`/`amazoncognito.com` hosts in `eu-central-1`. Firefox grants
-manifest-declared host permissions at install time (127+); on older
-builds you may have to enable them from the extension's permissions panel.
+## host_permissions are generated per build
+
+The checked-in `manifest.json` lists regional wildcards
+(`https://*.execute-api.eu-central-1.amazonaws.com/*` and the matching
+`amazoncognito.com` host). Those are **placeholders, not what ships** — a
+wildcard grant would cover every AWS account's API Gateway and every Cognito
+hosted UI in the region, far more than this extension calls.
+
+`vite.config.ts`'s `write-manifest` plugin rewrites `host_permissions` at the
+end of every build, narrowing it to the two concrete origins derived from the
+same `VITE_*` values `src/config.ts` reads:
+
+| build | resulting `host_permissions` |
+| --- | --- |
+| `npm run build` | the `ApiUrl` origin + the Cognito hosted-UI origin |
+| `npm run dev` | `http://localhost:3000/*` + the Cognito hosted-UI origin |
+
+If no `.env.<mode>` file is present, the build warns and falls back to the
+checked-in wildcards so `dist/` still loads — check the build output if the
+extension is asking for more than you expect.
+
+Firefox grants manifest-declared host permissions at install time (127+); on
+older builds you may have to enable them from the extension's permissions
+panel.

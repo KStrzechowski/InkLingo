@@ -99,11 +99,17 @@ async function requestTokens (body: URLSearchParams): Promise<TokenResponse> {
 
 export async function login (): Promise<void> {
   const { verifier, challenge } = await createPkcePair()
+  // CSRF guard on the authorization response. PKCE already binds the code to
+  // this call — launchWebAuthFlow hands the redirect URL straight back here
+  // rather than to an ambient endpoint — but proving the response belongs to
+  // the request we made is the OAuth baseline, so send and check it anyway.
+  const state = base64UrlEncode(crypto.getRandomValues(new Uint8Array(16)))
   const params = new URLSearchParams({
     client_id: COGNITO_CLIENT_ID,
     response_type: 'code',
     scope: SCOPES,
     redirect_uri: redirectUri(),
+    state,
     code_challenge: challenge,
     code_challenge_method: 'S256'
   })
@@ -113,7 +119,12 @@ export async function login (): Promise<void> {
     interactive: true
   })
 
-  const code = new URL(responseUrl).searchParams.get('code')
+  const returned = new URL(responseUrl).searchParams
+  if (returned.get('state') !== state) {
+    throw new Error('Login response did not match the request — try again')
+  }
+
+  const code = returned.get('code')
   if (code === null) {
     throw new Error('Login finished without an authorization code')
   }
