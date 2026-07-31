@@ -450,8 +450,8 @@ Both new migrations (Phase 1: collection languages; Phase 3: phonetics/gloss) ar
 
 #### Automated
 
-- [x] 5.1 Backend type checking passes: `cd backend && npm run build:ts`
-- [x] 5.2 Backend test suite passes: `cd backend && npm test`
+- [x] 5.1 Backend type checking passes: `cd backend && npm run build:ts` — 8d28e70
+- [x] 5.2 Backend test suite passes: `cd backend && npm test` — 8d28e70
 
 #### Manual
 
