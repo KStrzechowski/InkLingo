@@ -104,10 +104,19 @@ To create the state deliberately, delete one translation row against the dev
 database:
 
 ```sql
--- swap in the entry id from the web app URL / a SELECT on entries
+-- swap in the entry id from a SELECT on entries.
+-- Delete BOTH rows: entry_sentences has no uniqueness constraint, so leaving
+-- the sentence behind means the Add button inserts a second German sentence
+-- next to the orphan, which reads like an endpoint bug but isn't one.
 DELETE FROM entry_translations
 WHERE entry_id = '<entry-uuid>' AND language_code = 'de';
+DELETE FROM entry_sentences
+WHERE entry_id = '<entry-uuid>' AND language_code = 'de';
 ```
+
+(The app itself never produces that split state — the save endpoint writes the
+translation and sentence in one transaction — so this is a quirk of setting the
+fixture up by hand, not a case the endpoint needs to defend against.)
 
 Reload the collection detail page.
 
