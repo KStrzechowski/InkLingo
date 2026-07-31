@@ -183,5 +183,13 @@ export class ApiConstruct extends Construct {
       methods: [apigatewayv2.HttpMethod.POST],
       integration
     });
+
+    // FR-018's per-entry language backfill. Two levels below
+    // /api/collections/{id}, so neither of the entries above covers it.
+    this.httpApi.addRoutes({
+      path: '/api/collections/{id}/entries/{entryId}/translations',
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration
+    });
   }
 }

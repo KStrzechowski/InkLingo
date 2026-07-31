@@ -22,9 +22,17 @@ export interface TranslationVariant {
   sentences: TranslationSentence[]
 }
 
+export interface TranslationLanguage {
+  languageCode: string
+  variants: TranslationVariant[]
+}
+
+// One entry per target language the collection teaches, in the order the
+// backend requested them. A language the model skipped comes back with an
+// empty `variants` array rather than being absent.
 export interface TranslationResult {
   normalizedNativeText: string
-  variants: TranslationVariant[]
+  languages: TranslationLanguage[]
 }
 
 export interface SavedEntry {

@@ -1,7 +1,7 @@
 ---
 change_id: capture-translate-save
 title: Capture translate save
-status: impl_reviewed
+status: implementing
 created: 2026-07-25
 updated: 2026-07-31
 archived_at: null
@@ -29,3 +29,9 @@ What bounds the exposure today:
 - **The Anthropic Console spend limit on the workspace holding this API key is the actual backstop** — it caps the bill at a chosen number regardless of container count. Set it; it costs nothing and no code change substitutes for it.
 
 Options considered and rejected for this slice: ElastiCache (VPC-only — the Lambda has no VPC and needs internet egress for Anthropic/Neon/Cognito, so it would pull in a NAT Gateway; roughly $50–130/month) and Upstash (adds a vendor and a secret). If the exact 20/min ever matters, the cheap fix is a custom store against the existing Neon connection — `@fastify/rate-limit`'s store interface is just `incr(key, cb, timeWindow, max)` + `child(routeOptions)`.
+
+### Phase 5 adaptations (approved during implementation)
+
+- **One Anthropic call for all target languages, not one per language.** The plan's Phase 5 section asks for both "the translate route's Anthropic call is instructed with all of the collection's target language codes" (one call) and per-language failure isolation — "a language whose generation fails or times out shows its own inline retry affordance without blocking the languages that succeeded". Those can't both hold: a single call fails as a unit. Chose the single call for cost (~$0.008 per capture instead of ~$0.04 at five languages). Two knock-on changes it forced: `MAX_TOKENS_PER_LANGUAGE` in `backend/src/ai/translate.ts` scales the output ceiling with the language count, because five languages in one response overruns the old flat 1536 and truncates the `tool_use` JSON mid-object; and `TRANSLATE_TIMEOUT_MS` went 15s → 20s, still clear of the 29s API Gateway ceiling.
+- **Criterion 5.5 is not verifiable as written.** It reads "Deliberately breaking one language's generation (e.g. an invalid language code) shows that language's section in an error/retry state while the others render normally" — behaviour the single-call design cannot have. What replaces it: a failed generation blanks the whole capture and the popup shows one error line plus one retry, and the model returning *nothing for one language* (as opposed to failing) renders that language's section with "Nothing came back for this language" while the others render normally. The second half is covered automatically by `alignToRequested` in `translate.ts` and by the `reorders and backfills what the model returns` test.
+- **Two new guards on `POST /api/collections`.** Duplicate target codes and the native language appearing among the targets both became reachable only once a collection could hold more than one target. The first would otherwise trip `UNIQUE(collection_id, language_code)` and surface as the name-conflict 409, which tells the caller the wrong thing. Same reasoning for the duplicate-language guard on `POST /:id/entries`, which would otherwise 500 mid-transaction.

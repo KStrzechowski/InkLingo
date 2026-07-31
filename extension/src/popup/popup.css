@@ -124,6 +124,26 @@ button.link {
   font-weight: 600;
 }
 
+/* One block per target language. The rule separates them without the extra
+   weight of a full border, which reads as noise at five languages deep. */
+.language {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.language + .language {
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+}
+
+.language > h2:first-child {
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+
 ul {
   list-style: none;
   margin: 0;

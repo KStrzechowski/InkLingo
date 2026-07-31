@@ -3,6 +3,12 @@ import type { Anthropic } from '@anthropic-ai/sdk'
 const MODEL = 'claude-haiku-4-5-20251001'
 export const TRANSLATION_TOOL_NAME = 'return_translation'
 
+// One response now covers every target language the collection teaches, so
+// the output ceiling scales with how many were asked for. max_tokens is a cap,
+// not a charge — sizing it generously costs nothing and a too-small value
+// truncates the tool_use JSON mid-object, which fails to parse entirely.
+const MAX_TOKENS_PER_LANGUAGE = 2048
+
 export interface TranslationSentence {
   targetText: string
   nativeGlossText: string
@@ -14,48 +20,67 @@ export interface TranslationVariant {
   sentences: TranslationSentence[]
 }
 
+export interface TranslationLanguage {
+  languageCode: string
+  variants: TranslationVariant[]
+}
+
 export interface TranslationResult {
   normalizedNativeText: string
-  variants: TranslationVariant[]
+  languages: TranslationLanguage[]
 }
 
 export interface GenerateTranslationParams {
   text: string
   nativeLanguageCode: string
-  targetLanguageCode: string
+  targetLanguageCodes: string[]
   signal: AbortSignal
 }
 
 const translationTool: Anthropic.Tool = {
   name: TRANSLATION_TOOL_NAME,
-  description: 'Return structured translation variants with IPA phonetics and bilingual example sentences for a captured word or phrase.',
+  description: 'Return structured translation variants with IPA phonetics and bilingual example sentences for a captured word or phrase, for every requested target language.',
   input_schema: {
     type: 'object',
-    required: ['normalizedNativeText', 'variants'],
+    required: ['normalizedNativeText', 'languages'],
     properties: {
       normalizedNativeText: {
         type: 'string',
         description: 'The input word/phrase normalized to its base form in the native language, regardless of which language it was typed in.'
       },
-      variants: {
+      languages: {
         type: 'array',
+        description: 'One entry per requested target language, in the order they were requested.',
         items: {
           type: 'object',
-          required: ['meaningText', 'phoneticTranscription', 'sentences'],
+          required: ['languageCode', 'variants'],
           properties: {
-            meaningText: { type: 'string', description: 'This variant\'s translation in the target language.' },
-            phoneticTranscription: {
-              type: ['string', 'null'],
-              description: 'IPA phonetic transcription of the target-language translation, or null if one cannot be produced.'
+            languageCode: {
+              type: 'string',
+              description: 'The target language code this entry covers, copied exactly from the requested list.'
             },
-            sentences: {
+            variants: {
               type: 'array',
               items: {
                 type: 'object',
-                required: ['targetText', 'nativeGlossText'],
+                required: ['meaningText', 'phoneticTranscription', 'sentences'],
                 properties: {
-                  targetText: { type: 'string', description: 'An example sentence in the target language using this variant.' },
-                  nativeGlossText: { type: 'string', description: 'That same sentence translated into the native language.' }
+                  meaningText: { type: 'string', description: 'This variant\'s translation in this target language.' },
+                  phoneticTranscription: {
+                    type: ['string', 'null'],
+                    description: 'IPA phonetic transcription of the target-language translation, or null if one cannot be produced.'
+                  },
+                  sentences: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['targetText', 'nativeGlossText'],
+                      properties: {
+                        targetText: { type: 'string', description: 'An example sentence in this target language using this variant.' },
+                        nativeGlossText: { type: 'string', description: 'That same sentence translated into the native language.' }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -66,13 +91,27 @@ const translationTool: Anthropic.Tool = {
   }
 }
 
+// The model can reorder the language blocks, or drop one. Rebuild the list
+// against what was actually requested so the response shape is predictable
+// for the client regardless — a language it skipped comes back with no
+// variants rather than silently vanishing from the array.
+function alignToRequested (returned: TranslationLanguage[], requested: string[]): TranslationLanguage[] {
+  return requested.map((languageCode) => {
+    const match = returned.find(
+      (language) => language.languageCode?.trim().toLowerCase() === languageCode
+    )
+    return { languageCode, variants: match?.variants ?? [] }
+  })
+}
+
 export async function generateTranslation (client: Anthropic, params: GenerateTranslationParams): Promise<TranslationResult> {
-  const { text, nativeLanguageCode, targetLanguageCode, signal } = params
+  const { text, nativeLanguageCode, targetLanguageCodes, signal } = params
+  const targetList = targetLanguageCodes.map((code) => `"${code}"`).join(', ')
 
   const message = await client.messages.create({
     model: MODEL,
-    max_tokens: 1536,
-    system: `You are a translation assistant inside a language-learning app. The active collection's native language is "${nativeLanguageCode}" and its target (learning) language is "${targetLanguageCode}". The user will type a word or phrase in either language — detect which one, then respond only via the provided tool call with: several translation variants covering distinct meanings if the word is ambiguous, each with an IPA phonetic transcription of the target-language form, and a few example sentences per variant, each paired with a native-language gloss.`,
+    max_tokens: MAX_TOKENS_PER_LANGUAGE * Math.max(targetLanguageCodes.length, 1),
+    system: `You are a translation assistant inside a language-learning app. The active collection's native language is "${nativeLanguageCode}" and its target (learning) languages are: ${targetList}. The user will type a word or phrase in the native language or in any one of the target languages — detect which one, then respond only via the provided tool call. Return one entry in "languages" for every requested target language, using the exact codes listed above. Within each language, give several translation variants covering distinct meanings if the word is ambiguous, each with an IPA phonetic transcription of that language's form, and a few example sentences per variant, each paired with a native-language gloss.`,
     messages: [{ role: 'user', content: text }],
     tools: [translationTool],
     tool_choice: { type: 'tool', name: TRANSLATION_TOOL_NAME }
@@ -85,5 +124,9 @@ export async function generateTranslation (client: Anthropic, params: GenerateTr
     throw new Error('anthropic response did not include the expected tool_use block')
   }
 
-  return toolUse.input as TranslationResult
+  const result = toolUse.input as TranslationResult
+  return {
+    normalizedNativeText: result.normalizedNativeText,
+    languages: alignToRequested(result.languages ?? [], targetLanguageCodes)
+  }
 }

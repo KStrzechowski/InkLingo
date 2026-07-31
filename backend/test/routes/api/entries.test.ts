@@ -24,10 +24,15 @@ function validBody (): Record<string, unknown> {
   }
 }
 
-async function collectionFor (app: App, t: Parameters<typeof build>[0], name: string): Promise<{ collectionId: string, token: string }> {
+async function collectionFor (
+  app: App,
+  t: Parameters<typeof build>[0],
+  name: string,
+  targetLanguageCodes = ['en']
+): Promise<{ collectionId: string, token: string }> {
   const sub = randomUUID()
   const userId = await createUserRow(app, t, sub)
-  const collectionId = await createCollectionRow(app, userId, name, 'pl', ['en'])
+  const collectionId = await createCollectionRow(app, userId, name, 'pl', targetLanguageCodes)
   app.jwtVerifier.cacheJwks(jwks)
   const token = await signToken({ sub })
   return { collectionId, token }
@@ -153,9 +158,67 @@ test('POST /api/collections/:id/entries rejects a language code the collection d
   assert.equal(res.statusCode, 400)
 })
 
-test('POST /api/collections/:id/entries rejects more than one translation with 400', async (t) => {
+test('POST /api/collections/:id/entries persists one translation+sentence pair per target language', async (t) => {
   const app = await build(t)
-  const { collectionId, token } = await collectionFor(app, t, 'Too many translations test')
+  const { collectionId, token } = await collectionFor(app, t, 'Multi language save test', ['en', 'de', 'fr'])
+
+  const res = await app.inject({
+    url: `/api/collections/${collectionId}/entries`,
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      wordOrPhrase: 'pies',
+      translations: [
+        { languageCode: 'en', meaningText: 'dog', phoneticTranscription: '/dɒɡ/' },
+        { languageCode: 'de', meaningText: 'Hund', phoneticTranscription: '/hʊnt/' },
+        { languageCode: 'fr', meaningText: 'chien', phoneticTranscription: '/ʃjɛ̃/' }
+      ],
+      sentences: [
+        { languageCode: 'en', sentenceText: 'The dog runs.', nativeGlossText: 'Pies biegnie.' },
+        { languageCode: 'de', sentenceText: 'Der Hund rennt.', nativeGlossText: 'Pies biegnie.' },
+        { languageCode: 'fr', sentenceText: 'Le chien court.', nativeGlossText: 'Pies biegnie.' }
+      ]
+    }
+  })
+
+  assert.equal(res.statusCode, 201)
+  const created = JSON.parse(res.payload) as SavedEntry
+  assert.deepStrictEqual(
+    created.translations.map((translation) => translation.languageCode).sort(),
+    ['de', 'en', 'fr']
+  )
+  assert.deepStrictEqual(
+    created.sentences.map((sentence) => sentence.languageCode).sort(),
+    ['de', 'en', 'fr']
+  )
+  // Still the collection's native language, not any of the three targets.
+  assert.equal(created.sourceLanguageCode, 'pl')
+})
+
+test('POST /api/collections/:id/entries rejects more than five translations with 400', async (t) => {
+  const app = await build(t)
+  const { collectionId, token } = await collectionFor(app, t, 'Over the language ceiling test')
+
+  const res = await app.inject({
+    url: `/api/collections/${collectionId}/entries`,
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      ...validBody(),
+      translations: ['en', 'de', 'fr', 'es', 'it', 'ru'].map((languageCode) => ({
+        languageCode, meaningText: 'dog', phoneticTranscription: null
+      }))
+    }
+  })
+
+  assert.equal(res.statusCode, 400)
+})
+
+// UNIQUE(entry_id, language_code) would otherwise blow up mid-transaction
+// and surface as a 500.
+test('POST /api/collections/:id/entries rejects two translations in the same language with 400', async (t) => {
+  const app = await build(t)
+  const { collectionId, token } = await collectionFor(app, t, 'Duplicate language save test', ['en', 'de'])
 
   const res = await app.inject({
     url: `/api/collections/${collectionId}/entries`,
@@ -165,7 +228,7 @@ test('POST /api/collections/:id/entries rejects more than one translation with 4
       ...validBody(),
       translations: [
         { languageCode: 'en', meaningText: 'dog', phoneticTranscription: null },
-        { languageCode: 'de', meaningText: 'Hund', phoneticTranscription: null }
+        { languageCode: 'en', meaningText: 'hound', phoneticTranscription: null }
       ]
     }
   })

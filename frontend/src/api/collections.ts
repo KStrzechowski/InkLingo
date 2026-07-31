@@ -46,7 +46,27 @@ export async function createCollection (name: string, nativeLanguageCode: string
   return res.data
 }
 
+export interface AddedEntryTranslation {
+  entryId: string
+  translation: EntryTranslation
+  sentence: EntrySentence
+}
+
 export async function getCollection (id: string): Promise<CollectionDetail> {
   const res = await apiClient.get<CollectionDetail>(`/api/collections/${id}`)
+  return res.data
+}
+
+// FR-018: backfill one existing entry with a language the collection gained
+// after that entry was saved. One entry, one language, user-triggered.
+export async function addEntryTranslation (
+  collectionId: string,
+  entryId: string,
+  languageCode: string
+): Promise<AddedEntryTranslation> {
+  const res = await apiClient.post<AddedEntryTranslation>(
+    `/api/collections/${collectionId}/entries/${entryId}/translations`,
+    { languageCode }
+  )
   return res.data
 }

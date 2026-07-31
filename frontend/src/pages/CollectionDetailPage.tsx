@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import axios from 'axios'
-import { getCollection, type CollectionDetail } from '../api/collections'
+import { addEntryTranslation, getCollection, type CollectionDetail, type Entry } from '../api/collections'
 import { extractErrorMessage } from '../api/errors'
 
 function CollectionDetailPage () {
@@ -10,6 +10,8 @@ function CollectionDetailPage () {
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  // Which entry+language backfill is in flight, so only that button spins.
+  const [addingKey, setAddingKey] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) {
@@ -45,6 +47,37 @@ function CollectionDetailPage () {
     }
   }, [id])
 
+  // FR-018: one entry, one language, on request. Splices the new rows into
+  // the entry in place rather than refetching the whole collection, so the
+  // other entries visibly stay as they were.
+  async function handleAddLanguage (entry: Entry, languageCode: string) {
+    if (!id) {
+      return
+    }
+    const key = `${entry.id}:${languageCode}`
+    setAddingKey(key)
+    setError(null)
+    try {
+      const added = await addEntryTranslation(id, entry.id, languageCode)
+      setCollection((prev) => (prev === null ? prev : {
+        ...prev,
+        entries: prev.entries.map((candidate) => (
+          candidate.id === entry.id
+            ? {
+                ...candidate,
+                translations: [...candidate.translations, added.translation],
+                sentences: [...candidate.sentences, added.sentence]
+              }
+            : candidate
+        ))
+      }))
+    } catch (err) {
+      setError(extractErrorMessage(err))
+    } finally {
+      setAddingKey(null)
+    }
+  }
+
   if (loading) {
     return <p>Loading…</p>
   }
@@ -53,38 +86,68 @@ function CollectionDetailPage () {
     return <p>Collection not found.</p>
   }
 
-  if (error || !collection) {
-    return <p style={{ color: 'red' }}>{error ?? 'Something went wrong.'}</p>
+  if (error && !collection) {
+    return <p style={{ color: 'red' }}>{error}</p>
+  }
+
+  if (!collection) {
+    return <p style={{ color: 'red' }}>Something went wrong.</p>
   }
 
   return (
     <section>
       <h2>{collection.name}</h2>
+      <p>
+        <small>{collection.nativeLanguageCode} → {collection.targetLanguageCodes.join(', ')}</small>
+      </p>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
       {collection.entries.length === 0 ? (
         <p>No entries yet.</p>
       ) : (
         <ul>
-          {collection.entries.map((entry) => (
-            <li key={entry.id}>
-              <strong>{entry.wordOrPhrase}</strong> ({entry.sourceLanguageCode})
-              <ul>
-                {entry.translations.map((translation) => (
-                  <li key={translation.id}>
-                    {translation.languageCode}: {translation.meaningText}
-                    {translation.phoneticTranscription && <em> {translation.phoneticTranscription}</em>}
-                  </li>
-                ))}
-              </ul>
-              <ul>
-                {entry.sentences.map((sentence) => (
-                  <li key={sentence.id}>
-                    {sentence.languageCode}: {sentence.sentenceText}
-                    {sentence.nativeGlossText && <em> — {sentence.nativeGlossText}</em>}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
+          {collection.entries.map((entry) => {
+            // Languages the collection teaches that this entry predates.
+            const missing = collection.targetLanguageCodes.filter((code) => (
+              !entry.translations.some((translation) => translation.languageCode === code)
+            ))
+
+            return (
+              <li key={entry.id}>
+                <strong>{entry.wordOrPhrase}</strong> ({entry.sourceLanguageCode})
+                <ul>
+                  {entry.translations.map((translation) => (
+                    <li key={translation.id}>
+                      {translation.languageCode}: {translation.meaningText}
+                      {translation.phoneticTranscription && <em> {translation.phoneticTranscription}</em>}
+                    </li>
+                  ))}
+                </ul>
+                <ul>
+                  {entry.sentences.map((sentence) => (
+                    <li key={sentence.id}>
+                      {sentence.languageCode}: {sentence.sentenceText}
+                      {sentence.nativeGlossText && <em> — {sentence.nativeGlossText}</em>}
+                    </li>
+                  ))}
+                </ul>
+                {missing.length > 0 && (
+                  <p>
+                    <small>Missing: </small>
+                    {missing.map((languageCode) => (
+                      <button
+                        key={languageCode}
+                        type="button"
+                        disabled={addingKey !== null}
+                        onClick={() => void handleAddLanguage(entry, languageCode)}
+                      >
+                        {addingKey === `${entry.id}:${languageCode}` ? 'Adding…' : `Add ${languageCode}`}
+                      </button>
+                    ))}
+                  </p>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </section>

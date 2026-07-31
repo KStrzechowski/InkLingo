@@ -91,6 +91,66 @@ test('POST /api/collections accepts a supported language code regardless of case
   assert.deepStrictEqual(created.targetLanguageCodes, ['en'])
 })
 
+test('POST /api/collections accepts up to five target languages', async (t) => {
+  const app = await build(t)
+  const { token } = await authedUser(app, t)
+
+  const res = await app.inject({
+    url: '/api/collections',
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { name: 'Five languages', nativeLanguageCode: 'pl', targetLanguageCodes: ['en', 'de', 'fr', 'es', 'it'] }
+  })
+  assert.equal(res.statusCode, 201)
+  const created = JSON.parse(res.payload) as { id: string, targetLanguageCodes: string[] }
+  assert.deepStrictEqual(created.targetLanguageCodes, ['en', 'de', 'fr', 'es', 'it'])
+
+  const detail = await app.inject({ url: `/api/collections/${created.id}`, headers: { authorization: `Bearer ${token}` } })
+  const body = JSON.parse(detail.payload) as { targetLanguageCodes: string[] }
+  assert.deepStrictEqual(body.targetLanguageCodes.slice().sort(), ['de', 'en', 'es', 'fr', 'it'])
+})
+
+test('POST /api/collections rejects a sixth target language with 400', async (t) => {
+  const app = await build(t)
+  const { token } = await authedUser(app, t)
+
+  const res = await app.inject({
+    url: '/api/collections',
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { name: 'Six languages', nativeLanguageCode: 'pl', targetLanguageCodes: ['en', 'de', 'fr', 'es', 'it', 'ru'] }
+  })
+  assert.equal(res.statusCode, 400)
+})
+
+// Would otherwise trip UNIQUE(collection_id, language_code) and surface as
+// the name-conflict 409, which tells the caller the wrong thing.
+test('POST /api/collections rejects duplicate target languages with 400', async (t) => {
+  const app = await build(t)
+  const { token } = await authedUser(app, t)
+
+  const res = await app.inject({
+    url: '/api/collections',
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { name: 'Duplicate targets', nativeLanguageCode: 'pl', targetLanguageCodes: ['en', 'EN'] }
+  })
+  assert.equal(res.statusCode, 400)
+})
+
+test('POST /api/collections rejects the native language appearing as a target with 400', async (t) => {
+  const app = await build(t)
+  const { token } = await authedUser(app, t)
+
+  const res = await app.inject({
+    url: '/api/collections',
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { name: 'Native as target', nativeLanguageCode: 'pl', targetLanguageCodes: ['en', 'pl'] }
+  })
+  assert.equal(res.statusCode, 400)
+})
+
 test('POST /api/collections rejects a duplicate name for the same user, case-insensitively, with 409', async (t) => {
   const app = await build(t)
   const { token } = await authedUser(app, t)

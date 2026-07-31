@@ -3,11 +3,21 @@ import { type FastifyInstance } from 'fastify'
 import { type FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { NeonDbError } from '@neondatabase/serverless'
 import { SUPPORTED_LANGUAGE_CODES } from '../../../languages.ts'
-import { createCollectionBodySchema, collectionParamsSchema, translateBodySchema, createEntryBodySchema } from './schemas.ts'
-import { generateTranslation } from '../../../ai/translate.ts'
+import {
+  createCollectionBodySchema,
+  collectionParamsSchema,
+  entryParamsSchema,
+  translateBodySchema,
+  createEntryBodySchema,
+  addEntryTranslationBodySchema
+} from './schemas.ts'
+import { generateTranslation, type GenerateTranslationParams, type TranslationResult } from '../../../ai/translate.ts'
 
 const UNIQUE_VIOLATION = '23505'
-const TRANSLATE_TIMEOUT_MS = 15_000
+// One call now covers every target language, so it generates more than the
+// single-language version did. Still comfortably under the 29s ceiling API
+// Gateway imposes on the Lambda (infra/lib/constructs/api-construct.ts:75).
+const TRANSLATE_TIMEOUT_MS = 20_000
 const TRANSLATE_RATE_LIMIT_MAX = 20
 
 interface TargetLanguageRow {
@@ -23,7 +33,38 @@ async function targetLanguagesByCollectionId (fastify: FastifyInstance, collecti
   ` as TargetLanguageRow[]
 }
 
+function hasDuplicates (codes: string[]): boolean {
+  return new Set(codes).size !== codes.length
+}
+
+// Wraps the Anthropic call in the request timeout and turns any failure into
+// null, so callers reply with a clean error instead of leaking an SDK
+// exception. Shared by the capture route and FR-018's per-entry backfill.
+async function generateWithTimeout (
+  fastify: FastifyInstance,
+  params: Omit<GenerateTranslationParams, 'signal'>
+): Promise<TranslationResult | null> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => { controller.abort() }, TRANSLATE_TIMEOUT_MS)
+  try {
+    return await generateTranslation(fastify.anthropicClient, { ...params, signal: controller.signal })
+  } catch (err) {
+    fastify.log.error({ err }, 'anthropic translate call failed')
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> => {
+  const translateRateLimit = {
+    rateLimit: {
+      max: TRANSLATE_RATE_LIMIT_MAX,
+      timeWindow: '1 minute',
+      keyGenerator: (request: { authUser: { id: string } }) => request.authUser.id
+    }
+  }
+
   fastify.get('/', async (request) => {
     const rows = await fastify.sql`
       SELECT id, name, native_language_code, created_at
@@ -63,6 +104,16 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       targetLanguageCodes.some((code) => !SUPPORTED_LANGUAGE_CODES.includes(code))
     ) {
       return reply.badRequest('unsupported language code')
+    }
+    // Both guards only became reachable once a collection could hold more than
+    // one target language. Without the first, the duplicate trips
+    // UNIQUE(collection_id, language_code) and surfaces as the name-conflict
+    // 409 below, which is a misleading thing to tell the caller.
+    if (hasDuplicates(targetLanguageCodes)) {
+      return reply.badRequest('targetLanguageCodes must not contain duplicates')
+    }
+    if (targetLanguageCodes.includes(nativeLanguageCode)) {
+      return reply.badRequest('nativeLanguageCode must not also be a target language')
     }
 
     try {
@@ -164,13 +215,7 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       params: collectionParamsSchema,
       body: translateBodySchema
     },
-    config: {
-      rateLimit: {
-        max: TRANSLATE_RATE_LIMIT_MAX,
-        timeWindow: '1 minute',
-        keyGenerator: (request) => request.authUser.id
-      }
-    }
+    config: translateRateLimit
   }, async (request, reply) => {
     const text = request.body.text.trim()
     if (text.length === 0) {
@@ -187,23 +232,20 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
     }
 
     const targetLanguages = await targetLanguagesByCollectionId(fastify, [collection.id])
-    const [targetLanguageCode] = targetLanguages.map((target) => target.language_code)
+    const targetLanguageCodes = targetLanguages.map((target) => target.language_code.toLowerCase())
 
-    const controller = new AbortController()
-    const timeout = setTimeout(() => { controller.abort() }, TRANSLATE_TIMEOUT_MS)
-    try {
-      return await generateTranslation(fastify.anthropicClient, {
-        text,
-        nativeLanguageCode: collection.native_language_code,
-        targetLanguageCode,
-        signal: controller.signal
-      })
-    } catch (err) {
-      fastify.log.error({ err }, 'anthropic translate call failed')
+    // One call covers every target language: the response is all-or-nothing,
+    // so a failure blanks the whole capture rather than one language's
+    // section. Decided during Phase 5 implementation — see change.md.
+    const result = await generateWithTimeout(fastify, {
+      text,
+      nativeLanguageCode: collection.native_language_code,
+      targetLanguageCodes
+    })
+    if (result === null) {
       return reply.badGateway('could not generate a translation — try again')
-    } finally {
-      clearTimeout(timeout)
     }
+    return result
   })
 
   fastify.post('/:id/entries', {
@@ -233,6 +275,14 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
     ) {
       return reply.badRequest('translation and sentence texts must not be blank')
     }
+    // At most one of each per language. Without this the duplicate hits
+    // UNIQUE(entry_id, language_code) mid-transaction and surfaces as a 500.
+    if (
+      hasDuplicates(translations.map((translation) => translation.languageCode)) ||
+      hasDuplicates(sentences.map((sentence) => sentence.languageCode))
+    ) {
+      return reply.badRequest('only one translation and one sentence per language')
+    }
 
     const [collection] = await fastify.sql`
       SELECT id, native_language_code
@@ -257,7 +307,7 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
     }
 
     // The entry id is generated here rather than by the column default so
-    // all three inserts can be built upfront and submitted as one
+    // all the inserts can be built upfront and submitted as one
     // non-interactive transaction — the Neon HTTP driver can't feed a
     // RETURNING value from one statement into the next.
     const entryId = randomUUID()
@@ -302,6 +352,97 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
         nativeGlossText: row.native_gloss_text,
         createdAt: row.created_at
       }))
+    })
+  })
+
+  // FR-018: backfill one already-saved entry with a language the collection
+  // gained after that entry was created. Deliberately per-entry and
+  // user-triggered — the PRD's Non-Goals rule out an automatic bulk pass.
+  fastify.post('/:id/entries/:entryId/translations', {
+    schema: {
+      params: entryParamsSchema,
+      body: addEntryTranslationBodySchema
+    },
+    config: translateRateLimit
+  }, async (request, reply) => {
+    const languageCode = request.body.languageCode.trim().toLowerCase()
+
+    const [collection] = await fastify.sql`
+      SELECT id, native_language_code
+      FROM collections
+      WHERE id = ${request.params.id} AND user_id = ${request.authUser.id}
+    `
+    if (collection === undefined) {
+      return reply.notFound()
+    }
+
+    const [entry] = await fastify.sql`
+      SELECT id, word_or_phrase
+      FROM entries
+      WHERE id = ${request.params.entryId} AND collection_id = ${collection.id}
+    `
+    if (entry === undefined) {
+      return reply.notFound()
+    }
+
+    const targetLanguages = await targetLanguagesByCollectionId(fastify, [collection.id])
+    const targetLanguageCodes = targetLanguages.map((target) => target.language_code.toLowerCase())
+    if (!targetLanguageCodes.includes(languageCode)) {
+      return reply.badRequest('language code is not one of the collection\'s target languages')
+    }
+
+    const existing = await fastify.sql`
+      SELECT id FROM entry_translations
+      WHERE entry_id = ${entry.id} AND lower(language_code) = ${languageCode}
+    `
+    if (existing.length > 0) {
+      return reply.conflict('this entry already has a translation in that language')
+    }
+
+    const result = await generateWithTimeout(fastify, {
+      text: entry.word_or_phrase,
+      nativeLanguageCode: collection.native_language_code,
+      targetLanguageCodes: [languageCode]
+    })
+    // Unlike the capture flow there's no user picking a variant here, so take
+    // the model's first one and its first sentence.
+    const variant = result?.languages[0]?.variants[0]
+    const sentence = variant?.sentences[0]
+    if (variant === undefined || sentence === undefined) {
+      return reply.badGateway('could not generate a translation — try again')
+    }
+
+    const phoneticTranscription = variant.phoneticTranscription?.trim()
+    const [translationRows, sentenceRows] = await fastify.sql.transaction([
+      fastify.sql`
+        INSERT INTO entry_translations (entry_id, language_code, meaning_text, phonetic_transcription)
+        VALUES (${entry.id}, ${languageCode}, ${variant.meaningText.trim()}, ${phoneticTranscription === undefined || phoneticTranscription.length === 0 ? null : phoneticTranscription})
+        RETURNING id, language_code, meaning_text, phonetic_transcription
+      `,
+      fastify.sql`
+        INSERT INTO entry_sentences (entry_id, language_code, sentence_text, native_gloss_text)
+        VALUES (${entry.id}, ${languageCode}, ${sentence.targetText.trim()}, ${sentence.nativeGlossText.trim()})
+        RETURNING id, language_code, sentence_text, native_gloss_text, created_at
+      `
+    ])
+    const [translationRow] = translationRows
+    const [sentenceRow] = sentenceRows
+
+    return await reply.code(201).send({
+      entryId: entry.id,
+      translation: {
+        id: translationRow.id,
+        languageCode: translationRow.language_code,
+        meaningText: translationRow.meaning_text,
+        phoneticTranscription: translationRow.phonetic_transcription
+      },
+      sentence: {
+        id: sentenceRow.id,
+        languageCode: sentenceRow.language_code,
+        sentenceText: sentenceRow.sentence_text,
+        nativeGlossText: sentenceRow.native_gloss_text,
+        createdAt: sentenceRow.created_at
+      }
     })
   })
 }
