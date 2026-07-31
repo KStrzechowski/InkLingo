@@ -107,9 +107,12 @@ function CollectionDetailPage () {
         <ul>
           {collection.entries.map((entry) => {
             // Languages the collection teaches that this entry predates.
-            const missing = collection.targetLanguageCodes.filter((code) => (
-              !entry.translations.some((translation) => translation.languageCode === code)
-            ))
+            // Compared case-insensitively: POST /api/collections lowercases on
+            // write, but collections created before that normalization landed
+            // still hold codes like 'EN', which would otherwise never match a
+            // saved 'en' translation and show a spurious "Add EN" button.
+            const have = new Set(entry.translations.map((translation) => translation.languageCode.toLowerCase()))
+            const missing = collection.targetLanguageCodes.filter((code) => !have.has(code.toLowerCase()))
 
             return (
               <li key={entry.id}>
