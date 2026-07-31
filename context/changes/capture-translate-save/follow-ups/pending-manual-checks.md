@@ -1,97 +1,167 @@
 # Pending manual checks — capture-translate-save
 
-Deferred on 2026-07-31 at the user's request. All of these need a human at a
-browser. Written up here so they can be run without re-deriving the setup.
+Everything here needs a human at a browser. Written as one ordered session
+rather than six separate errands — roughly 15 minutes end to end.
 
-**Nothing in Phase 5 has been exercised against a real Anthropic response** —
-every backend test stubs the client, so the multi-language `languages[]` tool
-schema is unproven against the actual model. Item 4 below is the one that
-matters most.
+## What is already verified, and how
 
----
+Don't re-do these.
 
-## 1. Plan criterion 4.8 — rate-limit error state in the popup
+| Verified | Method |
+| --- | --- |
+| Multi-language tool schema works against the real model | 10/10 five-language captures fully populated via live Anthropic |
+| `MAX_TOKENS_PER_LANGUAGE = 2048` is sufficient | Peak 1,721 output tokens vs 10,240 budgeted (~6× headroom) |
+| Empty-variants failure mode | Found (~3 in 34 calls), fixed with a retry, 3 regression tests |
+| Cost per capture | $0.0063 at five languages, measured |
+| Latency | 4.7–10.0s at five languages, 3.7s at one, vs the 20s route timeout |
+| Save persists one pair per language | `entries.test.ts` against the real database |
+| FR-018 touches only its own entry | `entry-translations.test.ts` → `does not touch sibling entries` |
+| API Gateway route registration | `cdk synth` — all 8 route keys present |
 
-**Progress row**: `### Phase 4` → `- [ ] 4.8 A deliberately-triggered rate-limit shows a clean, non-crashing error state in the popup`
-
-**What it asserts**: that a 429 from `POST /api/collections/:id/translate` renders as a readable message in the popup rather than a crash or a stuck "Translating…" spinner. The limiter itself was already verified by criterion 2.5 — this is purely the extension-side presentation path (`extension/src/background.ts:15-17` maps status 429 to a fixed string; `extension/src/popup/App.tsx` renders it through the normal `error` state).
-
-**Cheapest procedure** — the literal check needs 21 real Anthropic calls in a minute; shrinking the budget gets the same signal for ~2 calls, mirroring what the plan already suggests for the timeout check:
-
-1. `backend/src/routes/api/collections/index.ts:11` — change `TRANSLATE_RATE_LIMIT_MAX = 20` to `2`. `npm run dev` hot-reloads it.
-2. `cd extension && npm run dev` (builds against `.env.development` → `http://localhost:3000`), then load/reload `dist/manifest.json` via `about:debugging`.
-3. Open the popup, pick a collection, hit **Translate** three times.
-4. **Expect**: the third attempt shows *"Too many requests — wait a minute and try again."* in the popup's error line. The button re-enables, no unhandled rejection in the background script console, no permanent spinner.
-5. Revert line 11 to `20`.
-
-**On pass**: tick 4.8 in `plan.md`'s Progress section.
+What is left is exactly the part that needs a rendered UI.
 
 ---
 
-## 2. Re-verify the login round trip after the `state` fix
+## Setup (once)
 
-**Why**: the Phase 4 implementation review (`reviews/impl-review-phase-4.md`, F3) changed the OAuth authorization request — `extension/src/auth.ts` now sends a `state` parameter and rejects the response if the returned value doesn't match. Build and lint pass, but no automated test covers `browser.identity.launchWebAuthFlow`, so the round trip is unproven until someone logs in.
+```sh
+# terminal 1
+cd backend && npm run dev            # http://localhost:3000
 
-**Procedure**:
+# terminal 2
+cd frontend && npm run dev           # http://localhost:5173
 
-1. `cd extension && npm run dev`, reload the add-on in `about:debugging`.
-2. In the popup, **Log out** (drops the stored tokens), then **Log in**.
-3. **Expect**: the Cognito hosted UI opens, credentials are accepted, and reopening the popup lands in the authenticated state with collections listed.
-4. **Failure mode to watch for**: *"Login response did not match the request — try again"* means Cognito didn't echo `state` back as expected — check whether the hosted UI is preserving it, and fall back to reverting the F3 change in `auth.ts` if so.
+# terminal 3
+cd extension && npm run dev          # rebuilds dist/ on change
+```
 
-**On pass**: nothing to tick — F3 is already recorded as FIXED in the review report. This is confirmation only.
+Then `about:debugging` → **This Firefox** → **Load Temporary Add-on…** →
+pick `extension/dist/manifest.json`.
 
 ---
 
-## 3. Plan criteria 5.3 / 5.4 — multi-language capture and save
+## Step 1 — Login round trip  (confirms review finding F3)
 
-**Progress rows**: `### Phase 5` → `5.3`, `5.4`
+The OAuth request now sends a `state` parameter and rejects a response whose
+`state` doesn't match. Nothing automated covers `launchWebAuthFlow`.
 
-**Setup**: web app → create a collection with a native language and **3–5**
-target languages (the create form is now checkboxes, capped at 5, with the
-native language excluded from the options). Then `cd extension && npm run dev`
-and reload the add-on.
+1. Open the popup. If already logged in, click **Log out** first.
+2. Click **Log in**, complete the Cognito hosted UI.
+3. Reopen the popup.
 
-**5.3** — capture a word. Expect one section per target language, each with its
-own variant radio list, IPA, and nested sentences. A language the model
-returned nothing for shows *"Nothing came back for this language"* rather than
-disappearing.
+**Pass**: you land authenticated with collections listed.
+**Fail**: *"Login response did not match the request — try again"* means Cognito
+isn't echoing `state` back. Revert the `state` block in `extension/src/auth.ts`
+and re-open F3.
 
-**5.4** — pick a variant + sentence in **every** language (the Save button
-stays disabled until all pickable languages are chosen; the counter above it
-reads "N of M languages chosen"), then Save. Confirm in the web app's
-collection detail page that the entry has one translation and one sentence per
-target language.
+---
 
-## 4. Plan criterion 5.5 — substitute check (see change.md)
+## Step 2 — Create a multi-language collection  (first half of 5.3)
 
-**Progress row**: `### Phase 5` → `5.5`
+In the web app, create a collection with a native language and **3–5** targets.
+The form is now checkboxes, capped at 5, and the native language is excluded
+from the options.
 
-5.5 as written — one language erroring while the others render — describes
-behaviour the single-call design cannot produce. See `change.md` → "Phase 5
-adaptations". Verify the replacement instead:
+**Pass**: creation succeeds; the list shows `pl → en, de, fr`.
 
-1. Stop the backend (or point `.env.development` at a dead port) and rebuild.
-2. Capture a word.
-3. **Expect**: one error line and one working retry covering the whole capture
-   — not a hang, not a stuck "Translating…" spinner.
+---
 
-## 5. Plan criterion 5.6 — per-entry language backfill
+## Step 3 — Multi-language capture  (rest of 5.3) → ticks 5.3
 
-**Progress row**: `### Phase 5` → `5.6`
+In the popup, select that collection and capture a word. `zamek` is a good
+choice — it's ambiguous in Polish (castle / lock), so variants are meaningful.
 
-1. Save an entry into a collection, then note a target language that entry does
-   **not** have. (Easiest setup: create a 2-language collection, save an entry,
-   then create a 3-language collection and repeat — or save an entry while one
-   language's generation returns nothing.)
-2. In the web app's collection detail page, the entry shows
-   *"Missing: [Add de]"* buttons for each absent target language.
-3. Click one.
-4. **Expect**: that entry gains exactly one translation + one sentence in that
-   language. **Every other entry in the collection is untouched** — this is the
-   whole point of FR-018 being per-entry rather than a bulk pass. The backend
-   test `does not touch sibling entries` covers this, but confirm it visually.
+**Pass**: one section per target language, each with its own variant radio
+list, IPA, and nested sentences. Expect 5–10 seconds at five languages.
+**Note**: a language showing *"Nothing came back for this language"* is the
+handled path, not a crash — but if it happens on most captures, the retry in
+`ai/translate.ts` isn't doing its job; reopen that.
 
-## 6. Not a check — a standing action
+---
 
-`change.md` → "Known limitation — the per-user rate limit is per-Lambda-instance" names the **Anthropic Console spend limit** as the real denial-of-wallet backstop. It costs nothing, needs no code, and no change in this slice substitutes for it. Set it on the workspace holding the `/ink-lingo/anthropic-api-key` value if it isn't already set.
+## Step 4 — Save across languages  (5.4) → ticks 5.4
+
+Pick a variant **and** a sentence in every language. The Save button stays
+disabled until all are chosen; the counter reads "N of M languages chosen".
+Save, then open the collection in the web app.
+
+**Pass**: the entry shows one translation and one sentence per target
+language, with IPA and the bilingual gloss.
+
+---
+
+## Step 5 — Per-entry language backfill  (5.6) → ticks 5.6
+
+⚠️ **Read this first — the state you need can't be reached through the UI.**
+FR-018 is specified as backfilling "a target language added to the collection
+after that entry was created", but the plan's *What We're NOT Doing* rules out
+editing a collection's languages after creation, so there is no way to add one.
+The "Add ⟨lang⟩" button therefore only appears when an entry is missing a
+language for the *other* reason — that language returned no variants at
+capture time. See the note in `change.md`.
+
+To create the state deliberately, delete one translation row against the dev
+database:
+
+```sql
+-- swap in the entry id from the web app URL / a SELECT on entries
+DELETE FROM entry_translations
+WHERE entry_id = '<entry-uuid>' AND language_code = 'de';
+```
+
+Reload the collection detail page.
+
+**Pass**: that entry shows *"Missing: [Add de]"*. Click it — the entry gains
+exactly one translation + one sentence in German, and **every other entry in
+the collection is visibly unchanged**.
+
+---
+
+## Step 6 — Generation failure state  (substitute for 5.5) → ticks 5.5
+
+5.5 as written ("one language errors while others render normally") describes
+behaviour the single-call design cannot produce — you chose one Anthropic call
+covering all languages, so it succeeds or fails as a unit. See `change.md` →
+*Phase 5 adaptations*. Verify the replacement:
+
+1. Stop the backend (Ctrl-C in terminal 1).
+2. Capture a word in the popup.
+
+**Pass**: one error line and one working retry covering the whole capture — no
+hang, no stuck "Translating…" spinner.
+3. Restart the backend.
+
+---
+
+## Step 7 — Rate-limit error state  (4.8) → ticks 4.8
+
+The literal criterion needs 21 real Anthropic calls in a minute. Shrinking the
+budget gets the same signal for ~2 calls.
+
+1. `backend/src/routes/api/collections/index.ts:11` — set
+   `TRANSLATE_RATE_LIMIT_MAX` from `20` to `2`. `npm run dev` hot-reloads.
+2. Hit **Translate** three times.
+
+**Pass**: the third shows *"Too many requests — wait a minute and try again."*
+The button re-enables; no unhandled rejection in the background script console.
+3. **Revert line 11 to `20`.**
+
+What this asserts is the extension's presentation path (`background.ts:15-17`
+maps status 429 to that string). The limiter itself passed as criterion 2.5.
+
+---
+
+## Step 8 — Not a check, a standing action
+
+`change.md` → *Known limitation — the per-user rate limit is per-Lambda-instance*
+names the **Anthropic Console spend limit** as the real denial-of-wallet
+backstop. It costs nothing, needs no code, and no change in this slice
+substitutes for it. Set it on the workspace holding the
+`/ink-lingo/anthropic-api-key` value if it isn't already.
+
+---
+
+## When all steps pass
+
+Tick `4.8`, `5.3`, `5.4`, `5.5`, `5.6` in `plan.md`'s `## Progress` section,
+set `change.md` → `status: implemented`, commit, then `/10x-archive`.
