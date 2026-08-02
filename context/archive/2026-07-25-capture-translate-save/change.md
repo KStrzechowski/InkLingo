@@ -1,10 +1,10 @@
 ---
 change_id: capture-translate-save
 title: Capture translate save
-status: implemented
+status: archived
 created: 2026-07-25
 updated: 2026-08-02
-archived_at: null
+archived_at: 2026-08-02T17:11:25Z
 ---
 
 ## Notes
