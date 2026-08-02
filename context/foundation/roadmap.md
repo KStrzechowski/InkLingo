@@ -143,13 +143,15 @@ Fundamenty poniżej zakładają, że to jest już na miejscu i NIE odtwarzają t
 | Roadmap ID | Change ID | Suggested issue title | Ready for `/10x-plan` | Notes | Jira Epic | Jira Subtasks |
 | --- | --- | --- | --- | --- | --- | --- |
 | F-01 | minimal-database | Minimalny schemat danych: users, collections, entries | done | Zarchiwizowane — `context/archive/2026-07-20-minimal-database/` | [IL-1](https://kondi827.atlassian.net/browse/IL-1) | IL-6, IL-7, IL-8 |
-| S-01 | account-auth | Konto: rejestracja, logowanie, wylogowanie | yes | Uruchom `/10x-plan account-auth` | [IL-2](https://kondi827.atlassian.net/browse/IL-2) | IL-9, IL-10, IL-11 |
-| S-02 | word-collections | Zbiory: tworzenie i przeglądanie | no | Czeka na S-01 i F-01 | [IL-3](https://kondi827.atlassian.net/browse/IL-3) | IL-12, IL-13, IL-14 |
-| S-03 | capture-translate-save | Przechwytywanie słowa + tłumaczenie AI + zapis (gwiazda przewodnia) | no | Czeka na S-01, S-02, F-01 | [IL-4](https://kondi827.atlassian.net/browse/IL-4) | IL-15, IL-16, IL-17, IL-18 |
-| S-04 | printable-export | Eksport zbioru do druku A4 | no | Czeka na S-03 | [IL-5](https://kondi827.atlassian.net/browse/IL-5) | IL-19, IL-20 |
-| S-05 | pronunciation-playback | Odtwarzanie wymowy słowa/frazy/zdania | no | Czeka na S-03 | [IL-21](https://kondi827.atlassian.net/browse/IL-21) | IL-22, IL-23 |
+| S-01 | account-auth | Konto: rejestracja, logowanie, wylogowanie | done | Zarchiwizowane — `context/archive/2026-07-21-account-auth/` | [IL-2](https://kondi827.atlassian.net/browse/IL-2) | IL-9, IL-10, IL-11 |
+| S-02 | word-collections | Zbiory: tworzenie i przeglądanie | done | Zarchiwizowane — `context/archive/2026-07-23-word-collections/` | [IL-3](https://kondi827.atlassian.net/browse/IL-3) | IL-12, IL-13, IL-14 |
+| S-03 | capture-translate-save | Przechwytywanie słowa + tłumaczenie AI + zapis (gwiazda przewodnia) | done | Zarchiwizowane — `context/archive/2026-07-25-capture-translate-save/` | [IL-4](https://kondi827.atlassian.net/browse/IL-4) | IL-15, IL-16, IL-17, IL-18 |
+| S-04 | printable-export | Eksport zbioru do druku A4 | yes | Odblokowane przez S-03. Uruchom `/10x-plan printable-export` — najpierw rozstrzygnij Open Roadmap Question 1 (mechanizm wydruku) | [IL-5](https://kondi827.atlassian.net/browse/IL-5) | IL-19, IL-20 |
+| S-05 | pronunciation-playback | Odtwarzanie wymowy słowa/frazy/zdania | yes | Odblokowane przez S-03, równoległe z S-04. Uruchom `/10x-plan pronunciation-playback` — najpierw rozstrzygnij Open Roadmap Question 2 (mechanizm TTS) | [IL-21](https://kondi827.atlassian.net/browse/IL-21) | IL-22, IL-23 |
 
 Jira project: **IL** (InkLingo), site `kondi827.atlassian.net`. Epic priorities: F-01/S-01 = Highest, S-02/S-03 = High, S-04/S-05 = Medium (mirrors roadmap dependency order, not business weight — S-03 is the north star but is sequenced after S-02; S-04 and S-05 sit at the same readiness tier, both blocked only by S-03).
+
+Jira status as of 2026-08-02: IL-1 through IL-4 and their subtasks IL-6–IL-18 are **Done**. Open: IL-5 (+IL-19, IL-20) and IL-21 (+IL-22, IL-23) — S-04 and S-05.
 
 ## Open Roadmap Questions
 
