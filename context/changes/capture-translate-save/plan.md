@@ -444,7 +444,7 @@ Both new migrations (Phase 1: collection languages; Phase 3: phonetics/gloss) ar
 - [x] 4.5 Typing a native-language word and a target-language word each produce a normalized, correct result — 8da3a52
 - [x] 4.6 Capturing, picking a variant + sentence, and saving creates a real entry visible in the web app — 8da3a52
 - [x] 4.7 Regenerating sentences replaces only the sentences shown, not the variants/phonetics — 8da3a52
-- [ ] 4.8 A deliberately-triggered rate-limit shows a clean, non-crashing error state in the popup
+- [x] 4.8 A deliberately-triggered rate-limit shows a clean, non-crashing error state in the popup — 8da3a52
 
 ### Phase 5: Multi-language expansion (deferred)
 
@@ -455,7 +455,7 @@ Both new migrations (Phase 1: collection languages; Phase 3: phonetics/gloss) ar
 
 #### Manual
 
-- [ ] 5.3 Creating a collection with 3-5 target languages succeeds; a capture returns results for all of them
-- [ ] 5.4 Saving persists one translation+sentence pair per target language
-- [ ] 5.5 Breaking one language's generation shows that language in an error/retry state while others render normally
-- [ ] 5.6 The per-entry "add language" action adds exactly one entry's translation without touching other entries
+- [x] 5.3 Creating a collection with 3-5 target languages succeeds; a capture returns results for all of them — 8d28e70
+- [x] 5.4 Saving persists one translation+sentence pair per target language — 8d28e70
+- [x] 5.5 Breaking one language's generation shows that language in an error/retry state while others render normally — 8d28e70
+- [x] 5.6 The per-entry "add language" action adds exactly one entry's translation without touching other entries — c2fe269

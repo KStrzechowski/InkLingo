@@ -1,5 +1,18 @@
 # Pending manual checks — capture-translate-save
 
+> **Discharged 2026-08-02.** All steps ran and passed; `4.8`, `5.3`, `5.4`,
+> `5.5` and `5.6` are ticked in `plan.md`. Kept for the reasoning it records —
+> the FR-018 fixture, the 5.5 substitution, and the already-verified table.
+>
+> One wrinkle worth knowing if these are ever re-run: Firefox destroys the
+> popup on blur, so step 6 (stop the backend, then capture) can't be driven
+> from the toolbar popup — alt-tabbing to the terminal re-mounts it against
+> the dead backend, which renders as a *login* screen (`App.tsx:80-83` catches
+> the failed `loadCollections()` and falls back to `anonymous`). Open
+> `moz-extension://<internal-uuid>/popup.html` as a normal tab instead, while
+> the backend is still up; a tab doesn't close on blur, so its state survives
+> the switch.
+
 Everything here needs a human at a browser. Written as one ordered session
 rather than six separate errands — roughly 15 minutes end to end.
 
