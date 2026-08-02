@@ -160,12 +160,24 @@ Jira status as of 2026-08-02: IL-1 through IL-4 and their subtasks IL-6–IL-18 
 
 ## Parked
 
-- **FR-008 — automatyczne przechwytywanie przez zaznaczenie myszką** — Why parked: PRD odkłada to jawnie na v2 (najbardziej złożona technicznie część wtyczki — content script + Selection API); MVP działa wyłącznie przez ręczne wpisanie słowa (FR-007, w S-03).
+- **FR-008 — automatyczne przechwytywanie przez zaznaczenie myszką** — Why parked: PRD odkłada to jawnie na v2 (najbardziej złożona technicznie część wtyczki — content script + Selection API); MVP działa wyłącznie przez ręczne wpisanie słowa (FR-007, w S-03). Jira: [IL-37](https://kondi827.atlassian.net/browse/IL-37) (pod epikiem IL-26).
 - **System fiszek/powtórek (SRS)** — Why parked: PRD Non-Goals — zapowiedziana funkcja v2+, MVP kończy się na eksporcie do druku.
 - **Aplikacja mobilna** — Why parked: PRD Non-Goals — tylko web app + wtyczka do przeglądarki w MVP.
 - **Zaawansowane szablony graficzne do druku** — Why parked: PRD Non-Goals — jeden prosty czarno-biały układ tabeli w MVP.
 - **Dzielone/publiczne notatki dla grup znajomych** — Why parked: PRD Non-Goals — funkcja społecznościowa to przyszłość, nie MVP.
 - **Obsługa PDF-ów otwartych w przeglądarce w wtyczce** — Why parked: PRD Non-Goals — MVP działa tylko na zwykłych stronach WWW.
+
+### Post-MVP epics (Jira, poza roadmapą)
+
+Nie są slice'ami roadmapy — to praca świadomie odłożona na po MVP, wprowadzona na board 2026-08-02, żeby wishlist nie żył wyłącznie w dokumentach. Wszystkie mają label `post-mvp`.
+
+| Jira Epic | Zakres | Zadania | Źródło |
+| --- | --- | --- | --- |
+| [IL-24](https://kondi827.atlassian.net/browse/IL-24) | Re-architektura tłumaczeń — angielski jako pivot, sense-level reuse | IL-27 … IL-32, IL-38 | `context/changes/translation-pivot/change.md` |
+| [IL-25](https://kondi827.atlassian.net/browse/IL-25) | Dług techniczny i świadomie odłożone decyzje (auth × 3, dev DB) | IL-33 … IL-36 | sesje planistyczne S-01, weryfikacja S-03 |
+| [IL-26](https://kondi827.atlassian.net/browse/IL-26) | Funkcje v2+ zaparkowane w PRD Non-Goals | IL-37 (FR-008); reszta niescope'owana | sekcja `Parked` powyżej |
+
+IL-24 jest blocked-by IL-5 (S-04) i IL-21 (S-05) — pivot wznawiamy dopiero po dokończeniu MVP.
 
 ## Done
 

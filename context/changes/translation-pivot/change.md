@@ -9,6 +9,13 @@ archived_at: null
 
 ## Notes
 
+Tracked in Jira as **[IL-24](https://kondi827.atlassian.net/browse/IL-24)**
+(Epic, post-MVP) with tasks IL-27 … IL-32 plus IL-38 (pre-seeding). Blocked-by
+IL-5 (S-04) and IL-21 (S-05), mirroring "resume after the certificate" below.
+IL-27 (concept identity) blocks IL-29 (schema) — it is the gate named at the
+bottom of this file — and also blocks IL-38, which additionally waits on
+IL-29, IL-30 and the IL-32 licensing decision.
+
 Supersedes `context/changes/translation-cache/` (now `blocked`). That change
 scoped a per-`(word, native, target)` cache; this one changes the unit of
 reuse from the *word* to the *sense*, which makes the cache a property of the
@@ -132,6 +139,14 @@ Option 3 is the one to investigate first.
 - **DeepL Free is 500k chars/month.** At ~3 sentences × 6 languages × ~70
   chars ≈ 1,260 chars per new concept, that is roughly 400 new concepts per
   month before hitting the cap. Fine at current scale; a real ceiling later.
+- **That cap rules DeepL out as the seeding path.** Seeding 10k concepts is
+  ~12.6M chars ≈ 25 months of DeepL Free. The `$4 seed` line in the cost table
+  is the *AI* half (English senses + sentences via Batch API); the outward
+  translation for a seed has to come predominantly from bulk Wiktionary
+  extracts, with DeepL reserved for the request path and for gaps. If bulk
+  Wiktionary coverage turns out to be thin for the smaller editions, the
+  fallback is a paid DeepL tier for the duration of the seed — price that
+  before assuming it. Tracked as IL-38.
 - **CC-BY-SA (Wiktionary) and CC-BY (WordNet)** — attribution obligations,
   and share-alike on Wiktionary-derived content, need a deliberate decision
   before shipping. Unresolved legal gate carried over from `translation-cache`.
