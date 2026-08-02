@@ -45,7 +45,7 @@ InkLingo is a decoupled multi-app project — `frontend/`, `backend/`, `extensio
 This repo is driven by the 10xDevs AI Toolkit workflow (see the managed block above). Two things worth knowing without re-reading that whole block:
 
 - `context/foundation/` holds living docs — `prd.md`, `shape-notes.md`, `tech-stack.md` (the stack decision plus rationale; read it before suggesting a different framework or datastore).
-- `context/changes/bootstrap-verification/` holds one audit log per app: `verification-backend.md` (Fastify, scaffolded via `/10x-bootstrapper`) and `verification-frontend.md` (Vite+React, scaffolded manually — the registry-driven bootstrapper explicitly excludes it; see that file's "Why this stack" section for why).
+- `context/archive/2026-07-18-bootstrap-verification/` holds one audit log per app: `verification-backend.md` (Fastify, scaffolded via `/10x-bootstrapper`) and `verification-frontend.md` (Vite+React, scaffolded manually — the registry-driven bootstrapper explicitly excludes it; see that file's "Why this stack" section for why).
 - Don't hand-edit inside the `<!-- BEGIN/END @przeprogramowani/10x-cli -->` markers in this file or in `.claude/CLAUDE.md` — the CLI tool regenerates that block as course lessons progress.
 
 <!-- BEGIN @przeprogramowani/10x-cli -->
