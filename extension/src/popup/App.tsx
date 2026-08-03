@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { sendMessage } from '../messages.ts'
 import { languageLabel } from '../languages.ts'
+import { useSpeech, type Speech } from '../useSpeech.ts'
 import type { Collection, TranslationLanguage } from '../types.ts'
 
 // FR-013's "default to the last-used collection" — the collection has to
@@ -36,6 +37,51 @@ function sameMeaning (one: string, other: string): boolean {
   return one.trim().toLowerCase() === other.trim().toLowerCase()
 }
 
+function speakTitle (speech: Speech, languageCode: string, speaking: boolean): string {
+  if (speaking) {
+    return 'Stop'
+  }
+  if (!speech.ready) {
+    return 'Loading voices…'
+  }
+  if (!speech.hasVoice(languageCode)) {
+    return `No ${languageLabel(languageCode)} voice installed on this computer`
+  }
+  return `Play in ${languageLabel(languageCode)}`
+}
+
+// FR-016. Rendered as a sibling of the row's <label>, never inside it: a
+// button nested in a label makes every play click also select that row's
+// radio.
+function SpeakButton ({ speech, itemKey, text, languageCode }: {
+  speech: Speech
+  itemKey: string
+  text: string
+  languageCode: string
+}) {
+  const speaking = speech.speakingKey === itemKey
+  const title = speakTitle(speech, languageCode, speaking)
+
+  return (
+    <button
+      type="button"
+      className={speaking ? 'speak speaking' : 'speak'}
+      disabled={!speech.ready || !speech.hasVoice(languageCode)}
+      title={title}
+      aria-label={title}
+      onClick={() => {
+        if (speaking) {
+          speech.stop()
+        } else {
+          speech.play(itemKey, text, languageCode)
+        }
+      }}
+    >
+      {speaking ? '◼' : '▶'}
+    </button>
+  )
+}
+
 function initialSelections (languages: TranslationLanguage[]): Record<string, Selection> {
   return Object.fromEntries(languages.map((language) => [
     language.languageCode,
@@ -54,6 +100,9 @@ function App () {
   const [regeneratingCode, setRegeneratingCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
+  // Playback state lives entirely in the hook, so a failed utterance never
+  // touches the capture/save error above it.
+  const speech = useSpeech()
 
   const activeCollection = collections.find((collection) => collection.id === activeCollectionId)
   const working = busy !== null || regeneratingCode !== null
@@ -340,6 +389,18 @@ function App () {
               <section className="language" key={language.languageCode}>
                 <h2>{languageLabel(language.languageCode)}</h2>
 
+                {/* One reason line per language, not per row — the popup is
+                    380px wide and a block can hold several variants and
+                    several sentences. */}
+                {speech.ready && !speech.hasVoice(language.languageCode) && (
+                  <p className="muted">
+                    No {languageLabel(language.languageCode)} voice is installed on this computer, so playback is unavailable here.
+                  </p>
+                )}
+                {speech.error !== null && speech.error.key.startsWith(`${language.languageCode}:`) && (
+                  <p className="error">{speech.error.message}</p>
+                )}
+
                 {language.variants.length === 0 ? (
                   <p className="muted">Nothing came back for this language — try translating again.</p>
                 ) : (
@@ -358,6 +419,12 @@ function App () {
                             <span className="phonetic">/{candidate.phoneticTranscription}/</span>
                           )}
                         </label>
+                        <SpeakButton
+                          speech={speech}
+                          itemKey={`${language.languageCode}:variant:${index}`}
+                          text={candidate.meaningText}
+                          languageCode={language.languageCode}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -391,6 +458,12 @@ function App () {
                               <span className="gloss">{candidate.nativeGlossText}</span>
                             </span>
                           </label>
+                          <SpeakButton
+                            speech={speech}
+                            itemKey={`${language.languageCode}:sentence:${index}`}
+                            text={candidate.targetText}
+                            languageCode={language.languageCode}
+                          />
                         </li>
                       ))}
                     </ul>
