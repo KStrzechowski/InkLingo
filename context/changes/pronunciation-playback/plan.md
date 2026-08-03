@@ -283,8 +283,8 @@ None. No data, schema, API or deployed infrastructure is touched. The change is 
 
 #### Automated
 
-- [x] 2.1 Frontend type-checks and builds: `cd frontend && npm run build`
-- [x] 2.2 Frontend lints clean: `cd frontend && npm run lint`
+- [x] 2.1 Frontend type-checks and builds: `cd frontend && npm run build` — 787451c
+- [x] 2.2 Frontend lints clean: `cd frontend && npm run lint` — 787451c
 
 #### Manual
 
