@@ -264,8 +264,8 @@ None. No data, schema, API or deployed infrastructure is touched. The change is 
 
 #### Automated
 
-- [x] 1.1 Extension type-checks and builds: `cd extension && npm run build`
-- [x] 1.2 Extension lints clean: `cd extension && npm run lint`
+- [x] 1.1 Extension type-checks and builds: `cd extension && npm run build` — 6e9a464
+- [x] 1.2 Extension lints clean: `cd extension && npm run lint` — 6e9a464
 
 #### Manual
 
@@ -283,8 +283,8 @@ None. No data, schema, API or deployed infrastructure is touched. The change is 
 
 #### Automated
 
-- [ ] 2.1 Frontend type-checks and builds: `cd frontend && npm run build`
-- [ ] 2.2 Frontend lints clean: `cd frontend && npm run lint`
+- [x] 2.1 Frontend type-checks and builds: `cd frontend && npm run build`
+- [x] 2.2 Frontend lints clean: `cd frontend && npm run lint`
 
 #### Manual
 

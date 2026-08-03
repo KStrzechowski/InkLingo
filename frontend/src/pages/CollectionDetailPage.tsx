@@ -3,6 +3,52 @@ import { useParams } from 'react-router'
 import axios from 'axios'
 import { addEntryTranslation, getCollection, type CollectionDetail, type Entry } from '../api/collections'
 import { extractErrorMessage } from '../api/errors'
+import { languageLabel } from '../languages'
+import { useSpeech, type Speech } from '../useSpeech'
+
+function speakTitle (speech: Speech, languageCode: string, speaking: boolean): string {
+  if (speaking) {
+    return 'Stop'
+  }
+  if (!speech.ready) {
+    return 'Loading voices…'
+  }
+  if (!speech.hasVoice(languageCode)) {
+    return `No ${languageLabel(languageCode)} voice installed on this computer`
+  }
+  return `Play in ${languageLabel(languageCode)}`
+}
+
+// FR-016, the saved-entry half. Keyed by database id rather than by index,
+// since these rows have real ids.
+function SpeakButton ({ speech, itemKey, text, languageCode }: {
+  speech: Speech
+  itemKey: string
+  text: string
+  languageCode: string
+}) {
+  const speaking = speech.speakingKey === itemKey
+  const title = speakTitle(speech, languageCode, speaking)
+
+  return (
+    <button
+      type="button"
+      className={speaking ? 'speak speaking' : 'speak'}
+      disabled={!speech.ready || !speech.hasVoice(languageCode)}
+      title={title}
+      aria-label={title}
+      onClick={() => {
+        if (speaking) {
+          speech.stop()
+        } else {
+          speech.play(itemKey, text, languageCode)
+        }
+      }}
+    >
+      {speaking ? '◼' : '▶'}
+    </button>
+  )
+}
 
 function CollectionDetailPage () {
   const { id } = useParams<{ id: string }>()
@@ -12,6 +58,9 @@ function CollectionDetailPage () {
   const [loading, setLoading] = useState(true)
   // Which entry+language backfill is in flight, so only that button spins.
   const [addingKey, setAddingKey] = useState<string | null>(null)
+  // Playback state lives entirely in the hook, so a failed utterance never
+  // touches the load/backfill error above it.
+  const speech = useSpeech()
 
   useEffect(() => {
     if (!id) {
@@ -94,12 +143,30 @@ function CollectionDetailPage () {
     return <p style={{ color: 'red' }}>Something went wrong.</p>
   }
 
+  // One reason line for the page, not one per row: a collection holds many
+  // entries in the same handful of languages, and legacy codes ('EN',
+  // 'ENss') land here too — they resolve to no voice and read as their
+  // uppercased selves.
+  const spokenCodes = [...new Set(collection.entries.flatMap((entry) => [
+    ...entry.translations.map((translation) => translation.languageCode),
+    ...entry.sentences.map((sentence) => sentence.languageCode)
+  ]))]
+  const silentCodes = speech.ready ? spokenCodes.filter((code) => !speech.hasVoice(code)) : []
+
   return (
     <section>
       <h2>{collection.name}</h2>
       <p>
         <small>{collection.nativeLanguageCode} → {collection.targetLanguageCodes.join(', ')}</small>
       </p>
+      {silentCodes.length > 0 && (
+        <p>
+          <small>
+            No voice is installed on this computer for {silentCodes.map(languageLabel).join(', ')},
+            so playback is unavailable for those.
+          </small>
+        </p>
+      )}
       {error && <p style={{ color: 'red' }}>{error}</p>}
       {collection.entries.length === 0 ? (
         <p>No entries yet.</p>
@@ -122,6 +189,13 @@ function CollectionDetailPage () {
                     <li key={translation.id}>
                       {translation.languageCode}: {translation.meaningText}
                       {translation.phoneticTranscription && <em> {translation.phoneticTranscription}</em>}
+                      {' '}
+                      <SpeakButton
+                        speech={speech}
+                        itemKey={`${entry.id}:t:${translation.id}`}
+                        text={translation.meaningText}
+                        languageCode={translation.languageCode}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -130,9 +204,19 @@ function CollectionDetailPage () {
                     <li key={sentence.id}>
                       {sentence.languageCode}: {sentence.sentenceText}
                       {sentence.nativeGlossText && <em> — {sentence.nativeGlossText}</em>}
+                      {' '}
+                      <SpeakButton
+                        speech={speech}
+                        itemKey={`${entry.id}:s:${sentence.id}`}
+                        text={sentence.sentenceText}
+                        languageCode={sentence.languageCode}
+                      />
                     </li>
                   ))}
                 </ul>
+                {speech.error !== null && speech.error.key.startsWith(`${entry.id}:`) && (
+                  <p style={{ color: 'red' }}>{speech.error.message}</p>
+                )}
                 {missing.length > 0 && (
                   <p>
                     <small>Missing: </small>
