@@ -13,3 +13,13 @@ export const SUPPORTED_LANGUAGES: Language[] = [
   { code: 'it', label: 'Italian' },
   { code: 'uk', label: 'Ukrainian' }
 ]
+
+// Matched case-insensitively, and falls back to the uppercased code, so the
+// pre-normalization codes still in the dev database ('EN', 'ENss') render
+// something readable instead of blank. Mirrors extension/src/languages.ts
+// rather than sharing it: this repo has no shared package between its apps
+// (see CLAUDE.md's Architecture section).
+export function languageLabel (code: string): string {
+  const match = SUPPORTED_LANGUAGES.find((language) => language.code === code.toLowerCase())
+  return match?.label ?? code.toUpperCase()
+}
