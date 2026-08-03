@@ -81,12 +81,14 @@ body.print-mode .print-document {
   letter-spacing: 0.04em;
 }
 
-/* Sentence columns carry the bulk of the width; Lang stays narrow enough to
-   scan down but wide enough for the longest label. */
+/* Column order: Word | Language | Translation | Sentence | Sentence
+   (translated). The two sentence columns carry the bulk of the width and sit
+   side by side, so folding the sheet down the middle turns it into a
+   self-test. Language stays narrow enough to scan a finger down. */
 .print-table th:nth-child(1) { width: 16%; }
-.print-table th:nth-child(2) { width: 27%; }
-.print-table th:nth-child(3) { width: 10%; }
-.print-table th:nth-child(4) { width: 20%; }
+.print-table th:nth-child(2) { width: 10%; }
+.print-table th:nth-child(3) { width: 20%; }
+.print-table th:nth-child(4) { width: 27%; }
 .print-table th:nth-child(5) { width: 27%; }
 
 .print-table tbody th {
@@ -125,20 +127,34 @@ body.print-mode .print-document {
     display: none;
   }
 
+  /* print-color-adjust stops Firefox dropping ink it treats as decorative.
+     The border width is deliberately restated as 1px rather than a hairline:
+     sub-pixel widths (0.5pt is ~0.67px at 96dpi) round toward zero in
+     Firefox's print output, which drops every rule except the odd surviving
+     edge and prints the sheet as bare text in columns. */
+  .print-table {
+    border-collapse: collapse;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .print-table th,
+  .print-table td {
+    border: 1px solid #000;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
   /* Repeat the column header on every page. */
   .print-table thead {
     display: table-header-group;
   }
 
   /* One <tbody> per entry — this is what keeps a word's language rows
-     together and stops the rowSpan'd word cell orphaning at a fold. */
+     together and stops the rowSpan'd word cell orphaning at a fold.
+     Deliberately NOT applied to tr/td/th as well: Firefox mislays tables when
+     every cell also refuses to break, which drops rows from the printout. */
   .print-table tbody {
-    break-inside: avoid;
-  }
-
-  .print-table tr,
-  .print-table td,
-  .print-table th {
     break-inside: avoid;
   }
 }

@@ -4,6 +4,7 @@ import axios from 'axios'
 import { getCollection, type CollectionDetail, type Entry } from '../api/collections'
 import { extractErrorMessage } from '../api/errors'
 import { languageLabel } from '../languages'
+import { printLabels } from './printLabels'
 import './print.css'
 
 // One printed row: an entry paired with one of the collection's target
@@ -147,6 +148,7 @@ function PrintCollectionPage () {
 
   const bands = buildBands(collection)
   const nativeLabel = languageLabel(collection.nativeLanguageCode)
+  const labels = printLabels(collection.nativeLanguageCode)
 
   return (
     <article className="print-document">
@@ -170,11 +172,11 @@ function PrintCollectionPage () {
           <table className="print-table">
             <thead>
               <tr>
-                <th scope="col">Word</th>
-                <th scope="col">Sentence ({nativeLabel})</th>
-                <th scope="col">Lang</th>
-                <th scope="col">Translation</th>
-                <th scope="col">Sentence</th>
+                <th scope="col">{labels.word}</th>
+                <th scope="col">{labels.language}</th>
+                <th scope="col">{labels.translation}</th>
+                <th scope="col">{labels.sentenceNative}</th>
+                <th scope="col">{labels.sentenceTarget}</th>
               </tr>
             </thead>
             {bands.map(({ entry, rows }) => (
@@ -192,14 +194,18 @@ function PrintCollectionPage () {
                       {index === 0 && (
                         <th scope="row" rowSpan={rows.length}>{entry.wordOrPhrase}</th>
                       )}
-                      <td>{row.nativeGlossText}</td>
                       <td>{languageLabel(row.languageCode)}</td>
                       <td>
                         {row.meaningText}
                         {row.phoneticTranscription !== null && (
-                          <span className="print-phonetic"> /{row.phoneticTranscription}/</span>
+                          // Rendered verbatim: stored transcriptions already
+                          // carry their own delimiters, and inconsistently —
+                          // '/ˈfuːd/' for English, '[ɪˈda]' for Russian.
+                          // Wrapping them again printed 'food //ˈfuːd//'.
+                          <span className="print-phonetic"> {row.phoneticTranscription}</span>
                         )}
                       </td>
+                      <td>{row.nativeGlossText}</td>
                       <td>{row.sentenceText}</td>
                     </tr>
                   ))

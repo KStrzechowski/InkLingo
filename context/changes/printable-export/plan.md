@@ -60,6 +60,10 @@ Splitting this way means a layout bug and a print-CSS bug can never be confused 
 
 **`Intl.Collator` throws on malformed locale tags.** The alphabetical sort keys on the collection's native language, and the dev database holds pre-normalisation codes including `ENss`, which is not a valid BCP-47 primary subtag. Constructing the collator must be guarded so a bad code degrades to the default locale instead of crashing the page.
 
+**Print borders must never be sub-pixel.** Observed 2026-08-03: re-declaring the table border as `0.5pt` inside `@media print` (~0.67px at 96dpi) made Firefox round it toward zero, dropping every rule except a stray header underline and printing the sheet as bare text in columns. The screen rule was untouched, so the page looked correct on screen and only the printout broke. Keep the printed border at `1px` or wider.
+
+**Firefox's print preview is not the printout.** The same build that rendered no table in Firefox's preview pane printed a correct, fully-ruled table to paper. Preview is a lower-fidelity renderer; verify this page against actual paper or a PDF, never the preview alone.
+
 **Page numbers come from the browser, not the document.** `@page` margin boxes with `counter(page)` are unsupported in current browsers, so the printout relies on Firefox's built-in header/footer (which prints "page N of M" when enabled — the default). The consequence for this plan is a constraint on `@page` margins: they must leave room for that footer rather than bleeding content into it, and the manual verification step must confirm the setting is on.
 
 ---
@@ -105,7 +109,8 @@ Reuses `extractErrorMessage` from `../api/errors` for the error branch, matching
 - A language is included when the entry has a translation **or** a sentence for it — a language with only one of the two renders its row with the other cell empty rather than being dropped.
 - Entries are sorted alphabetically by `wordOrPhrase` using an `Intl.Collator` built from the collection's `nativeLanguageCode`. Constructing that collator must not be able to throw: an invalid tag such as the dev database's `ENss` raises `RangeError`, so fall back to the default-locale collator.
 - Each entry emits its own `<tbody>`; the `Word` cell carries `rowSpan` equal to that entry's row count. An entry with zero renderable languages still emits one row so the word is not silently dropped from the printout.
-- Table columns, in order: `Word` · `Sentence (<native label>)` · `Lang` · `Translation` · `Sentence`. The `Translation` cell shows `meaningText` followed by `phoneticTranscription` when present; the `Sentence (native)` cell shows that row's own `nativeGlossText`.
+- Table columns, in order: `Word` · `Language` · `Translation` · `Sentence` · `Sentence (translated)`. The `Translation` cell shows `meaningText` followed by `phoneticTranscription` when present, rendered **verbatim** — stored transcriptions already carry their own delimiters, inconsistently (`/ˈfuːd/` for English, `[ɪˈda]` for Russian), so adding a pair prints `food //ˈfuːd//`. The `Sentence` cell shows that row's own `nativeGlossText`; `Sentence (translated)` shows `sentenceText`.
+- **Column headings are in the collection's native language**, from `frontend/src/pages/printLabels.ts` (all 8 supported codes, English fallback for unmapped codes including legacy `ENss`). The sheet is a study aid for someone reading *into* the target languages, so its furniture belongs in the language they already read.
 - Column headers live in a `<thead>` — required for Phase 2's per-page repetition.
 
 #### 4. Entry point from the collection detail page
