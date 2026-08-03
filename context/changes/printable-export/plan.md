@@ -258,8 +258,8 @@ None — additive frontend change, no schema change, no API change, no stored da
 
 #### Automated
 
-- [x] 2.1 Type check and build pass: `cd frontend && npm run build`
-- [x] 2.2 Lint passes with no new warnings: `cd frontend && npm run lint`
+- [x] 2.1 Type check and build pass: `cd frontend && npm run build` — 7ca8fb6
+- [x] 2.2 Lint passes with no new warnings: `cd frontend && npm run lint` — 7ca8fb6
 
 #### Manual
 
