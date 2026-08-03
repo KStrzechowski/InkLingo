@@ -37,6 +37,10 @@ Verified by printing (or print-previewing) a 1-language collection and a 5-langu
 - **No backend route, no PDF generation, no new dependency.** No `infra/lib/constructs/api-construct.ts` entry is needed — that rule in `lessons.md` applies only to routes under `backend/src/routes/api/`, and this change adds none.
 - **No export of multiple collections at once**, and no collection selection UI on the print page — the print view is always scoped to one collection reached by its id.
 - **No alternative print templates, colour schemes or layouts.** PRD Non-Goals: "jeden prosty, czarno-biały układ tabeli"; Cornell method and cut-out templates are v2+.
+- **No branding or colour on the printed sheet.** Raised and deliberately deferred 2026-08-03, to follow the frontend redesign rather than precede it — a print design derived from a visual identity that doesn't exist yet would only be rebuilt. Three findings worth keeping for whoever picks this up:
+  - **There is no InkLingo logo.** Every image asset in the repo is Vite/React starter boilerplate (`frontend/public/favicon.svg`, `frontend/src/assets/{hero.png,react.svg,vite.svg}`), and `frontend/index.html` still carries `<title>frontend</title>`. Branding the printout starts with creating an identity, not with CSS.
+  - **A logo on every page is not achievable in Firefox.** CSS `@page` margin boxes are unsupported (the same limitation that pushes page numbering onto Firefox's own footer). The only per-page repeat mechanism is `<thead>`/`table-header-group`, which would consume vertical space on every sheet. First page only is straightforward.
+  - **Print colour must live in text and borders, never fills.** Firefox omits `background-color` from printouts unless the user has enabled "Print backgrounds", which is off by default — so a shaded header row or zebra striping would silently vanish for most users.
 - **No landscape orientation, no configurable font size, no per-user print settings.** One fixed A4 portrait layout.
 - **No CSV / Anki / other export formats.**
 - **No change to the collection detail page's own presentation** beyond adding the Print link.
