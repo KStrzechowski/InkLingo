@@ -1,7 +1,7 @@
 ---
 change_id: printable-export
 title: Printable export
-status: planned
+status: implementing
 created: 2026-08-02
 updated: 2026-08-02
 archived_at: null
