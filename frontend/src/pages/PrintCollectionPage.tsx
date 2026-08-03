@@ -4,6 +4,7 @@ import axios from 'axios'
 import { getCollection, type CollectionDetail, type Entry } from '../api/collections'
 import { extractErrorMessage } from '../api/errors'
 import { languageLabel } from '../languages'
+import './print.css'
 
 // One printed row: an entry paired with one of the collection's target
 // languages. Languages add rows, not columns, so column widths never shrink
@@ -84,6 +85,17 @@ function PrintCollectionPage () {
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // print.css is scoped to this class, so the global app shell is only
+  // neutralised while this page is mounted — navigating away restores the
+  // normal app appearance. This class name is the single coupling point
+  // between the component and the stylesheet.
+  useEffect(() => {
+    document.body.classList.add('print-mode')
+    return () => {
+      document.body.classList.remove('print-mode')
+    }
+  }, [])
 
   // Same fetch lifecycle as CollectionDetailPage, so loading / 404 / error /
   // loaded behave consistently across the two pages.

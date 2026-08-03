@@ -1,0 +1,144 @@
+/* Print document styles. Imported only by PrintCollectionPage, and gated on a
+   body class the page adds while mounted, so no other route can be affected.
+
+   Two concerns live here, deliberately separated:
+     1. screen rules  — make the on-screen preview look like the printout,
+                        otherwise "review before printing" means nothing
+     2. @media print  — the actual A4 document geometry
+
+   Everything structural is drawn with `border`, never `background-color`:
+   Firefox omits backgrounds from printouts unless the user has turned on
+   "Print backgrounds", which is off by default, so any structure carried by a
+   fill silently vanishes on paper. */
+
+/* ---------- screen ---------- */
+
+/* Neutralise the global app shell (index.css #root: fixed 1126px, centred,
+   border-inline, flex column) and the dark-mode variable block, so the
+   preview is a white page with black text in any OS theme. */
+body.print-mode {
+  background: #fff;
+  color: #000;
+}
+
+body.print-mode #root {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  text-align: left;
+  border-inline: none;
+  min-height: 0;
+  display: block;
+}
+
+body.print-mode .print-document {
+  /* Matches the printed text width (A4 210mm less two 15mm margins), so
+     on-screen line breaks land where they will on paper. */
+  width: 180mm;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 8mm 0;
+  color: #000;
+  font-size: 11pt;
+  line-height: 1.35;
+}
+
+.print-header {
+  margin-bottom: 6mm;
+}
+
+.print-header h1 {
+  font-size: 18pt;
+  letter-spacing: normal;
+  margin: 0 0 2mm;
+  color: #000;
+}
+
+.print-header p {
+  font-size: 10pt;
+  color: #000;
+}
+
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.print-table th,
+.print-table td {
+  border: 1px solid #000;
+  padding: 1.5mm 2mm;
+  text-align: left;
+  vertical-align: top;
+  word-wrap: break-word;
+  color: #000;
+}
+
+.print-table thead th {
+  font-size: 9pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Sentence columns carry the bulk of the width; Lang stays narrow enough to
+   scan down but wide enough for the longest label. */
+.print-table th:nth-child(1) { width: 16%; }
+.print-table th:nth-child(2) { width: 27%; }
+.print-table th:nth-child(3) { width: 10%; }
+.print-table th:nth-child(4) { width: 20%; }
+.print-table th:nth-child(5) { width: 27%; }
+
+.print-table tbody th {
+  font-weight: 600;
+}
+
+.print-phonetic {
+  white-space: nowrap;
+}
+
+/* ---------- print ---------- */
+
+@media print {
+  /* Margins leave room for Firefox's own header/footer, which is where page
+     numbering comes from — CSS @page margin boxes with counter(page) are
+     unsupported in current browsers, so there is no in-document fallback. */
+  @page {
+    size: A4 portrait;
+    margin: 14mm 15mm;
+  }
+
+  body.print-mode,
+  body.print-mode #root,
+  body.print-mode .print-document {
+    background: #fff;
+    color: #000;
+  }
+
+  body.print-mode .print-document {
+    width: auto;
+    padding: 0;
+  }
+
+  /* Screen-only affordances. */
+  .no-print {
+    display: none;
+  }
+
+  /* Repeat the column header on every page. */
+  .print-table thead {
+    display: table-header-group;
+  }
+
+  /* One <tbody> per entry — this is what keeps a word's language rows
+     together and stops the rowSpan'd word cell orphaning at a fold. */
+  .print-table tbody {
+    break-inside: avoid;
+  }
+
+  .print-table tr,
+  .print-table td,
+  .print-table th {
+    break-inside: avoid;
+  }
+}
