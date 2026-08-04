@@ -1,19 +1,36 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { User } from 'oidc-client-ts'
-import { getUser } from './cognito'
+import { getFreshUser, userManager } from './cognito'
 import { AuthContext } from './useAuth'
 
 export function AuthProvider ({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // getFreshUser, not getUser: reopening the app after an hour away would
+  // otherwise render the signed-in shell around a dead token, and every API
+  // call underneath it would fail as an unexplained CORS error.
   const refresh = useCallback(async () => {
-    setUser(await getUser())
+    setUser(await getFreshUser())
   }, [])
 
   useEffect(() => {
     void refresh().then(() => setLoading(false))
   }, [refresh])
+
+  // Renewals and session drops happen outside React — automaticSilentRenew
+  // on a timer, and removeUser() from the api client's 401 handler. Without
+  // these the context keeps serving whichever user it read at mount.
+  useEffect(() => {
+    const onLoaded = (renewed: User) => setUser(renewed)
+    const onUnloaded = () => setUser(null)
+    userManager.events.addUserLoaded(onLoaded)
+    userManager.events.addUserUnloaded(onUnloaded)
+    return () => {
+      userManager.events.removeUserLoaded(onLoaded)
+      userManager.events.removeUserUnloaded(onUnloaded)
+    }
+  }, [])
 
   return (
     <AuthContext.Provider value={{ user, loading, refresh }}>
