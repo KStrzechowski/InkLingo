@@ -17,6 +17,30 @@
   }
 }
 
+/* Playback control beside a saved translation or sentence. Deliberately
+   class-scoped: App.css is imported globally, so a bare `button` rule here
+   would reach pages that do their own button styling. */
+.speak {
+  padding: 0 4px;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.speak.speaking {
+  color: #c92a2a;
+}
+
+.speak:disabled {
+  color: inherit;
+  opacity: 0.5;
+  cursor: default;
+}
+
 .hero {
   position: relative;
 

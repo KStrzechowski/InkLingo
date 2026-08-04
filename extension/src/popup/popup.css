@@ -153,11 +153,49 @@ ul {
   gap: 6px;
 }
 
+/* Each row is now a label plus a play control, so the row itself does the
+   sharing and the label takes whatever is left. */
+.variants li,
+.sentences li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
 li label {
   display: flex;
   gap: 8px;
   align-items: baseline;
   cursor: pointer;
+}
+
+.variants li > label,
+.sentences li > label {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A small inline affordance, not a primary action — closest precedent is
+   button.link above. Class-scoped on purpose: a bare `button` rule here
+   would reach every button in the popup. */
+.speak {
+  flex: none;
+  padding: 0 4px;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.speak.speaking {
+  color: var(--error);
+}
+
+/* button:disabled already dims it; this drops the accent colour so a
+   language with no installed voice does not read as clickable. */
+.speak:disabled {
+  color: var(--muted);
 }
 
 .phonetic {
