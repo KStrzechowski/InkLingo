@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import axios from 'axios'
 import { addEntryTranslation, getCollection, type CollectionDetail, type Entry } from '../api/collections'
 import { extractErrorMessage } from '../api/errors'
@@ -99,6 +99,9 @@ function CollectionDetailPage () {
       <h2>{collection.name}</h2>
       <p>
         <small>{collection.nativeLanguageCode} → {collection.targetLanguageCodes.join(', ')}</small>
+      </p>
+      <p>
+        <Link to={`/collections/${id}/print`}>Print</Link>
       </p>
       {error && <p style={{ color: 'red' }}>{error}</p>}
       {collection.entries.length === 0 ? (

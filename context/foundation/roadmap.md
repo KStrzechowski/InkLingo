@@ -176,8 +176,11 @@ Nie są slice'ami roadmapy — to praca świadomie odłożona na po MVP, wprowad
 | [IL-24](https://kondi827.atlassian.net/browse/IL-24) | Re-architektura tłumaczeń — angielski jako pivot, sense-level reuse | IL-27 … IL-32, IL-38 | `context/changes/translation-pivot/change.md` |
 | [IL-25](https://kondi827.atlassian.net/browse/IL-25) | Dług techniczny i świadomie odłożone decyzje (auth × 3, dev DB) | IL-33 … IL-36 | sesje planistyczne S-01, weryfikacja S-03 |
 | [IL-26](https://kondi827.atlassian.net/browse/IL-26) | Funkcje v2+ zaparkowane w PRD Non-Goals | IL-37 (FR-008); reszta niescope'owana | sekcja `Parked` powyżej |
+| [IL-41](https://kondi827.atlassian.net/browse/IL-41) | Wiele znaczeń i wiele zdań na wpis (wybór wielokrotny) | IL-42 … IL-45 | sesja weryfikacyjna S-04, 2026-08-03 |
 
 IL-24 jest blocked-by IL-5 (S-04) i IL-21 (S-05) — pivot wznawiamy dopiero po dokończeniu MVP.
+
+IL-41 (dodane 2026-08-03 na prośbę użytkownika: „next phase") — dziś wpis ma **dokładnie jedno** znaczenie i jedno zdanie na język nauki, wymuszone przez `UNIQUE (entry_id, language_code)` na `entry_translations`. Model zwraca warianty zgodnie z FR-009 („dla słów wieloznacznych"), ale wtyczka zapisuje jeden, a backfill FR-018 bierze pierwszy z brzegu. Zweryfikowane na bazie deweloperskiej: `zamek` zapisany jest wyłącznie jako `lock` — „castle" i „zipper" nigdy nie trafiły do bazy. Priorytet **Low** — ten sam tier co pozostałe epiki post-MVP; kolejność niesie link blocked-by IL-5, nie priorytet (użytkownik: „nie przemyślałem jeszcze, co po MVP"). Powiązane z IL-24 (jednostką reużycia w pivocie jest *sens*, więc schematy trzeba uzgodnić, jeśli IL-24 ruszy wcześniej).
 
 ## Done
 

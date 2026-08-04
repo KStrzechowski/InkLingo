@@ -5,6 +5,7 @@ import { useAuth } from './auth/useAuth'
 import { handleLoginCallback, login, logout } from './auth/cognito'
 import CollectionsListPage from './pages/CollectionsListPage'
 import CollectionDetailPage from './pages/CollectionDetailPage'
+import PrintCollectionPage from './pages/PrintCollectionPage'
 import './App.css'
 
 function CallbackPage () {
@@ -49,6 +50,28 @@ function AuthenticatedLayout () {
   )
 }
 
+// The print page needs the same auth gate as the rest of the app but none of
+// its chrome — the on-screen preview has to match what actually prints, so no
+// heading, no "Signed in as", no log-out control wraps the document.
+function PrintLayout () {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return <p>Loading…</p>
+  }
+
+  if (!user) {
+    return (
+      <section id="center">
+        <h1>InkLingo</h1>
+        <button type="button" onClick={() => void login()}>Log in</button>
+      </section>
+    )
+  }
+
+  return <Outlet />
+}
+
 function App () {
   return (
     <AuthProvider>
@@ -57,6 +80,9 @@ function App () {
         <Route element={<AuthenticatedLayout />}>
           <Route path="/" element={<CollectionsListPage />} />
           <Route path="/collections/:id" element={<CollectionDetailPage />} />
+        </Route>
+        <Route element={<PrintLayout />}>
+          <Route path="/collections/:id/print" element={<PrintCollectionPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
