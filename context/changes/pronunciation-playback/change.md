@@ -1,9 +1,9 @@
 ---
 change_id: pronunciation-playback
 title: Pronunciation playback
-status: implementing
+status: implemented
 created: 2026-08-02
-updated: 2026-08-03
+updated: 2026-08-04
 archived_at: null
 ---
 

@@ -269,15 +269,15 @@ None. No data, schema, API or deployed infrastructure is touched. The change is 
 
 #### Manual
 
-- [ ] 1.3 English variant play control speaks the word in a `pl → en` collection
-- [ ] 1.4 Example sentence play control speaks the full sentence
-- [ ] 1.5 Playing a second item stops the first and starts the second
-- [ ] 1.6 Clicking the speaking item's control stops it
-- [ ] 1.7 Play clicks do not change the selected variant or sentence radio
-- [ ] 1.8 A language with no local voice shows disabled controls plus one reason line
-- [ ] 1.9 Closing the popup mid-sentence stops the audio
-- [ ] 1.10 Cold-start: controls are enabled on first popup open after a Firefox relaunch
-- [ ] 1.11 Capture, regeneration and save behave exactly as before
+- [x] 1.3 English variant play control speaks the word in a `pl → en` collection
+- [x] 1.4 Example sentence play control speaks the full sentence
+- [x] 1.5 Playing a second item stops the first and starts the second
+- [x] 1.6 Clicking the speaking item's control stops it
+- [x] 1.7 Play clicks do not change the selected variant or sentence radio
+- [x] 1.8 A language with no local voice shows disabled controls plus one reason line
+- [x] 1.9 Closing the popup mid-sentence stops the audio
+- [x] 1.10 Cold-start: controls are enabled on first popup open after a Firefox relaunch
+- [x] 1.11 Capture, regeneration and save behave exactly as before
 
 ### Phase 2: Web app playback
 
@@ -288,10 +288,10 @@ None. No data, schema, API or deployed infrastructure is touched. The change is 
 
 #### Manual
 
-- [ ] 2.3 Play controls appear beside every saved translation and sentence
-- [ ] 2.4 Controls speak the correct text in the correct language
-- [ ] 2.5 Cancel-and-replace and stop behave as in the popup
-- [ ] 2.6 A language with no local voice shows disabled controls plus one reason line
-- [ ] 2.7 A legacy collection with `EN` / `PL` / `ENss` codes degrades quietly, no console errors
-- [ ] 2.8 Navigating away mid-sentence stops the audio
-- [ ] 2.9 The "Add \<language\>" backfill buttons still work unchanged
+- [x] 2.3 Play controls appear beside every saved translation and sentence
+- [x] 2.4 Controls speak the correct text in the correct language
+- [x] 2.5 Cancel-and-replace and stop behave as in the popup
+- [x] 2.6 A language with no local voice shows disabled controls plus one reason line
+- [x] 2.7 A legacy collection with `EN` / `PL` / `ENss` codes degrades quietly, no console errors
+- [x] 2.8 Navigating away mid-sentence stops the audio
+- [x] 2.9 The "Add \<language\>" backfill buttons still work unchanged
