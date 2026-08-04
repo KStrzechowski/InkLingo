@@ -21,7 +21,8 @@ From a collection's detail page the user follows a **Print** link to a chrome-fr
 | Print mechanism | Browser print view (`@media print` + `@page A4`) | Zero backend/infra work, and system fonts cover IPA + Cyrillic + Polish diacritics for free — a server-side PDF would need an embedded Unicode font in the Lambda. Ships inside the 2026-08-05 deadline. |
 | Entry point | Dedicated route `/collections/:id/print`, manual print | User reviews before spending paper; keeps print CSS out of the detail page entirely. |
 | Table layout | 5 columns, one row per (entry × language) | Languages add **rows**, not columns, so column widths never shrink — a column-per-language grid collapses to ~28mm columns at 5 languages. |
-| Columns | `Word \| Sentence (native) \| Lang \| Translation \| Sentence` | Native half and target half sit side by side; fold the sheet down the middle and it's a self-test. |
+| Columns | `Word \| Language \| Translation \| Sentence \| Sentence (translated)` | Word and its translation lead; the two sentence columns sit side by side, so folding the sheet down the middle is a self-test. |
+| Heading language | The collection's native language | The sheet is a study aid for someone reading *into* the target languages — its furniture belongs in the language they already read. |
 | Native sentence | One per language row, not shared | `nativeGlossText` is stored per target sentence — each language has its own. Blanking it would leave a target sentence with no counterpart. |
 | Language label | Dedicated narrow column | Scannable — you can run a finger down it to find every German row. |
 | Entry order | Alphabetical, locale-aware | A printed reference sheet is something you look things up in. |
