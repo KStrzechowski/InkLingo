@@ -15,7 +15,7 @@ export const SUPPORTED_LANGUAGES: Language[] = [
 ]
 
 // Matched case-insensitively, and falls back to the uppercased code, so the
-// pre-normalization codes still in the dev database ('EN', 'ENss') render
+// pre-normalization uppercase codes still in the database ('PL', 'EN') render
 // something readable instead of blank. Mirrors extension/src/languages.ts
 // rather than sharing it: this repo has no shared package between its apps
 // (see CLAUDE.md's Architecture section).
