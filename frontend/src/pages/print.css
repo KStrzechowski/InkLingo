@@ -17,7 +17,12 @@
    border-inline, flex column) and the dark-mode variable block, so the
    preview is a white page with black text in any OS theme. */
 body.print-mode {
-  background: #fff;
+  /* A grey backdrop for the white sheets to sit on. The preview is paginated
+     into real A4 pages (see .print-page), and page edges are only legible if
+     there is something for the paper to be lighter than. Screen only — the
+     print block below puts this back to #fff, and Firefox would not print a
+     background anyway. */
+  background: #d8d8dc;
   color: #000;
 }
 
@@ -32,15 +37,77 @@ body.print-mode #root {
 }
 
 body.print-mode .print-document {
-  /* Matches the printed text width (A4 210mm less two 15mm margins), so
-     on-screen line breaks land where they will on paper. */
-  width: 180mm;
-  max-width: 100%;
+  /* Sized by its sheets rather than by a fixed width — .print-page is the
+     thing that carries the A4 geometry now. */
+  width: fit-content;
   margin: 0 auto;
-  padding: 8mm 0;
+  padding: 8mm 0 16mm;
   color: #000;
   font-size: 11pt;
   line-height: 1.35;
+}
+
+/* One sheet of A4, drawn at real paper size on screen: 210 × 297mm with the
+   same margins @page uses below, so the preview shows exactly where the
+   breaks fall instead of one endless column. The content of each sheet is
+   chosen in printPagination.ts, which measures the bands and deals them out.
+
+   In print this collapses to a plain block — @page already supplies the page
+   size and margins, so a sheet that still carried them would nest one set of
+   margins inside another. */
+.print-page {
+  box-sizing: border-box;
+  position: relative;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 14mm 15mm;
+  background: #fff;
+  border: 1px solid #b4b4bb;
+  box-shadow: 0 1mm 3mm rgba(0, 0, 0, 0.15);
+}
+
+.print-page + .print-page {
+  margin-top: 14mm;
+}
+
+/* Sheet number, screen only. Positioned absolutely, outside the sheet's box,
+   because the sheet's height has to stay exactly one page — anything added to
+   its flow would show on screen as content that the printout does not have. */
+.print-page::after {
+  content: attr(data-page-label);
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  padding-top: 3mm;
+  text-align: center;
+  font-size: 9pt;
+  color: #4a4a52;
+}
+
+/* The height of one printable page, for printPagination.ts to measure. Read
+   off a real element rather than computed in JS so the mm→px mapping is the
+   browser's own.
+
+   Absolutely positioned and hidden: it exists only during the unpaginated
+   first render, and must not affect the layout it is being measured against. */
+.print-page-probe {
+  position: absolute;
+  visibility: hidden;
+  width: 0;
+  /* A4's 297mm less the two 14mm @page margins is 269mm of printable height.
+     The 4mm held back is slack. The packer fills each page to the millimetre
+     from screen measurements, but print lays text out at a different device
+     resolution, so a band that just fits on screen can just miss on paper —
+     which would spill one row onto a sheet of its own. */
+  height: 265mm;
+}
+
+/* Screen-only, and outside the sheets — see the comment in
+   PrintCollectionPage on why it cannot live inside page one. */
+.print-toolbar {
+  width: 210mm;
+  max-width: 100%;
+  margin: 0 auto 6mm;
 }
 
 .print-header {
@@ -59,20 +126,83 @@ body.print-mode .print-document {
   color: #000;
 }
 
+/* `separate`, not `collapse`, and the reason is page breaks. Under the
+   collapsed model the line between two rows is a single shared edge owned by
+   the table, and when the table is fragmented across pages that shared edge
+   has no row beneath it to pair with — so the fragment ends with no bottom
+   rule and the sheet looks like the table was cut off mid-air. Every page but
+   the last had an open bottom. Under the separate model each cell paints its
+   own borders, so the last row on a page closes itself.
+
+   `border-spacing: 0` keeps the cells touching; the grid is then drawn by
+   giving every cell a right and bottom border, the first cell in each row a
+   left border, and the header cells a top border — never two borders on the
+   same edge, which is what would otherwise double the line weight. */
 .print-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
 }
 
+/* `hyphens: auto` before `word-wrap: break-word`, not instead of it: with a
+   hyphenation dictionary the browser breaks at a syllable boundary and prints
+   the hyphen ('niepodle-głość'), and break-word only takes over when no
+   hyphenation point fits. Without one it does nothing and break-word carries
+   on as before. Verified 2026-08-03: Firefox — the browser this sheet is
+   printed from — hyphenates pl/de/ru/uk correctly from its bundled
+   dictionaries; Edge hyphenated nothing, since Chromium fetches dictionaries
+   through the component updater and that profile had none.
+
+   This only works because every cell declares its `lang` (see
+   PrintCollectionPage) — the attribute is what picks the dictionary. Row D of
+   the probe, with `hyphens: auto` and no `lang`, hyphenated nothing at all. */
 .print-table th,
 .print-table td {
-  border: 1px solid #000;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
   padding: 1.5mm 2mm;
   text-align: left;
   vertical-align: top;
+  hyphens: auto;
+  /* Only hyphenate words of 12+ characters, and never leave a stub shorter
+     than 5 before the hyphen or 4 after. Line breaking is greedy, so without
+     this a short word gets hyphenated purely because it fills the first line
+     better: 'limitation de vitesse' printed as 'limitation de vi-' / 'tesse'
+     when 'limitation de' / 'vitesse' was available and reads far better. A
+     12-character floor keeps that behaviour for words that genuinely cannot
+     fit a column ('Geschwindigkeitsbe-' / 'grenzung' still hyphenates) while
+     letting anything shorter move to the next line whole. Verified in Firefox
+     153, which supports the property; browsers that don't simply keep the
+     plain `hyphens: auto` behaviour. */
+  hyphenate-limit-chars: 12 5 4;
   word-wrap: break-word;
   color: #000;
+}
+
+/* The one edge the right/bottom pattern above leaves undrawn: the table's
+   left side.
+
+   Deliberately NOT `:first-child`, which was tried and is wrong — it matches
+   the first cell of every *row*, and a band's continuation rows begin with
+   the language `<td>`, which sits in column 2. Those cells took a left border
+   that landed directly against the word column's right border, and under the
+   separate model the two do not merge: they stack into a 2px rule between
+   Word and Language on every row but the first of each band.
+
+   Column 1 holds exactly two kinds of cell — the header row's first `<th>`,
+   and the `rowSpan`'d word `<th>` that opens each band. The word cell spans
+   its whole band, so its left border already closes the rows beneath it. */
+.print-table thead th:first-child,
+.print-table tbody th {
+  border-left: 1px solid #000;
+}
+
+/* Drawn on every page, not just the first — `table-header-group` repeats the
+   whole header row, borders included, which is what closes the top of each
+   continuation page. */
+.print-table thead th {
+  border-top: 1px solid #000;
 }
 
 .print-table thead th {
@@ -84,15 +214,44 @@ body.print-mode .print-document {
 /* Column order: Word | Language | Translation | Sentence | Sentence
    (translated). The two sentence columns carry the bulk of the width and sit
    side by side, so folding the sheet down the middle turns it into a
-   self-test. Language stays narrow enough to scan a finger down. */
+   self-test.
+
+   Language is sized to fit its widest possible value whole. Measured
+   2026-08-03 by rendering all 8 native × 8 target names at this exact font
+   (11pt system-ui → Segoe UI): at the old 10% the column offered 50.9px of
+   text width and 43 of the 64 names overflowed it, along with the English
+   and German column headings — 'niemiecki' (62.6px) was one of many. The
+   binding case is Russian 'французский' at 90.1px, which needs 15.8%
+   including cell padding and borders; 17% leaves ~8px of headroom for
+   Firefox shaping the same font slightly differently from Chromium.
+
+   The 7 points come out of the two sentence columns, costing each sentence
+   line roughly four characters. A per-native-language width would buy ~3 of
+   those characters back on a Polish sheet (Polish needs only 14%), which is
+   not worth a hand-maintained table of eight numbers. */
 .print-table th:nth-child(1) { width: 16%; }
-.print-table th:nth-child(2) { width: 10%; }
+.print-table th:nth-child(2) { width: 17%; }
 .print-table th:nth-child(3) { width: 20%; }
-.print-table th:nth-child(4) { width: 27%; }
-.print-table th:nth-child(5) { width: 27%; }
+.print-table th:nth-child(4) { width: 23.5%; }
+.print-table th:nth-child(5) { width: 23.5%; }
 
 .print-table tbody th {
   font-weight: 600;
+}
+
+/* Overrides the table-wide `word-wrap: break-word`, which exists for the
+   sentence columns but has no business breaking a one-word label: a language
+   name is a scanning target, and 'niemieck/i' across two lines defeats that.
+   Belt and braces with the column width above — that width is what keeps the
+   name inside its cell; this is what guarantees the failure mode if a wider
+   name ever arrives is a name crossing its border, which is visibly a bug,
+   rather than a mid-word split, which just looks like bad typesetting.
+
+   A class, not `td:nth-child(2)`: the first row of each band carries the
+   rowSpan'd word `<th>`, so the language cell is the second child there and
+   the first child in every following row. */
+.print-language {
+  white-space: nowrap;
 }
 
 .print-phonetic {
@@ -122,6 +281,30 @@ body.print-mode .print-document {
     padding: 0;
   }
 
+  /* The sheet stops being a drawn piece of paper and becomes a plain block:
+     @page supplies the size and margins, and the paper is the paper. */
+  .print-page {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+  }
+
+  /* The document's own page breaks, and the reason the printout matches the
+     preview page for page. `break-before` on every sheet after the first,
+     rather than `break-after` on all of them, so the last sheet does not push
+     out a trailing blank page. */
+  .print-page + .print-page {
+    break-before: page;
+  }
+
+  .print-page::after {
+    content: none;
+  }
+
   /* Screen-only affordances. */
   .no-print {
     display: none;
@@ -133,27 +316,50 @@ body.print-mode .print-document {
      Firefox's print output, which drops every rule except the odd surviving
      edge and prints the sheet as bare text in columns. */
   .print-table {
-    border-collapse: collapse;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
+  /* Restated per edge, matching the screen rules — a blanket `border: 1px`
+     here would put a second border on every shared edge under the separate
+     model and double the line weight. `border-collapse` is deliberately NOT
+     restated: collapsing again is what leaves each page's table open at the
+     bottom. */
   .print-table th,
   .print-table td {
-    border: 1px solid #000;
+    border-right: 1px solid #000;
+    border-bottom: 1px solid #000;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
-  /* Repeat the column header on every page. */
+  .print-table thead th:first-child,
+  .print-table tbody th {
+    border-left: 1px solid #000;
+  }
+
+  .print-table thead th {
+    border-top: 1px solid #000;
+  }
+
+  /* Both of these are now safety nets rather than the mechanism. Each page
+     holds its own table, sized to fit, so nothing should fragment: the column
+     header repeats because it is written into every page, and a band cannot
+     straddle a fold because the packer never puts one across two pages.
+
+     They stay because measurement slack is finite. If a page does overflow on
+     paper by a line or two, these keep that page's spill readable — header
+     repeated, band intact — and the overflow costs one sparse sheet rather
+     than corrupting everything after it, because the next .print-page still
+     starts on a fresh sheet of its own.
+
+     `break-inside` is deliberately NOT applied to tr/td/th as well: Firefox
+     mislays tables when every cell also refuses to break, which drops rows
+     from the printout. */
   .print-table thead {
     display: table-header-group;
   }
 
-  /* One <tbody> per entry — this is what keeps a word's language rows
-     together and stops the rowSpan'd word cell orphaning at a fold.
-     Deliberately NOT applied to tr/td/th as well: Firefox mislays tables when
-     every cell also refuses to break, which drops rows from the printout. */
   .print-table tbody {
     break-inside: avoid;
   }
