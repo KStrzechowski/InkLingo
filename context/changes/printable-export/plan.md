@@ -293,12 +293,12 @@ None — additive frontend change, no schema change, no API change, no stored da
 
 #### Manual
 
-- [ ] 1.3 Print link opens `/collections/:id/print` showing only the document — no app chrome
-- [ ] 1.4 5-language collection renders one row per language per entry, word cell spanning its band, each row showing its own native sentence
-- [ ] 1.5 Entry with a backfill gap shows rows only for languages it has, no blank filler rows
-- [ ] 1.6 Entries sort alphabetically; Polish/Cyrillic collections sort correctly and do not crash
-- [ ] 1.7 Empty collection shows a "nothing to print" message and no table
-- [ ] 1.8 Direct URL load works (auth gate holds, data loads); bad id shows not-found state
+- [x] 1.3 Print link opens `/collections/:id/print` showing only the document — no app chrome
+- [x] 1.4 5-language collection renders one row per language per entry, word cell spanning its band, each row showing its own native sentence
+- [x] 1.5 Entry with a backfill gap shows rows only for languages it has, no blank filler rows
+- [x] 1.6 Entries sort alphabetically; Polish/Cyrillic collections sort correctly and do not crash
+- [x] 1.7 Empty collection shows a "nothing to print" message and no table
+- [x] 1.8 Direct URL load works (auth gate holds, data loads); bad id shows not-found state
 
 ### Phase 2: Print stylesheet
 
@@ -309,14 +309,14 @@ None — additive frontend change, no schema change, no API change, no stored da
 
 #### Manual
 
-- [ ] 2.3 Print preview shows A4 portrait, black on white, no collision with the browser header/footer
-- [ ] 2.4 Dark OS theme still prints black on white
-- [ ] 2.5 Column header repeats on every page of a 3+ page printout
-- [ ] 2.6 No entry's language rows split across a page break; no orphaned word cells
-- [ ] 2.7 Table rules visible with Firefox "Print backgrounds" off
-- [ ] 2.8 IPA, Cyrillic and Polish diacritics render correctly on the printed page
-- [ ] 2.9 Page numbering appears via Firefox's print footer
-- [ ] 2.10 1-language and 5-language collections both readable; sentence columns wide enough
-- [ ] 2.11 Printed to actual paper at least once for a 3+ page collection
-- [ ] 2.12 On-screen preview is split into A4 sheets, and the printout matches it page for page with no trailing blank page
-- [ ] 2.13 Rule between `Word` and `Language` is a single weight on every row, not just the first of each band
+- [x] 2.3 Print preview shows A4 portrait, black on white, no collision with the browser header/footer
+- [x] 2.4 Dark OS theme still prints black on white
+- [x] 2.5 Column header repeats on every page of a 3+ page printout
+- [x] 2.6 No entry's language rows split across a page break; no orphaned word cells
+- [x] 2.7 Table rules visible with Firefox "Print backgrounds" off
+- [x] 2.8 IPA, Cyrillic and Polish diacritics render correctly on the printed page
+- [x] 2.9 Page numbering appears via Firefox's print footer
+- [x] 2.10 1-language and 5-language collections both readable; sentence columns wide enough
+- [x] 2.11 Printed to actual paper at least once for a 3+ page collection
+- [x] 2.12 On-screen preview is split into A4 sheets, and the printout matches it page for page with no trailing blank page
+- [x] 2.13 Rule between `Word` and `Language` is a single weight on every row, not just the first of each band
