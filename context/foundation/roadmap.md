@@ -3,7 +3,7 @@ project: "InkLingo"
 version: 1
 status: active
 created: 2026-07-19
-updated: 2026-08-02
+updated: 2026-08-04
 prd_version: 1
 main_goal: speed
 top_blocker: time
@@ -33,7 +33,7 @@ Osoba ucząca się języka obcego, natrafiając na nieznane słowo podczas czyta
 | S-01 | account-auth | user can zarejestrować konto, zalogować się i wylogować się | — | FR-001, FR-002, FR-003, Access Control | done |
 | S-02 | word-collections | user can ręcznie utworzyć zbiór i przeglądać listę zbiorów wraz z ich zawartością | S-01, F-01 | FR-004, FR-005 | done |
 | S-03 | capture-translate-save | user can przechwycić słowo/frazę w wtyczce, otrzymać warianty tłumaczenia, transkrypcję fonetyczną i przykładowe zdania od AI (z regeneracją) i zapisać wpis do zbioru | S-01, S-02, F-01 | US-01, FR-006, FR-007, FR-009, FR-010, FR-011, FR-012, FR-013, FR-015, NFR (czas odpowiedzi), NFR (tylko Firefox) | done |
-| S-04 | printable-export | user can wygenerować czytelny, gotowy do druku dokument A4 dla wybranego zbioru | S-03 | FR-014 | proposed |
+| S-04 | printable-export | user can wygenerować czytelny, gotowy do druku dokument A4 dla wybranego zbioru | S-03 | FR-014 | done |
 | S-05 | pronunciation-playback | user can odtworzyć wymowę (audio) wprowadzanego słowa/frazy oraz wybranego przykładowego zdania | S-03 | FR-016, NFR (odtwarzanie bez zauważalnego opóźnienia) | proposed |
 
 ## Streams
@@ -123,7 +123,7 @@ Fundamenty poniżej zakładają, że to jest już na miejscu i NIE odtwarzają t
 - **Unknowns:**
   - Mechanizm generowania wydruku — dedykowany plik generowany po stronie serwera, czy widok tabeli w przeglądarce + druk (Ctrl+P)? Owner: użytkownik / downstream `/10x-plan`. Block: no (PRD celowo zostawia to otwarte — akceptowalne jest dowolne podejście, o ile efekt jest czytelny).
 - **Risk:** Eksport ma sens dopiero, gdy istnieją zapisane wpisy — stąd na końcu, jako konsument tego, co dostarcza S-03.
-- **Status:** proposed (Prerequisite S-03 jeszcze nie ukończony; Unknown powyżej nie blokuje planowania)
+- **Status:** done
 
 ### S-05: Odtwarzanie wymowy
 
@@ -188,3 +188,4 @@ IL-41 (dodane 2026-08-03 na prośbę użytkownika: „next phase") — dziś wpi
 - **S-01: user can zarejestrować konto, zalogować się i wylogować się** — Archived 2026-07-23 → `context/archive/2026-07-21-account-auth/`. Lesson: —.
 - **S-02: user can ręcznie utworzyć nowy zbiór (folder) oraz przeglądać listę swoich zbiorów i zawartość każdego z nich** — Archived 2026-07-25 → `context/archive/2026-07-23-word-collections/`. Lesson: —.
 - **S-03: user can kliknąć ikonę wtyczki, ręcznie wpisać słowo/frazę w pływającym okienku, zobaczyć kilka wariantów tłumaczenia i kilka przykładowych zdań (z możliwością regeneracji), wybrać jedno zdanie i zapisać wpis do wybranego zbioru (domyślnie ostatnio używanego)** — Archived 2026-08-02 → `context/archive/2026-07-25-capture-translate-save/`. Lesson: two acceptance criteria described behaviour the chosen design cannot produce — 5.5 (per-language failure isolation, impossible once all languages share one Anthropic call) and FR-018's stated trigger (backfilling a language added post-creation, unreachable while collection languages are immutable). Both were caught at verification time, not planning time; when a plan fixes an implementation decision that narrows what a criterion can observe, re-read the criteria against it.
+- **S-04: user can wygenerować czytelny, gotowy do druku dokument A4 dla wybranego zbioru** — Archived 2026-08-04 → `context/archive/2026-08-02-printable-export/`. Lesson: —.

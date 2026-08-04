@@ -1,10 +1,10 @@
 ---
 change_id: printable-export
 title: Printable export
-status: implemented
+status: archived
 created: 2026-08-02
 updated: 2026-08-04
-archived_at: null
+archived_at: 2026-08-04T16:39:04Z
 ---
 
 ## Notes
