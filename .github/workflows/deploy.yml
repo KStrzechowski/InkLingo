@@ -52,7 +52,7 @@ jobs:
           project_id: ${{ vars.NEON_PROJECT_ID }}
           # No parent_branch — defaults to the project's actual primary
           # branch, whatever it's named in Neon (not necessarily "main").
-          branch_name: deploy-${{ github.sha }}
+          branch_name: deploy-${{ github.sha }}-${{ github.run_attempt }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Migrate ephemeral Neon branch
@@ -82,7 +82,7 @@ jobs:
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: deploy-${{ github.sha }}
+          branch: deploy-${{ github.sha }}-${{ github.run_attempt }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Install infra deps

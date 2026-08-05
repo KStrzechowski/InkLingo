@@ -31,22 +31,33 @@ function joinPrefix (prefix: string, subPath: string): string {
   return `${prefix}${subPath}`
 }
 
-// autohooks.ts registers an onRequest hook (@fastify/autoload's autoHooks
-// convention), not a route — excluded explicitly rather than relying on it
-// having no fastify.get/post calls to match.
+// Non-route support files, excluded by name rather than relying on them
+// having no fastify.get/post calls to match: autohooks.ts registers an
+// onRequest hook (@fastify/autoload's autoHooks convention), and schemas.ts
+// exports TypeBox schema objects, not a Fastify plugin.
+const NON_ROUTE_FILES = new Set(['autohooks.ts', 'schemas.ts'])
+
 function walkRouteFiles (dir: string): string[] {
   const files: string[] = []
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const fullPath = path.join(dir, entry.name)
     if (entry.isDirectory()) {
       files.push(...walkRouteFiles(fullPath))
-    } else if (entry.name.endsWith('.ts') && entry.name !== 'autohooks.ts') {
+    } else if (entry.name.endsWith('.ts') && !NON_ROUTE_FILES.has(entry.name)) {
       files.push(fullPath)
     }
   }
   return files
 }
 
+// Only recognizes the literal fastify.get/post/put/delete/patch('/path', ...)
+// call shape used everywhere in this codebase today. A route registered via
+// fastify.route({ method, url }) or a computed/template-literal path would
+// be invisible here — and equally invisible to extractGatewayRoutes' literal
+// addRoutes({ path, methods }) match below, so such a route would silently
+// report as "matching" (absent from both sides) instead of failing loudly.
+// The MIN_EXPECTED_ROUTES tripwire below guards against a *drop* in what
+// this pattern catches; it doesn't guard against a genuinely new call shape.
 function extractBackendRoutes (): RouteEntry[] {
   const routes: RouteEntry[] = []
   const methodCallPattern = /fastify\.(get|post|put|delete|patch)\s*\(\s*(['"`])(.*?)\2/g
@@ -89,12 +100,24 @@ function routeKey (route: RouteEntry): string {
   return `${route.method} ${route.path}`
 }
 
+// Tripwire floor, not a hardcoded expectation — bump it up when a route is
+// legitimately added. Catches the parser silently extracting fewer routes
+// than it used to (e.g. a call-shape change it no longer recognizes),
+// which a plain > 0 check would miss.
+const MIN_EXPECTED_ROUTES = 8
+
 test('every backend route has a matching API Gateway entry, and vice versa', () => {
   const backendRoutes = new Set(extractBackendRoutes().map(routeKey))
   const gatewayRoutes = new Set(extractGatewayRoutes().map(routeKey))
 
-  assert.ok(backendRoutes.size > 0, 'route extraction found zero backend routes — the parser likely broke, not the app')
-  assert.ok(gatewayRoutes.size > 0, 'route extraction found zero gateway routes — the parser likely broke, not the app')
+  assert.ok(
+    backendRoutes.size >= MIN_EXPECTED_ROUTES,
+    `route extraction found only ${backendRoutes.size} backend route(s) (expected at least ${MIN_EXPECTED_ROUTES}) — the parser likely missed some, not that the app lost routes`
+  )
+  assert.ok(
+    gatewayRoutes.size >= MIN_EXPECTED_ROUTES,
+    `route extraction found only ${gatewayRoutes.size} gateway route(s) (expected at least ${MIN_EXPECTED_ROUTES}) — the parser likely missed some, not that the app lost routes`
+  )
 
   const missingFromGateway = [...backendRoutes].filter((route) => !gatewayRoutes.has(route)).sort()
   const missingFromBackend = [...gatewayRoutes].filter((route) => !backendRoutes.has(route)).sort()
