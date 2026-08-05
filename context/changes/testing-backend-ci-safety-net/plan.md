@@ -261,22 +261,22 @@ No production data migration. CI runs the existing `backend/migrations/*.ts` fil
 
 #### Automated
 
-- [x] 1.1 `cd backend && npm test` passes, including the new `collections-rate-limit.test.ts` and the unchanged `translate.test.ts`
+- [x] 1.1 `cd backend && npm test` passes, including the new `collections-rate-limit.test.ts` and the unchanged `translate.test.ts` — f0067a8
 
 #### Manual
 
-- [x] 1.2 Temporarily lower `TRANSLATE_RATE_LIMIT_MAX`, confirm the test's assertion point tracks the guard's real behavior, then revert
+- [x] 1.2 Temporarily lower `TRANSLATE_RATE_LIMIT_MAX`, confirm the test's assertion point tracks the guard's real behavior, then revert — f0067a8
 
 ### Phase 2: Remove dead root route + add the route-reachability check (Risk #1)
 
 #### Automated
 
-- [ ] 2.1 `cd backend && npm test` passes, including the new `route-reachability.test.ts`
-- [ ] 2.2 `cd backend && npm run build:ts` succeeds after `root.ts`'s removal
+- [x] 2.1 `cd backend && npm test` passes, including the new `route-reachability.test.ts`
+- [x] 2.2 `cd backend && npm run build:ts` succeeds after `root.ts`'s removal
 
 #### Manual
 
-- [ ] 2.3 Temporarily comment out one `addRoutes` call, confirm `route-reachability.test.ts` fails naming that route, then revert
+- [x] 2.3 Temporarily comment out one `addRoutes` call, confirm `route-reachability.test.ts` fails naming that route, then revert
 
 ### Phase 3: Wire `npm test` into CI via an ephemeral Neon branch
 
