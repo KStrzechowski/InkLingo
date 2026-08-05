@@ -19,6 +19,8 @@ Phase 1 of the frozen test-plan rollout (`context/foundation/test-plan.md` §3).
 - `backend/test/tsconfig.json`'s `include` only covers `../src/**/*.ts`, `../migrations/**/*.ts`, and `**/*.ts` (relative to `test/`) — it does not include `infra/`. The reachability check must read `infra/lib/constructs/api-construct.ts` as plain text (`fs.readFileSync`), not import it as a TS module.
 - `backend/package.json`'s `migrate:up` script (`node-pg-migrate -d NEON_DATABASE_URL --envPath .env up`) already shows the CLI convention: `-d <ENV_VAR_NAME>` names the env var holding the connection string. In CI, the same binary can run without `--envPath` once the workflow sets `NEON_DATABASE_URL` directly.
 - Both workflows currently pin `node-version: 22`, while `context/foundation/test-plan.md`'s Stack table (§4) documents the suite as developed and run on Node 24 locally — a real, previously-untested version mismatch that a new CI test step would otherwise inherit silently.
+- `neondatabase/create-branch-action`'s `parent_branch` input names a **Neon** branch, not a git branch — this project's Neon primary branch isn't actually named `main` (confirmed live: `parent_branch: main` failed with "Parent branch main not found"). Fixed by omitting `parent_branch` entirely, which defaults to the project's actual primary branch regardless of its name.
+- `NEON_API_KEY`/`NEON_PROJECT_ID` must be **repository**-level secrets/vars, not environment-scoped ones — GitHub only exposes environment secrets to jobs declaring `environment: <name>`, and the `diff` job in both workflows (where these steps live) has no `environment:` field. Only `deploy.yml`'s `deploy` job does.
 - `deploy.yml`'s `deploy` job (`:69-72`) is gated by the "production" GitHub Environment's required reviewers, and `needs: diff` — the `deploy` job is automatically skipped if the `diff` job fails. **Revised mid-implementation**: this phase originally wired tests into `pr-diff.yml` only, reasoning that the `deploy` job's human-approval gate already covered a bypassed-PR-check scenario. That reasoning assumed a PR-based workflow; actual practice on this repo is pushing directly to `main`, which never triggers `pr-diff.yml` at all (it only fires on `pull_request` events). So the test step is added to **both** workflows: `pr-diff.yml` for if/when PRs are used, and `deploy.yml`'s `diff` job for the direct-push path — where `needs: diff` makes a test failure automatically skip `deploy`, no branch-protection configuration required.
 
 ## Desired End State
@@ -294,11 +296,11 @@ No production data migration. CI runs the existing `backend/migrations/*.ts` fil
 #### Automated
 
 - [x] 3.1 `.github/workflows/pr-diff.yml` parses as valid YAML — 0e22262
-- [x] 3.2 `.github/workflows/deploy.yml` parses as valid YAML
+- [x] 3.2 `.github/workflows/deploy.yml` parses as valid YAML — 9f35d96
 
 #### Manual
 
-- [x] 3.3 `NEON_API_KEY` and `NEON_PROJECT_ID` added as repo secrets/vars — confirmed already done by user
+- [x] 3.3 `NEON_API_KEY` and `NEON_PROJECT_ID` added as repo secrets/vars — confirmed already done by user — 9f35d96
 - [ ] 3.4 Push to `main`: `deploy.yml`'s `diff` job creates/migrates/tests/deletes a Neon branch, and `deploy` proceeds to its approval gate on success
 - [ ] 3.5 Scratch break on `main`: `deploy.yml`'s `diff` job fails and `deploy` is skipped (not just red-but-proceeding), then reverted
 - [ ] 3.6 Real PR run: `pr-diff.yml`'s `diff` job creates/migrates/tests/deletes a Neon branch

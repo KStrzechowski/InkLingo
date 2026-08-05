@@ -50,7 +50,8 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
-          parent_branch: main
+          # No parent_branch — defaults to the project's actual primary
+          # branch, whatever it's named in Neon (not necessarily "main").
           branch_name: deploy-${{ github.sha }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
