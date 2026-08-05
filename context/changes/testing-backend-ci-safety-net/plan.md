@@ -302,11 +302,11 @@ No production data migration. CI runs the existing `backend/migrations/*.ts` fil
 #### Manual
 
 - [x] 3.3 `NEON_API_KEY` and `NEON_PROJECT_ID` added as repo secrets/vars — confirmed already done by user — 9f35d96
-- [x] 3.4 Push to `main`: `deploy.yml`'s `diff` job creates/migrates/tests/deletes a Neon branch, and `deploy` proceeds to its approval gate on success
-- [x] 3.5 Scratch break on `main`: `deploy.yml`'s `diff` job fails and `deploy` is skipped (not just red-but-proceeding), then reverted
-- [x] 3.6 Real PR run: `pr-diff.yml`'s `diff` job creates/migrates/tests/deletes a Neon branch
-- [x] 3.7 Scratch-branch test failure shows as a failed check on the PR (`pr-diff.yml`), then reverted
-- [x] 3.8 Required-status-check branch protection configured for `pr-diff.yml`'s `diff` job
+- [x] 3.4 Push to `main`: `deploy.yml`'s `diff` job creates/migrates/tests/deletes a Neon branch, and `deploy` proceeds to its approval gate on success — d5291d2
+- [x] 3.5 Scratch break on `main`: `deploy.yml`'s `diff` job fails and `deploy` is skipped (not just red-but-proceeding), then reverted — d5291d2
+- [x] 3.6 Real PR run: `pr-diff.yml`'s `diff` job creates/migrates/tests/deletes a Neon branch — d5291d2
+- [x] 3.7 Scratch-branch test failure shows as a failed check on the PR (`pr-diff.yml`), then reverted — d5291d2
+- [x] 3.8 Required-status-check branch protection configured for `pr-diff.yml`'s `diff` job — d5291d2
 
 ### Phase 4: Close out test-plan.md bookkeeping
 

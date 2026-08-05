@@ -1,7 +1,7 @@
 ---
 change_id: testing-backend-ci-safety-net
 title: Testing backend ci safety net
-status: implementing
+status: implemented
 created: 2026-08-05
 updated: 2026-08-05
 archived_at: null
