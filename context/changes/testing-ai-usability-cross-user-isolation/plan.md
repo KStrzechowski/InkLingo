@@ -242,15 +242,15 @@ No schema or data changes. No production data affected.
 
 #### Automated
 
-- [x] 1.1 `cd backend && npm test` passes, including the 4 pre-existing cross-user tests now exercising the shared helpers
-- [x] 1.2 `cd backend && npm run build:ts` succeeds
+- [x] 1.1 `cd backend && npm test` passes, including the 4 pre-existing cross-user tests now exercising the shared helpers — 1c62fda
+- [x] 1.2 `cd backend && npm run build:ts` succeeds — 1c62fda
 
 ### Phase 2: Add the IDOR regression guard
 
 #### Automated
 
-- [ ] 2.1 `cd backend && npm test` passes, including the new `route-ownership.test.ts` and updated `route-reachability.test.ts`
-- [ ] 2.2 `cd backend && npm run build:ts` succeeds
+- [x] 2.1 `cd backend && npm test` passes, including the new `route-ownership.test.ts` and updated `route-reachability.test.ts`
+- [x] 2.2 `cd backend && npm run build:ts` succeeds
 
 #### Manual
 

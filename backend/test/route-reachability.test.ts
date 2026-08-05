@@ -3,6 +3,7 @@ import * as assert from 'node:assert'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ROUTES_DIR, walkRouteFiles } from './helpers/routes.ts'
 
 // A route added under backend/src/routes/ passes the full backend suite
 // (test/helper.ts builds the app in-process) whether or not it has a
@@ -12,7 +13,6 @@ import { fileURLToPath } from 'node:url'
 // comparison, not an HTTP test: it reads both sides as plain text, so it
 // catches drift without needing AWS credentials or a deployed stack.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const ROUTES_DIR = path.join(__dirname, '..', 'src', 'routes')
 const API_CONSTRUCT_PATH = path.join(__dirname, '..', '..', 'infra', 'lib', 'constructs', 'api-construct.ts')
 
 interface RouteEntry {
@@ -29,25 +29,6 @@ function normalizePath (routePath: string): string {
 function joinPrefix (prefix: string, subPath: string): string {
   if (subPath === '/') return prefix === '' ? '/' : prefix
   return `${prefix}${subPath}`
-}
-
-// Non-route support files, excluded by name rather than relying on them
-// having no fastify.get/post calls to match: autohooks.ts registers an
-// onRequest hook (@fastify/autoload's autoHooks convention), and schemas.ts
-// exports TypeBox schema objects, not a Fastify plugin.
-const NON_ROUTE_FILES = new Set(['autohooks.ts', 'schemas.ts'])
-
-function walkRouteFiles (dir: string): string[] {
-  const files: string[] = []
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      files.push(...walkRouteFiles(fullPath))
-    } else if (entry.name.endsWith('.ts') && !NON_ROUTE_FILES.has(entry.name)) {
-      files.push(fullPath)
-    }
-  }
-  return files
 }
 
 // Only recognizes the literal fastify.get/post/put/delete/patch('/path', ...)
