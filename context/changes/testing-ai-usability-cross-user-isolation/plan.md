@@ -260,15 +260,15 @@ No schema or data changes. No production data affected.
 
 #### Manual
 
-- [x] 3.1 Explicit live permission granted to run the script against the real Anthropic API
-- [x] 3.2 Script run once, producing usable-output rate, average latency, and estimated cost
-- [x] 3.3 Script and temporary output discarded — nothing committed
+- [x] 3.1 Explicit live permission granted to run the script against the real Anthropic API — fd8ca1c
+- [x] 3.2 Script run once, producing usable-output rate, average latency, and estimated cost — fd8ca1c
+- [x] 3.3 Script and temporary output discarded — nothing committed — fd8ca1c
 
 ### Phase 4: Close out test-plan.md bookkeeping
 
 #### Automated
 
-- [ ] 4.1 `grep "| 2 | AI usability" context/foundation/test-plan.md` shows Phase 2's Status as `complete`
+- [x] 4.1 `grep "| 2 | AI usability" context/foundation/test-plan.md` shows Phase 2's Status as `complete`
 
 #### Manual
 

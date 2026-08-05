@@ -69,7 +69,7 @@ orchestrator updates Status as artifacts appear on disk.
 | # | Phase name | Goal (one line) | Risks covered | Test types | Status | Change folder |
 |---|---|---|---|---|---|---|
 | 1 | Backend CI safety net | Make every backend route provably gateway-reachable, cap the AI route's cost exposure, and make `npm test` actually gate merges in CI | #1, #7 | static route-registration check, rate-limit plugin integration test, CI wiring | complete | context/changes/testing-backend-ci-safety-net/ |
-| 2 | AI usability + cross-user isolation | Confirm AI output is measurably usable and no endpoint lets one user reach another user's data | #3, #5 | empirical real-API script, backend integration tests (IDOR) | change opened | context/changes/testing-ai-usability-cross-user-isolation/ |
+| 2 | AI usability + cross-user isolation | Confirm AI output is measurably usable and no endpoint lets one user reach another user's data | #3, #5 | empirical real-API script, backend integration tests (IDOR) | complete | context/changes/testing-ai-usability-cross-user-isolation/ |
 | 3 | Auth resilience | An expired/invalid token never surfaces as an opaque failure — it renews silently or drops the session cleanly | #4 | frontend unit/integration tests (bootstraps Vitest for `frontend/`) | not started | — |
 | 4 | Print output correctness | Print/A4 layout changes are verifiable without a manual print-preview every time, in both OS themes | #2 | deterministic visual diff/snapshot, manual print spot-check | not started | — |
 | 5 | Frontend/extension logic coverage | The zero-coverage, highest-churn UI logic has tests for its documented edge cases | #6 | component/unit tests (extends Vitest; bootstraps a test runner for `extension/`) | not started | — |
@@ -120,6 +120,7 @@ phase lands; before that, the gate is `planned`.
 | backend unit + integration (`npm test`) | local + CI — both `pr-diff.yml` and `deploy.yml`'s `diff` jobs, each against its own ephemeral Neon branch per run (shipped in `testing-backend-ci-safety-net` p3) | enforced — `NEON_API_KEY`/`NEON_PROJECT_ID` are set, and a real push to `main` confirmed `deploy.yml`'s `diff` job runs tests and `deploy` is auto-skipped via `needs: diff` on failure. Only a required-status-check rule on `pr-diff.yml`'s `diff` job (Settings → Branches) remains needed for the PR path specifically, since that job has no automatic dependent to gate | logic regressions in the one app with real coverage today |
 | route-reachability check | `backend/test/route-reachability.test.ts`, runs as part of `npm test` | required (shipped in `testing-backend-ci-safety-net` p2) | a route that passes tests but 404s through the real gateway (Risk #1) |
 | AI-route rate-limit check | `backend/test/routes/api/collections-rate-limit.test.ts`, runs as part of `npm test` | required (shipped in `testing-backend-ci-safety-net` p1) | an unregistered or misconfigured cost guard on the AI-calling route (Risk #7) — the guard itself (`@fastify/rate-limit`) already existed; this phase added the test proving it works |
+| IDOR ownership guard | `backend/test/route-ownership.test.ts`, runs as part of `npm test` | required (shipped in `testing-ai-usability-cross-user-isolation` p2) | a route accepting a collection/entry ID without calling the shared ownership helper (Risk #5) — mirrors the route-reachability check's static-source-comparison approach, applied to authorization instead of gateway registration |
 | frontend unit + integration | local + CI | required after §3 Phase 3 | logic regressions in auth/token handling, then wider UI logic after Phase 5 |
 | print visual diff | CI on PR | required after §3 Phase 4 | print/A4 layout regressions across OS themes |
 | e2e on critical flows | — | not planned | no rollout phase currently justifies this layer over cheaper ones (see §4) |
@@ -169,13 +170,50 @@ the relevant rollout phase ships; before that, the sub-section reads
   `backend/src/routes/api/collections/index.ts` (keyed by
   `request.authUser.id`), and add a functional test on the model of
   `backend/test/routes/api/collections-rate-limit.test.ts` proving it
-  actually rejects excess requests.
+  actually rejects excess requests. If the endpoint accepts a collection or
+  entry ID in its path, it must fetch that resource through the shared
+  ownership helper (§6.6) — `route-ownership.test.ts` fails naming the
+  specific route if it doesn't.
 
 ### 6.5 Adding or updating the print visual diff
 
 - TBD — see §3 Phase 4.
 
-### 6.6 Per-rollout-phase notes
+### 6.6 Adding an ownership-checked (IDOR-safe) route
+
+- Shipped: `backend/src/routes/api/collections/ownership.ts` exports
+  `fetchOwnedCollection(fastify, collectionId, userId)` and
+  `fetchOwnedEntry(fastify, entryId, collectionId)` — the single source of
+  truth for "fetch this row only if the requesting user owns it." Any new
+  route accepting a `:id` (collection) or `:entryId` (entry) path param must
+  call the matching helper instead of writing its own ownership query.
+  `backend/test/route-ownership.test.ts` is a static source comparison (not
+  an HTTP test, same style as §6.2's reachability check): it enumerates
+  `:id`/`:entryId`-accepting routes and asserts each one's handler source
+  contains the expected helper call, failing with the specific route name if
+  not. No exemption list — every ID-accepting route needs the helper call,
+  full stop.
+
+### 6.7 Running the AI-usability empirical check
+
+- Not a committed script — per the "stubbed AI client" lesson
+  (`context/foundation/lessons.md`), this is a one-off, uncommitted script
+  run manually with explicit live permission before trusting a change to
+  the AI translate path. Call `generateTranslation()`
+  (`backend/src/ai/translate.ts`) directly with a real Anthropic client
+  (bypass HTTP/auth/DB — the risk lives in the AI call itself), for a dozen+
+  varied word/phrase inputs, and record whether `isEmpty()` was still true
+  after the built-in retry, plus latency and token usage. Never add this to
+  `npm test` or any CI workflow — it costs real Anthropic spend per run.
+  Last measured: `checked: 2026-08-05` — 14/14 calls usable (100%), avg
+  latency 4965ms, $0.0597 total (~$0.0043/call) against
+  `claude-haiku-4-5-20251001`. This single run is a spot-check, not a
+  statistically confident rate — the archived pre-retry measurement
+  (~9% empty) implies roughly 1-in-14 empty results is still expected on
+  average; re-run before trusting a change to the retry/empty-handling
+  logic itself.
+
+### 6.8 Per-rollout-phase notes
 
 (Filled in as each phase lands.)
 
