@@ -271,18 +271,18 @@ No production data migration. CI runs the existing `backend/migrations/*.ts` fil
 
 #### Automated
 
-- [x] 2.1 `cd backend && npm test` passes, including the new `route-reachability.test.ts`
-- [x] 2.2 `cd backend && npm run build:ts` succeeds after `root.ts`'s removal
+- [x] 2.1 `cd backend && npm test` passes, including the new `route-reachability.test.ts` — 22ae8fa
+- [x] 2.2 `cd backend && npm run build:ts` succeeds after `root.ts`'s removal — 22ae8fa
 
 #### Manual
 
-- [x] 2.3 Temporarily comment out one `addRoutes` call, confirm `route-reachability.test.ts` fails naming that route, then revert
+- [x] 2.3 Temporarily comment out one `addRoutes` call, confirm `route-reachability.test.ts` fails naming that route, then revert — 22ae8fa
 
 ### Phase 3: Wire `npm test` into CI via an ephemeral Neon branch
 
 #### Automated
 
-- [ ] 3.1 `.github/workflows/pr-diff.yml` parses as valid YAML
+- [x] 3.1 `.github/workflows/pr-diff.yml` parses as valid YAML
 
 #### Manual
 

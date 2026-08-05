@@ -16,7 +16,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Matches what the backend test suite is actually developed/run
+          # against locally (context/foundation/test-plan.md §4) — was 22,
+          # a previously-untested mismatch with local dev.
+          node-version: 24
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -31,6 +34,44 @@ jobs:
         run: |
           npm ci
           npm run build:ts
+
+      # Backend tests hit a real database (test/helper.ts boots the full
+      # Fastify app against fastify.sql, no mocking) — @neondatabase/serverless
+      # speaks Neon's HTTP protocol, not plain TCP pg, so a generic postgres:
+      # service container can't stand in. A fresh branch per run keeps
+      # parallel/re-run PRs from colliding and never leaves persistent state.
+      - name: Create ephemeral Neon branch for backend tests
+        id: neon-branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: pr-${{ github.event.number }}-${{ github.run_id }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Migrate ephemeral Neon branch
+        working-directory: backend
+        env:
+          NEON_DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+        run: npx node-pg-migrate -d NEON_DATABASE_URL up
+
+      - name: Run backend tests
+        working-directory: backend
+        env:
+          NEON_DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+          # config.ts only checks presence, never format — the one test that
+          # would make a real call (translate.test.ts) already stubs
+          # app.anthropicClient, so no real Anthropic spend happens here.
+          ANTHROPIC_API_KEY: ci-placeholder-key
+        run: npm test
+
+      - name: Delete ephemeral Neon branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: pr-${{ github.event.number }}-${{ github.run_id }}
+          api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Install infra deps
         working-directory: infra
