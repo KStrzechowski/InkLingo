@@ -117,9 +117,9 @@ phase lands; before that, the gate is `planned`.
 | Gate | Where | Required? | Catches |
 |---|---|---|---|
 | lint + typecheck | local (`npm run lint`, `tsc -b`/`npm run build:ts` per app) | required | syntactic / type drift |
-| backend unit + integration (`npm test`) | local only today — CI (`pr-diff.yml`, `deploy.yml`) builds the backend but never runs `npm test` | required after §3 Phase 1 | logic regressions in the one app with real coverage today, but currently unenforced at merge time |
-| route-reachability check | CI | required after §3 Phase 1 | a route that passes tests but 404s through the real gateway (Risk #1) |
-| AI-route rate-limit check | local + CI | required after §3 Phase 1 | an unregistered or misconfigured cost guard on the AI-calling route (Risk #7) |
+| backend unit + integration (`npm test`) | local + CI (`pr-diff.yml`, ephemeral Neon branch per run) — code lands in `testing-backend-ci-safety-net` p3; `deploy.yml` still never runs it | code shipped, not yet enforced — needs `NEON_API_KEY`/`NEON_PROJECT_ID` repo secrets and a required-status-check rule on `pr-diff.yml`'s `diff` job (pending, tracked in that change) | logic regressions in the one app with real coverage today |
+| route-reachability check | `backend/test/route-reachability.test.ts`, runs as part of `npm test` | required (shipped in `testing-backend-ci-safety-net` p2) | a route that passes tests but 404s through the real gateway (Risk #1) |
+| AI-route rate-limit check | `backend/test/routes/api/collections-rate-limit.test.ts`, runs as part of `npm test` | required (shipped in `testing-backend-ci-safety-net` p1) | an unregistered or misconfigured cost guard on the AI-calling route (Risk #7) — the guard itself (`@fastify/rate-limit`) already existed; this phase added the test proving it works |
 | frontend unit + integration | local + CI | required after §3 Phase 3 | logic regressions in auth/token handling, then wider UI logic after Phase 5 |
 | print visual diff | CI on PR | required after §3 Phase 4 | print/A4 layout regressions across OS themes |
 | e2e on critical flows | — | not planned | no rollout phase currently justifies this layer over cheaper ones (see §4) |
@@ -133,14 +133,25 @@ the relevant rollout phase ships; before that, the sub-section reads
 
 ### 6.1 Adding a backend unit/integration test
 
-- TBD — see `backend/test/routes/api/collections.test.ts` for the current
-  reference pattern (full Fastify app via `test/helper.ts`'s `build(t)`,
-  real Neon DB, cleanup in `t.after`) until §3 Phase 1 formalizes route-
-  reachability and rate-limit test patterns.
+- Follow `backend/test/routes/api/collections.test.ts`: full Fastify app via
+  `test/helper.ts`'s `build(t)`, real Neon DB, cleanup in `t.after`. If the
+  route calls Anthropic, stub `app.anthropicClient` via
+  `backend/test/helpers/anthropic.ts`'s `stubAnthropicSuccess` /
+  `stubAnthropicSequence` / `stubAnthropicFailure` (shared helpers, extracted
+  from `translate.test.ts` in `testing-backend-ci-safety-net` p1) rather than
+  redefining stubs locally.
 
 ### 6.2 Adding a route-reachability check
 
-- TBD — see §3 Phase 1.
+- Shipped: `backend/test/route-reachability.test.ts`. It's a static source
+  comparison, not an HTTP test — it reads `backend/src/routes/**/*.ts` and
+  `infra/lib/constructs/api-construct.ts` as plain text, regex-extracts
+  route/gateway registrations, normalizes Fastify's `:param` syntax to API
+  Gateway's `{param}` syntax, and asserts the two sets match exactly. There
+  is no exemption list: every backend route needs a matching gateway entry,
+  full stop. If a route is ever meant to be gateway-exempt on purpose,
+  that's a design conversation for this check's next revision, not a config
+  entry to add speculatively.
 
 ### 6.3 Adding a frontend or extension unit/component test
 
@@ -149,9 +160,16 @@ the relevant rollout phase ships; before that, the sub-section reads
 
 ### 6.4 Adding a test for a new backend API endpoint
 
-- TBD — see §3 Phase 1 for the route-reachability pattern this must pair
-  with; until then, follow the existing pattern in
-  `backend/test/routes/api/entries.test.ts`.
+- Follow the existing pattern in `backend/test/routes/api/entries.test.ts`.
+  A new endpoint must land with a matching `this.httpApi.addRoutes({...})`
+  entry in `infra/lib/constructs/api-construct.ts` in the same change —
+  `route-reachability.test.ts` (§6.2) fails naming the specific route if it
+  doesn't. If the endpoint calls Anthropic, attach a per-route
+  `config: { rateLimit: {...} }` following `translateRateLimit`'s pattern in
+  `backend/src/routes/api/collections/index.ts` (keyed by
+  `request.authUser.id`), and add a functional test on the model of
+  `backend/test/routes/api/collections-rate-limit.test.ts` proving it
+  actually rejects excess requests.
 
 ### 6.5 Adding or updating the print visual diff
 

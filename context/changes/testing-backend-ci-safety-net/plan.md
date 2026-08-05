@@ -282,7 +282,7 @@ No production data migration. CI runs the existing `backend/migrations/*.ts` fil
 
 #### Automated
 
-- [x] 3.1 `.github/workflows/pr-diff.yml` parses as valid YAML
+- [x] 3.1 `.github/workflows/pr-diff.yml` parses as valid YAML — 0e22262
 
 #### Manual
 
@@ -295,8 +295,8 @@ No production data migration. CI runs the existing `backend/migrations/*.ts` fil
 
 #### Automated
 
-- [ ] 4.1 `grep -c "TBD — see §3 Phase 1" context/foundation/test-plan.md` shows fewer matches than before
+- [x] 4.1 `grep -c "TBD — see §3 Phase 1" context/foundation/test-plan.md` shows fewer matches than before
 
 #### Manual
 
-- [ ] 4.2 Updated §5/§6 sections read accurately against what shipped
+- [x] 4.2 Updated §5/§6 sections read accurately against what shipped
