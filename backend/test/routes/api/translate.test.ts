@@ -1,47 +1,11 @@
 import { test } from 'node:test'
 import * as assert from 'node:assert'
 import { randomUUID } from 'node:crypto'
-import type { Anthropic } from '@anthropic-ai/sdk'
 import { build } from '../../helper.js'
 import { jwks, signToken } from '../../helpers/jwks.js'
 import { createUserRow, createCollectionRow } from '../../helpers/fixtures.js'
-import { TRANSLATION_TOOL_NAME, type TranslationResult, type TranslationVariant } from '../../../src/ai/translate.js'
-
-type App = Awaited<ReturnType<typeof build>>
-
-function stubAnthropicSuccess (app: App, input: unknown): void {
-  app.anthropicClient = {
-    messages: {
-      create: async () => ({
-        content: [{ type: 'tool_use', name: TRANSLATION_TOOL_NAME, input }]
-      })
-    }
-  } as unknown as Anthropic
-}
-
-// Returns each supplied payload in turn, then repeats the last one. Lets a
-// test drive the empty-then-populated sequence the retry exists for.
-function stubAnthropicSequence (app: App, inputs: unknown[]): { calls: () => number } {
-  let calls = 0
-  app.anthropicClient = {
-    messages: {
-      create: async () => {
-        const input = inputs[Math.min(calls, inputs.length - 1)]
-        calls++
-        return { content: [{ type: 'tool_use', name: TRANSLATION_TOOL_NAME, input }] }
-      }
-    }
-  } as unknown as Anthropic
-  return { calls: () => calls }
-}
-
-function stubAnthropicFailure (app: App): void {
-  app.anthropicClient = {
-    messages: {
-      create: async () => { throw new Error('anthropic unavailable') }
-    }
-  } as unknown as Anthropic
-}
+import { stubAnthropicSuccess, stubAnthropicSequence, stubAnthropicFailure } from '../../helpers/anthropic.js'
+import { type TranslationResult, type TranslationVariant } from '../../../src/ai/translate.js'
 
 function variant (meaningText: string): TranslationVariant {
   return {
