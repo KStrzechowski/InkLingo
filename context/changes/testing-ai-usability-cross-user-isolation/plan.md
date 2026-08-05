@@ -249,8 +249,8 @@ No schema or data changes. No production data affected.
 
 #### Automated
 
-- [x] 2.1 `cd backend && npm test` passes, including the new `route-ownership.test.ts` and updated `route-reachability.test.ts`
-- [x] 2.2 `cd backend && npm run build:ts` succeeds
+- [x] 2.1 `cd backend && npm test` passes, including the new `route-ownership.test.ts` and updated `route-reachability.test.ts` — 8dc3462
+- [x] 2.2 `cd backend && npm run build:ts` succeeds — 8dc3462
 
 #### Manual
 
@@ -260,9 +260,9 @@ No schema or data changes. No production data affected.
 
 #### Manual
 
-- [ ] 3.1 Explicit live permission granted to run the script against the real Anthropic API
-- [ ] 3.2 Script run once, producing usable-output rate, average latency, and estimated cost
-- [ ] 3.3 Script and temporary output discarded — nothing committed
+- [x] 3.1 Explicit live permission granted to run the script against the real Anthropic API
+- [x] 3.2 Script run once, producing usable-output rate, average latency, and estimated cost
+- [x] 3.3 Script and temporary output discarded — nothing committed
 
 ### Phase 4: Close out test-plan.md bookkeeping
 
