@@ -22,7 +22,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Matches what the backend test suite is actually developed/run
+          # against locally (context/foundation/test-plan.md §4) — was 22,
+          # a previously-untested mismatch with local dev. Unlike the
+          # deploy job below, this one isn't pinned to the Lambda runtime.
+          node-version: 24
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -34,6 +38,45 @@ jobs:
         run: |
           npm ci
           npm run build:ts
+
+      # Same rationale as pr-diff.yml: @neondatabase/serverless speaks
+      # Neon's HTTP protocol, not plain TCP pg, so tests need a real Neon
+      # branch, not a postgres: service container. This job runs on every
+      # push to main with no approval gate, and `deploy` below `needs: diff`
+      # — a failing test here automatically skips the deploy job, no
+      # branch-protection configuration required.
+      - name: Create ephemeral Neon branch for backend tests
+        id: neon-branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: deploy-${{ github.sha }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Migrate ephemeral Neon branch
+        working-directory: backend
+        env:
+          NEON_DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+        run: npx node-pg-migrate -d NEON_DATABASE_URL up
+
+      - name: Run backend tests
+        working-directory: backend
+        env:
+          NEON_DATABASE_URL: ${{ steps.neon-branch.outputs.db_url }}
+          # config.ts only checks presence, never format — the one test that
+          # would make a real call (translate.test.ts) already stubs
+          # app.anthropicClient, so no real Anthropic spend happens here.
+          ANTHROPIC_API_KEY: ci-placeholder-key
+        run: npm test
+
+      - name: Delete ephemeral Neon branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: deploy-${{ github.sha }}
+          api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Install infra deps
         working-directory: infra

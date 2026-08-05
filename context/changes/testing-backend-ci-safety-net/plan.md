@@ -2,7 +2,7 @@
 
 ## Overview
 
-Phase 1 of the frozen test-plan rollout (`context/foundation/test-plan.md` §3). Three deliverables against Risk #1 and Risk #7: prove the existing AI-route rate-limit guard actually rejects excess traffic, add a deterministic check that every backend route is reachable through the real API Gateway wiring, and wire `npm test` into CI so both (plus the existing suite) actually gate PRs.
+Phase 1 of the frozen test-plan rollout (`context/foundation/test-plan.md` §3). Three deliverables against Risk #1 and Risk #7: prove the existing AI-route rate-limit guard actually rejects excess traffic, add a deterministic check that every backend route is reachable through the real API Gateway wiring, and wire `npm test` into CI — both `pr-diff.yml` (for PRs) and `deploy.yml` (for direct pushes to `main`, the actual practice on this repo today) — so all of it actually gates merges/deploys.
 
 ## Current State Analysis
 
@@ -19,20 +19,20 @@ Phase 1 of the frozen test-plan rollout (`context/foundation/test-plan.md` §3).
 - `backend/test/tsconfig.json`'s `include` only covers `../src/**/*.ts`, `../migrations/**/*.ts`, and `**/*.ts` (relative to `test/`) — it does not include `infra/`. The reachability check must read `infra/lib/constructs/api-construct.ts` as plain text (`fs.readFileSync`), not import it as a TS module.
 - `backend/package.json`'s `migrate:up` script (`node-pg-migrate -d NEON_DATABASE_URL --envPath .env up`) already shows the CLI convention: `-d <ENV_VAR_NAME>` names the env var holding the connection string. In CI, the same binary can run without `--envPath` once the workflow sets `NEON_DATABASE_URL` directly.
 - Both workflows currently pin `node-version: 22`, while `context/foundation/test-plan.md`'s Stack table (§4) documents the suite as developed and run on Node 24 locally — a real, previously-untested version mismatch that a new CI test step would otherwise inherit silently.
-- `deploy.yml`'s `deploy` job (`:69-72`) is gated by the "production" GitHub Environment's required reviewers regardless of how `main` was reached — its own comment states the `diff` job's output "is what the deploy job's reviewer actually reads before approving." A bypassed PR check still hits a human gate before an actual deploy, which is why this phase wires tests into `pr-diff.yml` only.
+- `deploy.yml`'s `deploy` job (`:69-72`) is gated by the "production" GitHub Environment's required reviewers, and `needs: diff` — the `deploy` job is automatically skipped if the `diff` job fails. **Revised mid-implementation**: this phase originally wired tests into `pr-diff.yml` only, reasoning that the `deploy` job's human-approval gate already covered a bypassed-PR-check scenario. That reasoning assumed a PR-based workflow; actual practice on this repo is pushing directly to `main`, which never triggers `pr-diff.yml` at all (it only fires on `pull_request` events). So the test step is added to **both** workflows: `pr-diff.yml` for if/when PRs are used, and `deploy.yml`'s `diff` job for the direct-push path — where `needs: diff` makes a test failure automatically skip `deploy`, no branch-protection configuration required.
 
 ## Desired End State
 
 - `npm test` in `backend/` includes a test proving the rate-limit guard rejects a 21st request, and a test proving every backend route has a matching, correctly-pathed entry in `infra/lib/constructs/api-construct.ts` (and vice versa).
 - `backend/src/routes/root.ts` and its test no longer exist; every backend route has a real gateway entry.
-- `.github/workflows/pr-diff.yml` runs the full backend suite (including both new tests) against a disposable, freshly-migrated Neon branch on every PR, and fails the job if any test fails.
+- `.github/workflows/pr-diff.yml` and `.github/workflows/deploy.yml` both run the full backend suite (including both new tests) against a disposable, freshly-migrated Neon branch on every PR and every push to `main` respectively, and fail their `diff` job if any test fails — in `deploy.yml`'s case, automatically skipping the `deploy` job via `needs: diff`.
 - `context/foundation/test-plan.md`'s §5 and §6 no longer say "TBD — see §3 Phase 1" for the three items this phase covers.
 
 **Verification**: `cd backend && npm test` passes locally; a PR opened against `main` shows the new CI step run, create a Neon branch, run migrations, run tests, and tear the branch down; deliberately breaking a route/gateway entry or the rate-limit config locally makes the corresponding new test fail with a message naming the specific problem.
 
 ## What We're NOT Doing
 
-- Not touching `deploy.yml` — the existing human-approval gate on the `deploy` job already covers the "bypassed PR check" scenario this would otherwise guard against.
+- ~~Not touching `deploy.yml`~~ — revised: see the note under Key Discoveries. The test step now lands in both workflows since direct pushes to `main` are actual practice here, not just a hypothetical bypass.
 - Not adding test/lint gating for `frontend/` or `extension/` — those are test-plan.md Phase 3 and Phase 5's scope, not this phase's.
 - Not building a `config.public` route-exemption mechanism in `routes/api/autohooks.ts` — no real public route exists yet to justify it (a prior, deliberate decision from `account-auth`); deleting the one route that would have needed an exemption removes the immediate need.
 - Not changing the rate limit's actual threshold (`max: 20`, `1 minute`) — this phase proves the existing guard works, it doesn't retune it.
@@ -144,7 +144,7 @@ Delete the unused `GET /` scaffold route so the route/gateway comparison has no 
 
 ### Overview
 
-Add a test step to `pr-diff.yml` (only) that provisions a disposable Neon database branch for the run, migrates it, runs the full backend suite (now including both new tests) against it, and tears the branch down afterward — so `npm test` failures fail the PR's `diff` job instead of going unchecked.
+Add a test step to `pr-diff.yml` and `deploy.yml` that provisions a disposable Neon database branch for the run, migrates it, runs the full backend suite (now including both new tests) against it, and tears the branch down afterward — so `npm test` failures fail the `diff` job in either workflow instead of going unchecked. `deploy.yml`'s `deploy` job (`needs: diff`) is automatically skipped on a `diff` failure, so this is a real, self-enforcing gate on the direct-push-to-`main` path with no branch-protection configuration required.
 
 ### Changes Required:
 
@@ -162,7 +162,15 @@ Add a test step to `pr-diff.yml` (only) that provisions a disposable Neon databa
 
 Also bump this workflow's `node-version` (`:19`) from `22` to `24`, matching what the suite is actually developed and run against locally (`context/foundation/test-plan.md` §4) — otherwise the new step would be the first thing in this repo ever run on a different Node major version than local dev.
 
-#### 2. Repository secrets/vars (manual, non-code prerequisite)
+#### 2. Deploy workflow's `diff` job
+
+**File**: `.github/workflows/deploy.yml`
+
+**Intent**: Mirror change 1 into the `diff` job of the post-merge workflow, since pushing directly to `main` (not opening a PR) is this repo's actual practice and never triggers `pr-diff.yml` at all.
+
+**Contract**: Same four-step block (create branch → migrate → `npm test` → delete branch, `if: always()` on deletion) inserted after the `diff` job's own `Build backend` step, before its `Install infra deps` step. Also bump the `diff` job's `node-version` from `22` to `24` — but **not** the `deploy` job's, whose `node-version: 22 # matches the Lambda runtime (NODEJS_22_X)` is intentionally pinned to the Lambda runtime and unrelated to the test suite's Node version. The `deploy` job needs no other change: it already `needs: diff`, so a test failure there skips `deploy` automatically.
+
+#### 3. Repository secrets/vars (manual, non-code prerequisite)
 
 **Intent**: The new steps need `NEON_API_KEY` and `NEON_PROJECT_ID` to create/delete branches via Neon's API.
 
@@ -173,13 +181,16 @@ Also bump this workflow's `node-version` (`:19`) from `22` to `24`, matching wha
 #### Automated Verification:
 
 - `.github/workflows/pr-diff.yml` parses as valid YAML (any YAML linter, or GitHub's own workflow validation on push)
+- `.github/workflows/deploy.yml` parses as valid YAML
 
 #### Manual Verification:
 
 - `NEON_API_KEY` and `NEON_PROJECT_ID` are added as repo secrets/vars (prerequisite for everything below)
-- Open a real PR and confirm in the Actions tab: a Neon branch is created, migrations run cleanly, `npm test` executes and passes, and the branch is deleted afterward regardless of outcome
-- On a scratch branch, temporarily break a test to confirm the `diff` job goes red (visible as a failed check on the PR), then revert
-- In the repo's Settings → Branches, add or confirm a required status check for the `diff` job — this is the action that actually makes "gate merges" true; without it, a failing job is visible but non-blocking
+- Push to `main` and confirm in the Actions tab: `deploy.yml`'s `diff` job creates a Neon branch, migrates it, runs `npm test`, deletes the branch afterward, and (if tests pass) the `deploy` job proceeds to its approval gate
+- On a scratch branch/commit, temporarily break a test, push to `main`, and confirm `deploy.yml`'s `diff` job fails and the `deploy` job is skipped (not just red-but-proceeding) — then revert
+- Open a real PR and confirm the same create/migrate/test/delete cycle runs in `pr-diff.yml`'s `diff` job
+- On a scratch branch, temporarily break a test to confirm `pr-diff.yml`'s `diff` job goes red (visible as a failed check on the PR), then revert
+- In the repo's Settings → Branches, add or confirm a required status check for `pr-diff.yml`'s `diff` job — this is what makes it block a merge if a PR is used; `deploy.yml`'s `needs: diff` already self-enforces without any Settings change
 
 ---
 
@@ -283,20 +294,23 @@ No production data migration. CI runs the existing `backend/migrations/*.ts` fil
 #### Automated
 
 - [x] 3.1 `.github/workflows/pr-diff.yml` parses as valid YAML — 0e22262
+- [x] 3.2 `.github/workflows/deploy.yml` parses as valid YAML
 
 #### Manual
 
-- [ ] 3.2 `NEON_API_KEY` and `NEON_PROJECT_ID` added as repo secrets/vars
-- [ ] 3.3 Real PR run: Neon branch created, migrated, tests run and pass, branch deleted
-- [ ] 3.4 Scratch-branch test failure shows as a failed check on the PR, then reverted
-- [ ] 3.5 Required-status-check branch protection configured for the `diff` job
+- [x] 3.3 `NEON_API_KEY` and `NEON_PROJECT_ID` added as repo secrets/vars — confirmed already done by user
+- [ ] 3.4 Push to `main`: `deploy.yml`'s `diff` job creates/migrates/tests/deletes a Neon branch, and `deploy` proceeds to its approval gate on success
+- [ ] 3.5 Scratch break on `main`: `deploy.yml`'s `diff` job fails and `deploy` is skipped (not just red-but-proceeding), then reverted
+- [ ] 3.6 Real PR run: `pr-diff.yml`'s `diff` job creates/migrates/tests/deletes a Neon branch
+- [ ] 3.7 Scratch-branch test failure shows as a failed check on the PR (`pr-diff.yml`), then reverted
+- [ ] 3.8 Required-status-check branch protection configured for `pr-diff.yml`'s `diff` job
 
 ### Phase 4: Close out test-plan.md bookkeeping
 
 #### Automated
 
-- [x] 4.1 `grep -c "TBD — see §3 Phase 1" context/foundation/test-plan.md` shows fewer matches than before
+- [x] 4.1 `grep -c "TBD — see §3 Phase 1" context/foundation/test-plan.md` shows fewer matches than before — 10220cb
 
 #### Manual
 
-- [x] 4.2 Updated §5/§6 sections read accurately against what shipped
+- [x] 4.2 Updated §5/§6 sections read accurately against what shipped — 10220cb

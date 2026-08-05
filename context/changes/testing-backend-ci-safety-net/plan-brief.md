@@ -24,7 +24,7 @@ Every backend route has a gateway entry, enforced by a test that fails with a sp
 | Check location | `backend/test/`, `node:test` | One test runner for the whole backend suite; `infra/test/`'s only existing file is unmodified boilerplate with no real precedent either way. | Plan |
 | Rate-limit test depth | Functional — fire 21 requests, assert 429 on the last | Proves the guard actually rejects traffic; the Anthropic client stays stubbed so this costs nothing even though it's a real functional test. | Plan |
 | `GET /` route | Delete it | Unmodified Fastify-CLI scaffold, no callers, redundant with `/health` — keeping it as an "exemption" would ship permanent special-case logic to protect one line of dead code. | Plan |
-| CI scope | `pr-diff.yml` only, not `deploy.yml` | `deploy.yml`'s deploy job already requires human approval regardless of how `main` was reached — that gate already covers the bypass scenario. | Plan |
+| CI scope | Both `pr-diff.yml` and `deploy.yml` | Revised mid-implementation: actual practice on this repo is pushing directly to `main`, which never triggers `pr-diff.yml` — the test step had to land in `deploy.yml`'s `diff` job too, where `needs: diff` makes a failure automatically skip `deploy`. | Plan |
 
 ## Scope
 
@@ -36,7 +36,6 @@ Every backend route has a gateway entry, enforced by a test that fails with a sp
 - Updating `test-plan.md`'s cookbook/quality-gate placeholders for this phase
 
 **Out of scope:**
-- `deploy.yml` changes
 - Frontend/extension test or lint gating (later rollout phases own this)
 - Retuning the rate limit's actual threshold
 - Building a `config.public` route-exemption mechanism (no real public route exists yet)
@@ -52,7 +51,7 @@ Two independent, cheap checks first (rate-limit test, reachability test — eith
 |---|---|---|
 | 1. Rate-limit guard test | Functional proof the 20/min cap rejects excess requests | Test could pass trivially if not wired to the guard's real behavior — mitigated by a manual "lower the limit and watch it track" check |
 | 2. Reachability check | Static test failing on any route/gateway mismatch, dead root route removed | Regex-based parsing is a new pattern with no precedent — mitigated by a manual "break a gateway entry and watch it fail" check |
-| 3. CI wiring | `npm test` runs and gates `pr-diff.yml` via an ephemeral Neon branch | Needs `NEON_API_KEY`/`NEON_PROJECT_ID` secrets added manually before it can run at all |
+| 3. CI wiring | `npm test` runs and gates both `pr-diff.yml` and `deploy.yml` via an ephemeral Neon branch | Needs `NEON_API_KEY`/`NEON_PROJECT_ID` secrets added manually before it can run at all (now done) |
 | 4. test-plan.md bookkeeping | Cookbook/quality-gate sections reflect what shipped | None — pure documentation |
 
 **Prerequisites:** `NEON_API_KEY` and `NEON_PROJECT_ID` must be added as repo secrets/vars before Phase 3 can run in CI (cannot be automated by this plan).
