@@ -12,6 +12,7 @@ import {
   addEntryTranslationBodySchema
 } from './schemas.ts'
 import { generateTranslation, type GenerateTranslationParams, type TranslationResult } from '../../../ai/translate.ts'
+import { fetchOwnedCollection, fetchOwnedEntry } from './ownership.ts'
 
 const UNIQUE_VIOLATION = '23505'
 // One call now covers every target language, so it generates more than the
@@ -148,11 +149,7 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       params: collectionParamsSchema
     }
   }, async (request, reply) => {
-    const [collection] = await fastify.sql`
-      SELECT id, name, native_language_code, created_at
-      FROM collections
-      WHERE id = ${request.params.id} AND user_id = ${request.authUser.id}
-    `
+    const collection = await fetchOwnedCollection(fastify, request.params.id, request.authUser.id)
     if (collection === undefined) {
       return reply.notFound()
     }
@@ -222,11 +219,7 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       return reply.badRequest('text must not be blank')
     }
 
-    const [collection] = await fastify.sql`
-      SELECT id, native_language_code
-      FROM collections
-      WHERE id = ${request.params.id} AND user_id = ${request.authUser.id}
-    `
+    const collection = await fetchOwnedCollection(fastify, request.params.id, request.authUser.id)
     if (collection === undefined) {
       return reply.notFound()
     }
@@ -284,11 +277,7 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       return reply.badRequest('only one translation and one sentence per language')
     }
 
-    const [collection] = await fastify.sql`
-      SELECT id, native_language_code
-      FROM collections
-      WHERE id = ${request.params.id} AND user_id = ${request.authUser.id}
-    `
+    const collection = await fetchOwnedCollection(fastify, request.params.id, request.authUser.id)
     if (collection === undefined) {
       return reply.notFound()
     }
@@ -367,20 +356,12 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
   }, async (request, reply) => {
     const languageCode = request.body.languageCode.trim().toLowerCase()
 
-    const [collection] = await fastify.sql`
-      SELECT id, native_language_code
-      FROM collections
-      WHERE id = ${request.params.id} AND user_id = ${request.authUser.id}
-    `
+    const collection = await fetchOwnedCollection(fastify, request.params.id, request.authUser.id)
     if (collection === undefined) {
       return reply.notFound()
     }
 
-    const [entry] = await fastify.sql`
-      SELECT id, word_or_phrase
-      FROM entries
-      WHERE id = ${request.params.entryId} AND collection_id = ${collection.id}
-    `
+    const entry = await fetchOwnedEntry(fastify, request.params.entryId, collection.id)
     if (entry === undefined) {
       return reply.notFound()
     }
