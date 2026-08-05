@@ -69,6 +69,12 @@ jobs:
           # would make a real call (translate.test.ts) already stubs
           # app.anthropicClient, so no real Anthropic spend happens here.
           ANTHROPIC_API_KEY: ci-placeholder-key
+          # auth.ts builds a CognitoJwtVerifier eagerly at boot, which
+          # regex-validates userPoolId's shape (<region>_<alphanumeric>) —
+          # this needs to look real, not point at a real pool. Tests inject
+          # their own local JWKS (test/helpers/jwks.ts) and never hit AWS.
+          COGNITO_USER_POOL_ID: eu-central-1_ciplaceholder1
+          COGNITO_CLIENT_ID: ci-placeholder-client-id
         run: npm test
 
       - name: Delete ephemeral Neon branch
