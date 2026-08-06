@@ -24,8 +24,25 @@ function CallbackPage () {
   return <p>Loading…</p>
 }
 
+// Risk #4's "clean re-authentication prompt". Without it, a token the API
+// Gateway authorizer rejects for a non-expiry reason leaves the signed-in
+// shell up while every request underneath fails as an opaque CORS error.
+// Not a forced logout: the same evidence is also consistent with the user's
+// own wifi dropping, and it clears itself the moment a request succeeds.
+function ConnectionIssueBanner () {
+  return (
+    <div role="alert">
+      <p>
+        We can&apos;t reach the server. This is usually a connection problem, but
+        your session may also have ended.
+      </p>
+      <button type="button" onClick={() => void login()}>Sign in again</button>
+    </div>
+  )
+}
+
 function AuthenticatedLayout () {
-  const { user, loading } = useAuth()
+  const { user, loading, connectionIssue } = useAuth()
 
   if (loading) {
     return <p>Loading…</p>
@@ -43,6 +60,7 @@ function AuthenticatedLayout () {
   return (
     <section id="center">
       <h1>InkLingo</h1>
+      {connectionIssue && <ConnectionIssueBanner />}
       <p>Signed in as {user.profile.email}</p>
       <button type="button" onClick={() => void logout()}>Log out</button>
       <Outlet />

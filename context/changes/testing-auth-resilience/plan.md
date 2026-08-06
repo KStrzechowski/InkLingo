@@ -344,8 +344,8 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Automated
 
-- [x] 2.1 `cd frontend && npm test` passes, including `cognito.test.ts`, `AuthContext.test.tsx`, `client.test.ts`
-- [x] 2.2 `cd frontend && npm run build` succeeds
+- [x] 2.1 `cd frontend && npm test` passes, including `cognito.test.ts`, `AuthContext.test.tsx`, `client.test.ts` — a622698
+- [x] 2.2 `cd frontend && npm run build` succeeds — a622698
 
 #### Manual
 
@@ -355,8 +355,8 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Automated
 
-- [ ] 3.1 `cd frontend && npm test` passes, including new retry-then-signal/App banner cases
-- [ ] 3.2 `cd frontend && npm run build` succeeds
+- [x] 3.1 `cd frontend && npm test` passes, including new retry-then-signal/App banner cases
+- [x] 3.2 `cd frontend && npm run build` succeeds
 
 #### Manual
 
