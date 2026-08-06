@@ -88,6 +88,17 @@ jobs:
         working-directory: infra
         run: node scripts/package-backend.mjs
 
+      # Deliberately ahead of the env-writing step below: Vite resolves the
+      # committed frontend/.env.test over a generic .env for the same key, but
+      # running first means the suite never even has real Cognito values on
+      # disk to pick up. Unlike the backend suite this needs no database and
+      # no credentials — everything auth-related is mocked.
+      - name: Run frontend tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
+
       - name: Write frontend env from deployed stack outputs
         working-directory: infra
         run: node scripts/write-frontend-env.mjs

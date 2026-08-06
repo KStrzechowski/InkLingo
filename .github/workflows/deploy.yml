@@ -93,6 +93,15 @@ jobs:
         working-directory: infra
         run: node scripts/package-backend.mjs
 
+      # Same rationale as pr-diff.yml, and the same automatic gate the backend
+      # tests get: `deploy` below `needs: diff`, so a red frontend test here
+      # skips the deploy job without any branch-protection configuration.
+      - name: Run frontend tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
+
       - name: Write frontend env from deployed stack outputs
         working-directory: infra
         run: node scripts/write-frontend-env.mjs

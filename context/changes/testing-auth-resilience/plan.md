@@ -355,8 +355,8 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Automated
 
-- [x] 3.1 `cd frontend && npm test` passes, including new retry-then-signal/App banner cases
-- [x] 3.2 `cd frontend && npm run build` succeeds
+- [x] 3.1 `cd frontend && npm test` passes, including new retry-then-signal/App banner cases — 9c83863
+- [x] 3.2 `cd frontend && npm run build` succeeds — 9c83863
 
 #### Manual
 
@@ -367,7 +367,7 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Automated
 
-- [ ] 4.1 `cd frontend && npm ci && npm test` passes locally
+- [x] 4.1 `cd frontend && npm ci && npm test` passes locally
 - [ ] 4.2 New CI step passes on an open PR
 
 #### Manual
