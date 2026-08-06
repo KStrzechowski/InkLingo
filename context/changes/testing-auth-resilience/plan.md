@@ -378,7 +378,7 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Automated
 
-- [x] 5.1 `grep "| 3 | Auth resilience" context/foundation/test-plan.md` shows Status as `complete`
+- [x] 5.1 `grep "| 3 | Auth resilience" context/foundation/test-plan.md` shows Status as `complete` — aaf817d
 
 #### Manual
 
