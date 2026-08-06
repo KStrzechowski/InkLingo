@@ -6,7 +6,7 @@
 >
 > Refresh: re-run `/10x-test-plan --refresh` when stale (see §8).
 >
-> Last updated: 2026-08-05
+> Last updated: 2026-08-06
 
 ## 1. Strategy
 
@@ -70,7 +70,7 @@ orchestrator updates Status as artifacts appear on disk.
 |---|---|---|---|---|---|---|
 | 1 | Backend CI safety net | Make every backend route provably gateway-reachable, cap the AI route's cost exposure, and make `npm test` actually gate merges in CI | #1, #7 | static route-registration check, rate-limit plugin integration test, CI wiring | complete | context/changes/testing-backend-ci-safety-net/ |
 | 2 | AI usability + cross-user isolation | Confirm AI output is measurably usable and no endpoint lets one user reach another user's data | #3, #5 | empirical real-API script, backend integration tests (IDOR) | complete | context/changes/testing-ai-usability-cross-user-isolation/ |
-| 3 | Auth resilience | An expired/invalid token never surfaces as an opaque failure — it renews silently or drops the session cleanly | #4 | frontend unit/integration tests (bootstraps Vitest for `frontend/`) | researched | context/changes/testing-auth-resilience/ |
+| 3 | Auth resilience | An expired/invalid token never surfaces as an opaque failure — it renews silently or drops the session cleanly | #4 | frontend unit/integration tests (bootstraps Vitest for `frontend/`) | complete | context/changes/testing-auth-resilience/ |
 | 4 | Print output correctness | Print/A4 layout changes are verifiable without a manual print-preview every time, in both OS themes | #2 | deterministic visual diff/snapshot, manual print spot-check | not started | — |
 | 5 | Frontend/extension logic coverage | The zero-coverage, highest-churn UI logic has tests for its documented edge cases | #6 | component/unit tests (extends Vitest; bootstraps a test runner for `extension/`) | not started | — |
 
@@ -95,7 +95,7 @@ the MCP/tools actually exposed in the current session.
 | Layer | Tool | Version | Notes |
 |---|---|---|---|
 | unit + integration (backend) | Node built-in `node:test` + `c8` | Node 24, c8 ^11.0.0 | 12 test files across routes/plugins/schema — real coverage, hits a real Neon DB via `test/helper.ts`'s `build(t)`; not currently run in CI (see §5) |
-| unit + integration (frontend/extension) | none yet — see §3 Phase 3 (frontend), Phase 5 (extension) | — | Both apps build on Vite ^8.1.1 + React 19; Vitest is the natural fit (shares Vite config/transform, zero new bundler) |
+| unit + integration (frontend/extension) | frontend: Vitest + `@testing-library/react` + jsdom. extension: none yet — see §3 Phase 5 | vitest ^4.1.10, @testing-library/react ^16.3.2, @testing-library/jest-dom ^7, jsdom ^30 | Shipped for `frontend/` in `testing-auth-resilience` p1: `test` field on the existing `vite.config.ts` (no second config), tests under `frontend/test/` mirroring `backend/test/`, no Vitest globals (explicit `describe`/`it`/`expect`/`vi` imports, matching the backend's `node:test` style). `frontend/tsconfig.vitest.json` puts `test/` under `tsc -b`. The extension still has no runner; same Vitest fit applies when Phase 5 bootstraps it |
 | API mocking | none | — | Backend tests hit a real database directly and stub only the Anthropic client at the network edge; no HTTP-mocking library installed anywhere |
 | e2e | none | — | Not currently justified by cost × signal — no rollout phase names a failure mode that requires the full deployed shape over a cheaper layer |
 | accessibility | none | — | Not in scope for any top-7 risk; revisit only if a future risk names it |
@@ -121,7 +121,7 @@ phase lands; before that, the gate is `planned`.
 | route-reachability check | `backend/test/route-reachability.test.ts`, runs as part of `npm test` | required (shipped in `testing-backend-ci-safety-net` p2) | a route that passes tests but 404s through the real gateway (Risk #1) |
 | AI-route rate-limit check | `backend/test/routes/api/collections-rate-limit.test.ts`, runs as part of `npm test` | required (shipped in `testing-backend-ci-safety-net` p1) | an unregistered or misconfigured cost guard on the AI-calling route (Risk #7) — the guard itself (`@fastify/rate-limit`) already existed; this phase added the test proving it works |
 | IDOR ownership guard | `backend/test/route-ownership.test.ts`, runs as part of `npm test` | required (shipped in `testing-ai-usability-cross-user-isolation` p2) | a route accepting a collection/entry ID without calling the shared ownership helper (Risk #5) — mirrors the route-reachability check's static-source-comparison approach, applied to authorization instead of gateway registration |
-| frontend unit + integration | local + CI | required after §3 Phase 3 | logic regressions in auth/token handling, then wider UI logic after Phase 5 |
+| frontend unit + integration (`npm test` in `frontend/`) | local + CI — the "Run frontend tests" step in both `pr-diff.yml` and `deploy.yml`'s `diff` jobs (shipped in `testing-auth-resilience` p4) | enforced — needs no database or credentials, so unlike the backend gate there is nothing to configure. `deploy.yml` is auto-gated (`deploy` `needs: diff`); the PR path carries the same open caveat as the backend row — the frontend step lives in that same `diff` job, so one required-status-check rule on it (Settings → Branches) covers both | logic regressions in auth/token handling, then wider UI logic after Phase 5 |
 | print visual diff | CI on PR | required after §3 Phase 4 | print/A4 layout regressions across OS themes |
 | e2e on critical flows | — | not planned | no rollout phase currently justifies this layer over cheaper ones (see §4) |
 | pre-prod smoke | — | not planned | no rollout phase names this; manual verification remains the practice for now |
@@ -156,8 +156,53 @@ the relevant rollout phase ships; before that, the sub-section reads
 
 ### 6.3 Adding a frontend or extension unit/component test
 
-- TBD — see §3 Phase 3 (frontend bootstrap) and §3 Phase 5 (extension
-  bootstrap + logic coverage).
+- **Frontend — shipped** (`testing-auth-resilience` p1-p3). Tests live under
+  `frontend/test/`, mirroring the source tree (`test/auth/cognito.test.ts`
+  covers `src/auth/cognito.ts`) rather than colocated beside the source —
+  the cross-app convention `backend/test/` already sets. `npm test` runs
+  `vitest run` (single pass, no watch); `npm run dev`-style watching is
+  `npx vitest` when you want it.
+- Import `describe`/`it`/`expect`/`vi` explicitly from `'vitest'`. There are
+  no test globals on purpose, so nothing needs teaching to oxlint or tsc.
+- Shared fakes go in `frontend/test/helpers/` — `helpers/oidc.ts` exports
+  `createFakeUser()` and `createFakeUserManager()` (the `oidc-client-ts`
+  subset this codebase actually reads, plus `emitUserLoaded`/`emitUserUnloaded`
+  for firing events a component subscribes to). Same role as
+  `backend/test/helpers/fixtures.ts`; extend it rather than re-mocking ad hoc.
+- Mock at the seam the module under test actually imports from. `cognito.ts`
+  and anything rendering `AuthProvider` mock `'oidc-client-ts'` itself so the
+  real renewal logic stays in the path; `client.ts` imports `getFreshUser`
+  from `cognito.ts` directly, so *that* module is its seam. The mock factory
+  builds the fake itself, because it runs at the moment the module under test
+  is first imported:
+
+  ```ts
+  const state = vi.hoisted(() => ({ manager: null as unknown as FakeUserManager }))
+  vi.mock('oidc-client-ts', async () => {
+    const { createFakeUserManager } = await import('../helpers/oidc')
+    state.manager = createFakeUserManager()
+    // `function`, not an arrow — cognito.ts calls these with `new`.
+    return {
+      UserManager: vi.fn(function () { return state.manager }),
+      WebStorageStateStore: vi.fn(function () {})
+    }
+  })
+  ```
+
+- `vi.resetAllMocks()` in `beforeEach` restores each `vi.fn(impl)` to the
+  implementation the fixture gave it, so no test inherits another's stubbing.
+- For anything touching `apiClient`, override `apiClient.defaults.adapter`
+  instead of mocking axios — the interceptors are the thing under test and a
+  custom adapter leaves them running. See `frontend/test/api/client.test.ts`.
+- Component tests use `@testing-library/react` against jsdom. Cleanup is
+  registered in `frontend/test/setup.ts` (RTL only auto-registers it when
+  test globals are injected, which this project doesn't do).
+- `frontend/.env.test` is committed and holds dummy Cognito values;
+  `frontend/test/env.test.ts` asserts they win over a real `.env`, which is
+  what keeps CI's deployed-stack env out of the test run.
+- **Extension — TBD**, see §3 Phase 5. Its auth path
+  (`browser.identity.launchWebAuthFlow`) is unrelated to `oidc-client-ts`, so
+  expect a different fixture set even though the runner will be the same.
 
 ### 6.4 Adding a test for a new backend API endpoint
 
@@ -231,10 +276,19 @@ Exclusions agreed during the rollout (Phase 2 interview, Q5).
   its own archived plan; diminishing returns on hardening it further right
   now. (Source: Phase 2 interview Q5.) Re-evaluate if the product moves to a
   paid TTS provider (PRD Open Question 2 reopened).
+- **`oidc-client-ts`'s `automaticSilentRenew` timer mechanics** — the
+  frontend auth tests assert only that `UserManager` is *constructed* with
+  `automaticSilentRenew: true`, never that its timer actually fires a
+  renewal. The timers belong to `oidc-client-ts`, which tests them itself,
+  and since these tests mock that module wholesale, "testing" the renewal
+  would only exercise the fake's own scripted behavior — coverage with no
+  oracle. (Source: `testing-auth-resilience` plan, What We're NOT Doing.)
+  Re-evaluate if this project ever stops mocking the module — e.g. if a
+  future phase drives real token lifetimes against a live Cognito pool.
 
 ## 8. Freshness Ledger
 
-- Strategy (§1–§5) last reviewed: 2026-08-05
+- Strategy (§1–§5) last reviewed: 2026-08-06
 - Stack versions last verified: 2026-08-05
 - AI-native tool references last verified: 2026-08-05 (none in use)
 

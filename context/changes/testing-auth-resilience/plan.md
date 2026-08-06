@@ -367,7 +367,7 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Automated
 
-- [x] 4.1 `cd frontend && npm ci && npm test` passes locally
+- [x] 4.1 `cd frontend && npm ci && npm test` passes locally — edadd37
 - [ ] 4.2 New CI step passes on an open PR
 
 #### Manual
@@ -378,7 +378,7 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Automated
 
-- [ ] 5.1 `grep "| 3 | Auth resilience" context/foundation/test-plan.md` shows Status as `complete`
+- [x] 5.1 `grep "| 3 | Auth resilience" context/foundation/test-plan.md` shows Status as `complete`
 
 #### Manual
 
