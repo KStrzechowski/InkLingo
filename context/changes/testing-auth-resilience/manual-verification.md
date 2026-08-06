@@ -14,7 +14,9 @@ setup-teardown. Tick them off in `plan.md`'s `## Progress` as you go.
 | 4.2 | New CI step runs and passes on an open PR | GitHub, ~10 min |
 | 4.3 | A deliberately failing test turns *that* step red | GitHub, continues 4.2 |
 
-All commands assume `cd frontend` unless stated otherwise.
+All commands assume `cd frontend` unless stated otherwise. This is a Windows
+box, so shell-specific steps give both PowerShell and Git Bash forms; `npm`,
+`git` and `gh` invocations are identical in either.
 
 ---
 
@@ -25,12 +27,31 @@ This is the one that protects CI: `deploy.yml`/`pr-diff.yml` write a real
 tests. `test/env.test.ts` asserts the precedence on every run, so what's left
 is confirming it holds with a real `.env` actually present.
 
+PowerShell:
+
+```powershell
+cd frontend
+# -Encoding ascii is load-bearing: Out-File / bare `>` write UTF-16 in
+# Windows PowerShell 5.1, which Vite's env parser won't read as intended.
+Set-Content -Path .env -Encoding ascii -Value @(
+  'VITE_COGNITO_USER_POOL_ID=eu-central-1_REALVALUE',
+  'VITE_COGNITO_CLIENT_ID=realclientid'
+)
+npm test
+Remove-Item .env
+```
+
+Git Bash / POSIX:
+
 ```bash
 cd frontend
 printf 'VITE_COGNITO_USER_POOL_ID=eu-central-1_REALVALUE\nVITE_COGNITO_CLIENT_ID=realclientid\n' > .env
 npm test
 rm .env
 ```
+
+Creating `frontend/.env` by hand in an editor works just as well — the file
+content is the point, not how it gets there.
 
 **Pass:** the suite is green — `test/env.test.ts` still sees
 `eu-central-1_testplaceholder`. A failure here would name the real value in
