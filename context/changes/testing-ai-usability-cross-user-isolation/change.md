@@ -1,7 +1,7 @@
 ---
 change_id: testing-ai-usability-cross-user-isolation
 title: Testing ai usability cross user isolation
-status: implementing
+status: implemented
 created: 2026-08-05
 updated: 2026-08-05
 archived_at: null

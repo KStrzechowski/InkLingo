@@ -254,7 +254,7 @@ No schema or data changes. No production data affected.
 
 #### Manual
 
-- [ ] 2.3 Temporarily remove one ownership-helper call, confirm `route-ownership.test.ts` fails naming that route and the missing helper, then revert
+- [x] 2.3 Temporarily remove one ownership-helper call, confirm `route-ownership.test.ts` fails naming that route and the missing helper, then revert
 
 ### Phase 3: Empirical AI-usability measurement
 
@@ -268,8 +268,8 @@ No schema or data changes. No production data affected.
 
 #### Automated
 
-- [x] 4.1 `grep "| 2 | AI usability" context/foundation/test-plan.md` shows Phase 2's Status as `complete`
+- [x] 4.1 `grep "| 2 | AI usability" context/foundation/test-plan.md` shows Phase 2's Status as `complete` — ec8c925
 
 #### Manual
 
-- [ ] 4.2 Updated §5/§6 sections read accurately against what shipped, including Phase 3's real measured numbers
+- [x] 4.2 Updated §5/§6 sections read accurately against what shipped, including Phase 3's real measured numbers
