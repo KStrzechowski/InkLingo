@@ -332,9 +332,9 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Automated
 
-- [x] 1.1 `cd frontend && npm install` succeeds with the new dependencies
-- [x] 1.2 `cd frontend && npm test` runs and exits cleanly
-- [x] 1.3 `cd frontend && npm run build` succeeds
+- [x] 1.1 `cd frontend && npm install` succeeds with the new dependencies — 90643b4
+- [x] 1.2 `cd frontend && npm test` runs and exits cleanly — 90643b4
+- [x] 1.3 `cd frontend && npm run build` succeeds — 90643b4
 
 #### Manual
 
@@ -344,8 +344,8 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Automated
 
-- [ ] 2.1 `cd frontend && npm test` passes, including `cognito.test.ts`, `AuthContext.test.tsx`, `client.test.ts`
-- [ ] 2.2 `cd frontend && npm run build` succeeds
+- [x] 2.1 `cd frontend && npm test` passes, including `cognito.test.ts`, `AuthContext.test.tsx`, `client.test.ts`
+- [x] 2.2 `cd frontend && npm run build` succeeds
 
 #### Manual
 
