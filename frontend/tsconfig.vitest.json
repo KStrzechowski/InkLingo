@@ -1,0 +1,10 @@
+{
+  // Same extend-and-include shape as backend/test/tsconfig.json: the app's
+  // own options, widened to cover test/ so `tsc -b` actually type-checks the
+  // tests instead of skipping a directory no project includes.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.vitest.tsbuildinfo"
+  },
+  "include": ["src", "test"]
+}
