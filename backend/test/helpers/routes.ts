@@ -23,3 +23,15 @@ export function walkRouteFiles (dir: string): string[] {
   }
   return files
 }
+
+// Only recognizes the literal fastify.get/post/put/delete/patch('/path', ...)
+// call shape used everywhere in this codebase today. A route registered via
+// fastify.route({ method, url }) or a computed/template-literal path would
+// be invisible here. Shared by route-reachability.test.ts (set-based
+// comparison) and route-ownership.test.ts (needs match.index for slicing).
+export const methodCallPattern = /fastify\.(get|post|put|delete|patch)\s*\(\s*(['"`])(.*?)\2/g
+
+export function joinPrefix (prefix: string, subPath: string): string {
+  if (subPath === '/') return prefix === '' ? '/' : prefix
+  return `${prefix}${subPath}`
+}

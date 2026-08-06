@@ -3,7 +3,7 @@ import * as assert from 'node:assert'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ROUTES_DIR, walkRouteFiles } from './helpers/routes.ts'
+import { ROUTES_DIR, walkRouteFiles, methodCallPattern, joinPrefix } from './helpers/routes.ts'
 
 // A route added under backend/src/routes/ passes the full backend suite
 // (test/helper.ts builds the app in-process) whether or not it has a
@@ -26,13 +26,9 @@ function normalizePath (routePath: string): string {
   return routePath.replace(/:([A-Za-z0-9_]+)/g, '{$1}')
 }
 
-function joinPrefix (prefix: string, subPath: string): string {
-  if (subPath === '/') return prefix === '' ? '/' : prefix
-  return `${prefix}${subPath}`
-}
-
 // Only recognizes the literal fastify.get/post/put/delete/patch('/path', ...)
-// call shape used everywhere in this codebase today. A route registered via
+// call shape used everywhere in this codebase today (methodCallPattern,
+// shared via helpers/routes.ts). A route registered via
 // fastify.route({ method, url }) or a computed/template-literal path would
 // be invisible here — and equally invisible to extractGatewayRoutes' literal
 // addRoutes({ path, methods }) match below, so such a route would silently
@@ -41,7 +37,6 @@ function joinPrefix (prefix: string, subPath: string): string {
 // this pattern catches; it doesn't guard against a genuinely new call shape.
 function extractBackendRoutes (): RouteEntry[] {
   const routes: RouteEntry[] = []
-  const methodCallPattern = /fastify\.(get|post|put|delete|patch)\s*\(\s*(['"`])(.*?)\2/g
 
   for (const filePath of walkRouteFiles(ROUTES_DIR)) {
     const source = fs.readFileSync(filePath, 'utf8')

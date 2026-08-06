@@ -2,24 +2,18 @@ import { test } from 'node:test'
 import * as assert from 'node:assert'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { ROUTES_DIR, walkRouteFiles } from './helpers/routes.ts'
+import { ROUTES_DIR, walkRouteFiles, methodCallPattern, joinPrefix } from './helpers/routes.ts'
 
 // Mirrors route-reachability.test.ts's static-source-comparison approach,
 // applied to Risk #5 (IDOR) instead of Risk #1 (gateway reachability): a
 // route accepting a collection/entry id in its path must call the shared
 // ownership helper (backend/src/routes/api/collections/ownership.ts)
 // rather than writing its own ad hoc (and possibly wrong) ownership query.
-const methodCallPattern = /fastify\.(get|post|put|delete|patch)\s*\(\s*(['"`])(.*?)\2/g
 
 interface IdRoute {
   method: string
   path: string
   handlerSource: string
-}
-
-function joinPrefix (prefix: string, subPath: string): string {
-  if (subPath === '/') return prefix === '' ? '/' : prefix
-  return `${prefix}${subPath}`
 }
 
 function routeLabel (route: IdRoute): string {
