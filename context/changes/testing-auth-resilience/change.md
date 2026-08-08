@@ -1,9 +1,9 @@
 ---
 change_id: testing-auth-resilience
 title: Testing auth resilience
-status: implementing
+status: implemented
 created: 2026-08-06
-updated: 2026-08-06
+updated: 2026-08-08
 archived_at: null
 ---
 
@@ -29,3 +29,27 @@ request, and would make every page depend on auth context. Prefer a "Try
 again" action on each page's existing `error` state that re-runs its own
 loader: local to the page that knows what it failed to fetch, and it covers
 every failed load (500s, timeouts) rather than only this one.
+
+### Next step: transitive high-severity advisories in `frontend/` (2026-08-08)
+
+Surfaced by `npm audit` while verifying this change. **Unrelated to it** — both
+predate this phase and none of the four packages added here pull them in.
+Recorded so the next person touching frontend dependencies picks them up.
+
+As of 2026-08-08, `cd frontend && npm audit` reports 2 high-severity issues,
+both on the single `vite@8.1.3 → postcss@8.5.16 → nanoid@3.3.15` path:
+
+- **postcss ≤8.5.22** — path traversal via attacker-controlled
+  `sourceMappingURL` auto-loading, disclosing arbitrary `.map` files
+  (GHSA-r28c-9q8g-f849, plus GHSA-fxqj-rqcc-2cmp as the incomplete fix of
+  GHSA-6g55-p6wh-862q).
+- **nanoid ≤3.3.16** — non-secure generators can loop indefinitely on a
+  negative or zero size (GHSA-28wg-ghj8-5hjv, GHSA-2v37-7h3g-55p8).
+
+Both are build-time-only for us: `postcss` runs inside Vite's build, and none
+of this ships to the browser or processes untrusted input in our pipeline —
+which is why this is a next step and not a blocker.
+
+`npm audit fix` reports a fix is available for both. Worth doing on its own
+branch with a full `npm test && npm run build` after, since it moves a
+transitive dep underneath Vite.

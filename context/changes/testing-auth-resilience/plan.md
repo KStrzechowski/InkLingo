@@ -338,7 +338,7 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Manual
 
-- [ ] 1.4 Confirm `.env.test`'s dummy values win over any local `.env`'s real values inside a test
+- [x] 1.4 Confirm `.env.test`'s dummy values win over any local `.env`'s real values inside a test
 
 ### Phase 2: Regression tests for the shipped expiry fix
 
@@ -349,7 +349,7 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Manual
 
-- [ ] 2.3 Breaking the `renewal ??=` dedupe fails the concurrency test; reverting restores green
+- [x] 2.3 Breaking the `renewal ??=` dedupe fails the concurrency test; reverting restores green
 
 ### Phase 3: Close the residual invalid-token gap
 
@@ -360,19 +360,19 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Manual
 
-- [ ] 3.3 Backend-down repro: one retry, banner appears, "Sign in again" works
-- [ ] 3.4 Backend-back-up: banner self-clears on next successful request
+- [x] 3.3 Backend-down repro: one retry, banner appears, "Sign in again" works
+- [x] 3.4 Backend-back-up: banner self-clears on next successful request
 
 ### Phase 4: Wire frontend tests into CI
 
 #### Automated
 
 - [x] 4.1 `cd frontend && npm ci && npm test` passes locally — edadd37
-- [ ] 4.2 New CI step passes on an open PR
+- [x] 4.2 New CI step passes on an open PR
 
 #### Manual
 
-- [ ] 4.3 A deliberately failing test turns the new CI step red specifically; reverting restores green
+- [x] 4.3 A deliberately failing test turns the new CI step red specifically; reverting restores green
 
 ### Phase 5: Close out test-plan.md bookkeeping
 
@@ -382,4 +382,4 @@ No schema or data changes. No production data affected. No breaking change to an
 
 #### Manual
 
-- [ ] 5.2 Updated §4/§5/§6/§7 sections read accurately against what shipped
+- [x] 5.2 Updated §4/§5/§6/§7 sections read accurately against what shipped
