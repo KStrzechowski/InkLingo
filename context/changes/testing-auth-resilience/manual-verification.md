@@ -232,3 +232,5 @@ It arrives transitively through `vite@8.1.3` and predates this change — none
 of the four packages added here pull it in (`npm ls postcss` shows the single
 `vite → postcss` path). Out of scope; worth its own look when you next touch
 frontend dependencies.
+
+dummy commit
