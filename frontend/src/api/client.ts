@@ -11,6 +11,17 @@ interface RetryableConfig extends InternalAxiosRequestConfig {
   _connectionRetried?: boolean
 }
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    // Opts a write back into the retry below. The default is no replay for
+    // anything that isn't a safe method, so set this only where sending the
+    // same request twice is genuinely harmless — an endpoint that upserts, or
+    // one that returns the original resource instead of a conflict. Anything
+    // that costs money per call (the translate routes) should never carry it.
+    replaySafe?: boolean
+  }
+}
+
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   timeout: 8000
@@ -23,6 +34,11 @@ apiClient.interceptors.request.use(async (config) => {
   const user = await getFreshUser()
   if (user) {
     config.headers.Authorization = `Bearer ${user.id_token}`
+  } else {
+    // The retry below reuses the failed attempt's config, header and all. If
+    // the session died in between, leaving the old header in place would send
+    // a token we already know is dead instead of going out unauthenticated.
+    delete config.headers.Authorization
   }
   return config
 })
@@ -49,6 +65,15 @@ apiClient.interceptors.response.use(
       return Promise.reject(error)
     }
 
+    // Our own timeout also arrives with no response, but it is not evidence of
+    // a rejected token — the server may have the request and still be working
+    // on it. The translate routes budget 20s against this client's 8s, so a
+    // slow generation lands here routinely; replaying one would bill a second
+    // model call for a request that was about to succeed.
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      return Promise.reject(error)
+    }
+
     // No response at all means the browser blocked it before any status could
     // be read. That is what an authorizer rejection looks like when the 401
     // comes back without Access-Control-Allow-Origin — and it is also exactly
@@ -57,15 +82,26 @@ apiClient.interceptors.response.use(
     // authorizer rejection fails identically and is then worth surfacing.
     const config = error.config as RetryableConfig | undefined
     if (error.response === undefined && config !== undefined) {
+      // Only replay what is safe to send twice. request() re-sends the original
+      // verb and body, and a response-less failure cannot tell us whether the
+      // server already committed the write — so a retried POST can duplicate it.
+      // Writes are excluded by default and opt back in via replaySafe, rather
+      // than being retried by default and opting out: forgetting the flag on a
+      // new route should cost a spurious banner, not a duplicated side effect.
+      const method = (config.method ?? 'get').toLowerCase()
+      const safeMethod = method === 'get' || method === 'head' || method === 'options'
+      const safeToReplay = safeMethod || config.replaySafe === true
       const carriedToken = config.headers?.Authorization !== undefined
-      if (carriedToken && config._connectionRetried !== true) {
+      if (safeToReplay && carriedToken && config._connectionRetried !== true) {
         config._connectionRetried = true
         return apiClient.request(config)
       }
-      if (config._connectionRetried === true) {
-        // Failed the same way twice. Not proof of a rejected token, but
-        // enough to stop failing silently — AuthProvider turns this into a
-        // banner offering a fresh sign-in.
+      if (carriedToken && (config._connectionRetried === true || !safeToReplay)) {
+        // Either it failed the same way twice, or it was a write we could not
+        // safely replay. Neither is proof of a rejected token, but both are
+        // worth surfacing rather than failing silently — AuthProvider turns
+        // this into a banner offering a fresh sign-in. A write that failed on a
+        // one-off blip raises it wrongly, which the next success clears.
         signalConnectionIssue()
       }
     }

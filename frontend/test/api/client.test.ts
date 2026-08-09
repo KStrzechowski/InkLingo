@@ -22,8 +22,10 @@ vi.mock('../../src/auth/cognito', () => ({
 // A custom adapter replaces the network entirely; axios still runs both
 // interceptors around it, which is the part under test. 'network' models a
 // response-less failure — a CORS-blocked authorizer rejection and a dropped
-// connection both arrive exactly this way.
-type Step = number | 'network'
+// connection both arrive exactly this way. 'timeout' is response-less too, but
+// carries ECONNABORTED: our own deadline firing while the server is still
+// working, which must never be replayed.
+type Step = number | 'network' | 'timeout'
 
 let attempts = 0
 let sentConfigs: InternalAxiosRequestConfig[] = []
@@ -37,6 +39,15 @@ function respondWith (...steps: Step[]) {
 
     if (step === 'network') {
       throw new AxiosError('Network Error', AxiosError.ERR_NETWORK, config, {})
+    }
+
+    if (step === 'timeout') {
+      throw new AxiosError(
+        `timeout of ${String(config.timeout)}ms exceeded`,
+        AxiosError.ECONNABORTED,
+        config,
+        {}
+      )
     }
 
     const response = {
@@ -186,6 +197,64 @@ describe('response interceptor — retry then signal', () => {
   it('does not retry a request that carried no token', async () => {
     state.getFreshUser.mockResolvedValue(null)
     respondWith('network')
+
+    await expect(apiClient.get('/api/collections')).rejects.toThrow()
+
+    expect(attempts).toBe(1)
+    expect(connectionIssue).toBe(false)
+  })
+})
+
+describe('response interceptor — write safety', () => {
+  // The failure this guards against: a POST that reached the server and
+  // committed, whose response was lost on the way back. Replaying it runs the
+  // side effect twice — on the translate routes, a second billed model call.
+  it('does not replay a POST, but still signals', async () => {
+    state.getFreshUser.mockResolvedValue(createFakeUser())
+    respondWith('network')
+
+    await expect(apiClient.post('/api/collections', { name: 'x' })).rejects.toThrow()
+
+    expect(attempts).toBe(1)
+    // Legibility does not depend on the retry: an unreplayable write that
+    // fails opaquely still earns the banner, it just earns it one attempt
+    // sooner than a GET does.
+    expect(connectionIssue).toBe(true)
+  })
+
+  it('replays a write that explicitly opts in via replaySafe', async () => {
+    state.getFreshUser.mockResolvedValue(createFakeUser())
+    respondWith('network')
+
+    await expect(
+      apiClient.post('/api/collections', { name: 'x' }, { replaySafe: true })
+    ).rejects.toThrow()
+
+    expect(attempts).toBe(2)
+    expect(connectionIssue).toBe(true)
+  })
+
+  it('leaves an opted-in write alone once its replay succeeds', async () => {
+    state.getFreshUser.mockResolvedValue(createFakeUser())
+    respondWith('network', 200)
+
+    const response = await apiClient.post(
+      '/api/collections',
+      { name: 'x' },
+      { replaySafe: true }
+    )
+
+    expect(response.status).toBe(200)
+    expect(attempts).toBe(2)
+    expect(connectionIssue).toBe(false)
+  })
+
+  // Our own 8s deadline against a 20s server budget on the translate routes:
+  // the request is very likely still being worked on, so a replay would double
+  // the work rather than recover anything, and the session is not in doubt.
+  it('never replays or signals on a client-side timeout', async () => {
+    state.getFreshUser.mockResolvedValue(createFakeUser())
+    respondWith('timeout')
 
     await expect(apiClient.get('/api/collections')).rejects.toThrow()
 

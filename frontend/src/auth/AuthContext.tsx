@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { User } from 'oidc-client-ts'
 import { getFreshUser, userManager } from './cognito'
 import { onConnectionIssueChange } from './connectionIssue'
@@ -38,8 +38,17 @@ export function AuthProvider ({ children }: { children: ReactNode }) {
   // subscribe/unsubscribe shape as the userManager events above.
   useEffect(() => onConnectionIssueChange(setConnectionIssue), [])
 
+  // A fresh object here re-renders every consumer whenever any one field
+  // changes, whether or not that consumer reads it — PrintLayout takes the
+  // context but never looks at connectionIssue, so without this the print view
+  // re-renders each time the banner toggles.
+  const value = useMemo(
+    () => ({ user, loading, refresh, connectionIssue }),
+    [user, loading, refresh, connectionIssue]
+  )
+
   return (
-    <AuthContext.Provider value={{ user, loading, refresh, connectionIssue }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

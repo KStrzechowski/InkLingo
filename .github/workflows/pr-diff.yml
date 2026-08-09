@@ -88,11 +88,16 @@ jobs:
         working-directory: infra
         run: node scripts/package-backend.mjs
 
-      # Deliberately ahead of the env-writing step below: Vite resolves the
-      # committed frontend/.env.test over a generic .env for the same key, but
-      # running first means the suite never even has real Cognito values on
+      # Deliberately ahead of the env-writing step below: that step writes
+      # frontend/.env.production, which a `test`-mode run never loads anyway,
+      # but running first means the suite never even has real Cognito values on
       # disk to pick up. Unlike the backend suite this needs no database and
       # no credentials — everything auth-related is mocked.
+      #
+      # This install also covers the build step below, which is why that one
+      # does not repeat it. Note it must stay a full install: tsconfig.json
+      # references tsconfig.vitest.json, so `tsc -b` type-checks test/ and
+      # needs the vitest and @testing-library types from devDependencies.
       - name: Run frontend tests
         working-directory: frontend
         run: |
@@ -105,9 +110,7 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        run: |
-          npm ci
-          npm run build
+        run: npm run build
 
       - name: Diff
         working-directory: infra

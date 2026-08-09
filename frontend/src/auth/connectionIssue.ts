@@ -30,6 +30,13 @@ export function clearConnectionIssue (): void {
 
 export function onConnectionIssueChange (listener: (active: boolean) => void): () => void {
   listeners.add(listener)
+  // Hand over the current value immediately, not just subsequent changes:
+  // setActive only notifies on a transition, so a subscriber arriving while a
+  // signal already stands would otherwise sit at its own default until the
+  // next one. Today AuthProvider is the root and mounts before any request
+  // fires, which hides this — a second subscriber, or a provider that
+  // remounts, would not be so lucky.
+  listener(active)
   return () => {
     listeners.delete(listener)
   }

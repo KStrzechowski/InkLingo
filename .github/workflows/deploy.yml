@@ -96,6 +96,8 @@ jobs:
       # Same rationale as pr-diff.yml, and the same automatic gate the backend
       # tests get: `deploy` below `needs: diff`, so a red frontend test here
       # skips the deploy job without any branch-protection configuration.
+      # This install serves the build step below too, and must include
+      # devDependencies — `tsc -b` reaches test/ through tsconfig.vitest.json.
       - name: Run frontend tests
         working-directory: frontend
         run: |
@@ -108,9 +110,7 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        run: |
-          npm ci
-          npm run build
+        run: npm run build
 
       - name: Diff
         working-directory: infra

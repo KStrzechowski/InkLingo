@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-// CI writes a real frontend/.env from deployed stack outputs in the same job
-// that runs these tests, and cognito.ts reads VITE_COGNITO_* at module load.
-// Vite resolves the mode-specific .env.test over the generic .env for the
-// same key, so the dummy values below are what a test run sees either way —
-// this asserts that precedence rather than trusting it.
+// CI writes a real frontend/.env.production from deployed stack outputs in the
+// same job that runs these tests, and cognito.ts reads VITE_COGNITO_* at module
+// load. Vite only loads the files for the current mode, so a `test` run never
+// reads .env.production — and prefers this .env.test over a generic .env for
+// the same key. This asserts that rather than trusting it.
 describe('test environment', () => {
   it('loads .env.test values, not a real .env or .env.development', () => {
     expect(import.meta.env.MODE).toBe('test')
