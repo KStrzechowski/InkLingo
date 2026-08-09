@@ -265,18 +265,21 @@ describe('response interceptor — write safety', () => {
 })
 
 // The client must never be the first to give up on a model-backed route: the
-// Lambda is capped at 29s by API Gateway and the generation budgets 20s inside
-// that, so a shorter client deadline abandons work the server completes and
-// reports it to the user as a failure.
+// route abandons its own generation at 20s and answers badGateway, so a
+// shorter client deadline abandons work the server completes and reports it to
+// the user as a failure.
 describe('request deadlines', () => {
-  it('gives the model-backed route longer than the Lambda can run', async () => {
+  it('outlasts the translate route’s own generation budget', async () => {
     state.getFreshUser.mockResolvedValue(createFakeUser())
     respondWith(200)
 
     await addEntryTranslation('c1', 'e1', 'de').catch(() => undefined)
 
     expect(sentConfigs[0].timeout).toBe(AI_REQUEST_TIMEOUT_MS)
-    expect(AI_REQUEST_TIMEOUT_MS).toBeGreaterThan(29_000)
+    // 20s budget + room for a cold start, the writes and the round trip. The
+    // assertion is the floor, not the value — tightening below this re-creates
+    // the bug where a successful generation surfaces as a client failure.
+    expect(AI_REQUEST_TIMEOUT_MS).toBeGreaterThan(22_000)
   })
 
   it('leaves ordinary routes on the short default', async () => {

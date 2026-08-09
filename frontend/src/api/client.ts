@@ -22,13 +22,21 @@ declare module 'axios' {
   }
 }
 
-// Routes that call the model need their own deadline. The Lambda is capped at
-// 29s by API Gateway's hard limit (infra/lib/constructs/api-construct.ts:75)
-// and the generation itself budgets 20s inside that, so waiting just past the
-// Lambda's ceiling means the server always gets to deliver its own verdict —
-// a translation, or a clean "could not generate". Below it, the client quits
-// first and reports a failure for a request that goes on to succeed.
-export const AI_REQUEST_TIMEOUT_MS = 30_000
+// Routes that call the model need their own deadline, sized so the server is
+// always the one to decide the outcome — a client that quits first reports a
+// failure for a request that goes on to succeed and store its result.
+//
+// What bounds the wait is the route's own TRANSLATE_TIMEOUT_MS (20s, in
+// backend/src/routes/api/collections/index.ts): past that it abandons the
+// generation and answers badGateway, so a response is in flight by ~20s
+// whatever happens. This adds headroom for a cold start, the two INSERTs and
+// the round trip. Measured single-language generation is ~3.7s, so the margin
+// here is for the tail, not the normal case.
+//
+// API Gateway's 29s Lambda cap sits above this and is deliberately not the
+// anchor: it only binds if the handler hangs outside the model call, and that
+// path returns a 504 — a real status the interceptor already handles.
+export const AI_REQUEST_TIMEOUT_MS = 25_000
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
