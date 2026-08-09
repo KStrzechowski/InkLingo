@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { AI_REQUEST_TIMEOUT_MS, apiClient } from './client'
 
 export interface Collection {
   id: string
@@ -66,7 +66,12 @@ export async function addEntryTranslation (
 ): Promise<AddedEntryTranslation> {
   const res = await apiClient.post<AddedEntryTranslation>(
     `/api/collections/${collectionId}/entries/${entryId}/translations`,
-    { languageCode }
+    { languageCode },
+    // This one waits on a live model call, so it gets the long deadline rather
+    // than the client's 8s default — otherwise we abandon a generation the
+    // server is still completing. Deliberately not replaySafe: abandoning it is
+    // exactly what must not happen twice.
+    { timeout: AI_REQUEST_TIMEOUT_MS }
   )
   return res.data
 }

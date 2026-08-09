@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AxiosError } from 'axios'
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
-import { apiClient } from '../../src/api/client'
+import { AI_REQUEST_TIMEOUT_MS, apiClient } from '../../src/api/client'
+import { addEntryTranslation, listCollections } from '../../src/api/collections'
 import { clearConnectionIssue, onConnectionIssueChange } from '../../src/auth/connectionIssue'
 import { createFakeUser } from '../helpers/oidc'
 
@@ -249,9 +250,9 @@ describe('response interceptor — write safety', () => {
     expect(connectionIssue).toBe(false)
   })
 
-  // Our own 8s deadline against a 20s server budget on the translate routes:
-  // the request is very likely still being worked on, so a replay would double
-  // the work rather than recover anything, and the session is not in doubt.
+  // A deadline firing means the request is very likely still being worked on,
+  // so a replay would double the work rather than recover anything, and the
+  // session is not in doubt either way.
   it('never replays or signals on a client-side timeout', async () => {
     state.getFreshUser.mockResolvedValue(createFakeUser())
     respondWith('timeout')
@@ -260,5 +261,30 @@ describe('response interceptor — write safety', () => {
 
     expect(attempts).toBe(1)
     expect(connectionIssue).toBe(false)
+  })
+})
+
+// The client must never be the first to give up on a model-backed route: the
+// Lambda is capped at 29s by API Gateway and the generation budgets 20s inside
+// that, so a shorter client deadline abandons work the server completes and
+// reports it to the user as a failure.
+describe('request deadlines', () => {
+  it('gives the model-backed route longer than the Lambda can run', async () => {
+    state.getFreshUser.mockResolvedValue(createFakeUser())
+    respondWith(200)
+
+    await addEntryTranslation('c1', 'e1', 'de').catch(() => undefined)
+
+    expect(sentConfigs[0].timeout).toBe(AI_REQUEST_TIMEOUT_MS)
+    expect(AI_REQUEST_TIMEOUT_MS).toBeGreaterThan(29_000)
+  })
+
+  it('leaves ordinary routes on the short default', async () => {
+    state.getFreshUser.mockResolvedValue(createFakeUser())
+    respondWith(200)
+
+    await listCollections().catch(() => undefined)
+
+    expect(sentConfigs[0].timeout).toBe(8000)
   })
 })
