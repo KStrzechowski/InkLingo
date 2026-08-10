@@ -48,8 +48,15 @@ const FIVE_LANGUAGE_WORDS = [
 
 const FIVE_LANGUAGES = ['en', 'de', 'fr', 'es', 'it']
 
-function longSentence (code: string, word: string): string {
-  return `This is a reasonably long example sentence in ${code} using the word ${word}, long enough to wrap across more than one line in its column.`
+// Deliberately modest. An earlier version used ~140-character sentences, which
+// made each 5-language band ~853px against ~956px of page capacity — one entry
+// per sheet, and on a runner whose `system-ui` resolves to a different font
+// (CI is Linux; this sheet was designed against Segoe UI) the bands grew past a
+// whole page, so every sheet spilled onto a second PDF page. Bands need to sit
+// comfortably under a page in any font for the pagination assertions to be
+// about the packer rather than about font metrics.
+function exampleSentence (code: string, word: string): string {
+  return `A short ${code} sentence about ${word}.`
 }
 
 export const fixtures: Record<string, CollectionDetail> = {
@@ -66,8 +73,8 @@ export const fixtures: Record<string, CollectionDetail> = {
       'pl',
       Object.fromEntries(FIVE_LANGUAGES.map((code) => [code, {
         meaning: `${word}-${code}`,
-        sentence: longSentence(code, word),
-        gloss: `Polskie zdanie z wyrazem ${word}, dostatecznie długie by się zawinąć.`
+        sentence: exampleSentence(code, word),
+        gloss: `Polskie zdanie o ${word}.`
       }]))
     ))
   },
@@ -84,7 +91,7 @@ export const fixtures: Record<string, CollectionDetail> = {
     entries: FIVE_LANGUAGE_WORDS.slice(0, 6).map((word) => entry(word, 'pl', {
       en: {
         meaning: `${word}-en`,
-        sentence: longSentence('en', word),
+        sentence: exampleSentence('en', word),
         gloss: `Polskie zdanie z wyrazem ${word}.`
       }
     }))
