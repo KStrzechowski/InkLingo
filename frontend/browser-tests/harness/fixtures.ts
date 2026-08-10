@@ -169,8 +169,6 @@ export const fixtures: Record<string, CollectionDetail> = {
   }
 }
 
-export const FIXTURE_NAMES = Object.keys(fixtures)
-
 // Built rather than hand-written: the Language column must fit every one of the
 // 8 x 8 native x target language names, and hand-maintaining 64 rows across 8
 // fixtures is exactly the table printLabels avoids by using Intl.DisplayNames.

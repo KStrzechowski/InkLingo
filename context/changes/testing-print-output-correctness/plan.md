@@ -124,6 +124,31 @@ confirming a named test fails.
   through a running backend; the risk lives in the document and the stylesheet.
 - **Not deleting the manual gate.** It shrinks; it does not go away.
 
+### Deliberate exceptions, recorded during implementation
+
+Two of the boundaries above were crossed on purpose. Both were raised before
+acting; neither was a silent override.
+
+- **`print.css` was edited** (2026-08-10, commit `51ab9f2`) — the Language
+  column widened 17% → 19%. `browser-tests/languageColumn.spec.ts` found that
+  the 17% figure, measured once on 2026-08-03 against Segoe UI, does not hold
+  for other fonts: `system-ui` resolves per-OS, and on the CI runner
+  `французский` renders 104.9px against ~101px of column, crossing its cell
+  border. Raised as a finding and approved before the edit. The rule stands for
+  everything else — this is the one case where the measurement the design rested
+  on was itself shown to be environment-specific.
+- **One structural test was written** (`test/pages/printDocumentEffects.test.ts`)
+  despite the anti-pattern list's warning about implementation-mirroring tests.
+  It asserts that `PrintDocument` applies the `print-mode` class in a
+  `useLayoutEffect` declared before the one that measures. The behavioural
+  symptom is a wrong page count, which is a function of font metrics, so any
+  fixture tuned to expose it on one machine stops doing so on another — CI run
+  `31424566975` demonstrated exactly that sensitivity, and the fixtures were
+  resized for font-independence in response, which is what removed the
+  behavioural guard (confirmed by mutation: reverting the fix left all 51
+  browser tests green). A structural assertion is the only font-independent
+  guard available for this invariant.
+
 ## Implementation Approach
 
 Five phases, each independently verifiable, ordered so that every phase that
@@ -397,6 +422,22 @@ the whole harness path works — and then the first real assertion: with
 the document body and of a table cell is black and the background is white, and
 table cell borders are a full `1px` or wider, never sub-pixel.
 
+> **Amended during implementation (2026-08-10).** Two parts of this contract
+> shifted, both documented at the code:
+>
+> - **The border-width assertion moved** to `test/pages/printCssGeometry.test.ts`.
+>   Under print emulation Firefox reports these borders at `0.766667px` because
+>   it scales CSS pixels for the print medium, so an absolute threshold in the
+>   browser measures the engine rather than the stylesheet. The rule that matters
+>   — never *declare* a sub-pixel border, which is what made Firefox round
+>   `0.5pt` away and print the sheet as bare text in columns — is now checked
+>   statically against the declared value, and the browser spec keeps a relative
+>   assertion that a rule survives to computed style at all.
+> - **The `dist/` assertion moved** to a post-build step in both workflows. Both
+>   run the frontend tests before the build, so `dist/` does not exist when
+>   `harnessBuild.test.ts` runs in CI; that file keeps the two structural checks
+>   (no `rollupOptions` input, harness not in `public/`), which guard the causes.
+
 ### Success Criteria:
 
 #### Automated Verification:
@@ -459,6 +500,21 @@ tree's `/Count`. Also asserts, in both engines under print emulation, that a
 `.print-page` box matches A4 within a tolerance and that no `<tbody>` band is
 split across two sheets. Oracles are ISO 216 and the preview-matches-printout
 requirement, not stored values.
+
+> **Amended during implementation (2026-08-10).** Two departures:
+>
+> - **Scoping mechanism.** Chromium-only scoping is done with
+>   `test.skip(({ browserName }) => browserName !== 'chromium', reason)` rather
+>   than a separate Playwright project. The requirement this contract exists to
+>   satisfy — Firefox never reports a page-count test as *passing* — is met: it
+>   reports as skipped with the reason attached, visible as `1 skipped` in every
+>   run. A dedicated project would need the `chromium` project to also exclude
+>   the file, which is more configuration for the same observable.
+> - **Media.** The on-screen assertions run in *screen* media, not print
+>   emulation. The sheets are a screen artifact drawn at 210 × 297mm so the user
+>   can review real pages; under `media: 'print'` they collapse to plain blocks
+>   because `@page` supplies the geometry instead, and the table then spans the
+>   viewport — measuring a column there gives roughly twice its width on paper.
 
 ### Success Criteria:
 
@@ -667,7 +723,7 @@ schema, API, or stored-data changes.
 
 #### Automated
 
-- [x] 5.1 Both workflows parse and a PR run shows the new `print-tests` job — YAML validated locally; the PR run itself is part of manual verification
+- [x] 5.1 Both workflows parse and a PR run shows the new `print-tests` job — e8c9e2b
 - [x] 5.2 The `print-tests` job passes without AWS credentials — 51ab9f2
 - [ ] 5.3 `deploy.yml`'s `deploy` job is skipped when `print-tests` fails
 

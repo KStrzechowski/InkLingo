@@ -165,7 +165,18 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        run: npm run build
+        run: |
+          npm run build
+          # print-harness.html is a test-only page, reachable in dev only
+          # because Vite serves any root-level .html while `vite build`'s
+          # default input is index.html alone. frontend/test/pages/harnessBuild.test.ts
+          # guards the causes (no rollupOptions input, not in public/), but it
+          # cannot check the artifact: the test step above runs before this one,
+          # so dist/ does not exist yet. This is that check, where dist/ is real.
+          if [ -f dist/print-harness.html ]; then
+            echo "::error::print-harness.html was emitted into dist/ — the test harness would be served in production"
+            exit 1
+          fi
 
       - name: Diff
         working-directory: infra
