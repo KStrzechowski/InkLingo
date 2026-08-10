@@ -1,0 +1,13 @@
+{
+  // Own project, not folded into tsconfig.vitest.json: that one includes src
+  // and test, and a file owned by two referenced projects is an error under
+  // `tsc -b`. This covers the Playwright specs and the harness entry only.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.browser-tests.tsbuildinfo",
+    // Playwright's runner is a node process, and playwright.config.ts reads
+    // process.env.
+    "types": ["vite/client", "node"]
+  },
+  "include": ["browser-tests", "playwright.config.ts"]
+}

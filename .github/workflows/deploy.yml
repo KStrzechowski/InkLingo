@@ -12,6 +12,54 @@ permissions:
   contents: read
 
 jobs:
+  # Browser tests for the printable sheet (context/foundation/test-plan.md §3
+  # Phase 4). Its own job rather than a step in `diff`: it needs no AWS
+  # credentials and no Neon branch, so it runs in parallel instead of
+  # lengthening the critical path. `deploy` below lists it in `needs:`, so a
+  # red print test skips the deploy without any branch-protection setup.
+  print-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      # Keyed on the resolved Playwright version: browser builds are pinned to
+      # it, so a version bump must miss the cache rather than run new tests
+      # against old binaries.
+      - name: Resolve Playwright version
+        id: playwright
+        working-directory: frontend
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Run print browser tests
+        working-directory: frontend
+        run: npm run test:print
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-deploy
+          path: frontend/playwright-report/
+          retention-days: 7
+
   # Runs immediately on every push to main, no approval gate — this is
   # what the deploy job's reviewer actually reads before approving, so
   # approval isn't a blind click.
@@ -126,7 +174,7 @@ jobs:
   # rather than sharing artifacts with the diff job, same pattern as
   # pr-diff.yml, to avoid artifact-plumbing complexity for a solo PoC.
   deploy:
-    needs: diff
+    needs: [diff, print-tests]
     runs-on: ubuntu-latest
     environment: production
     steps:

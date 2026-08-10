@@ -19,6 +19,12 @@ dist-ssr
 # Local dev config (Cognito IDs, local API URL) — machine-specific, never committed.
 .env.development
 
+# Playwright (npm run test:print) output — reports and traces, regenerated per run.
+/playwright-report
+/test-results
+/blob-report
+/playwright/.cache
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
