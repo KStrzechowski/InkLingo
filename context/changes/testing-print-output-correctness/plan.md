@@ -616,10 +616,10 @@ schema, API, or stored-data changes.
 
 #### Automated
 
-- [x] 1.1 Type check and build pass: `cd frontend && npm run build`
-- [x] 1.2 Lint passes with no new warnings: `cd frontend && npm run lint`
-- [x] 1.3 Frontend suite passes: `cd frontend && npm test`
-- [x] 1.4 Deleting a `LABELS` entry makes `printLabels.test.ts` fail naming that code
+- [x] 1.1 Type check and build pass: `cd frontend && npm run build` — e8c9e2b
+- [x] 1.2 Lint passes with no new warnings: `cd frontend && npm run lint` — e8c9e2b
+- [x] 1.3 Frontend suite passes: `cd frontend && npm test` — e8c9e2b
+- [x] 1.4 Deleting a `LABELS` entry makes `printLabels.test.ts` fail naming that code — e8c9e2b
 
 #### Manual
 
@@ -629,22 +629,22 @@ schema, API, or stored-data changes.
 
 #### Automated
 
-- [x] 2.1 Type check and build pass: `cd frontend && npm run build`
-- [x] 2.2 Lint passes with no new warnings: `cd frontend && npm run lint`
-- [x] 2.3 Frontend suite passes: `cd frontend && npm test`
-- [x] 2.4 Changing `@page`'s margin without the probe fails `printCssGeometry.test.ts` with both values named
-- [x] 2.5 Reformatting a covered rule either still parses or trips the tripwire
+- [x] 2.1 Type check and build pass: `cd frontend && npm run build` — e8c9e2b
+- [x] 2.2 Lint passes with no new warnings: `cd frontend && npm run lint` — e8c9e2b
+- [x] 2.3 Frontend suite passes: `cd frontend && npm test` — e8c9e2b
+- [x] 2.4 Changing `@page`'s margin without the probe fails `printCssGeometry.test.ts` with both values named — e8c9e2b
+- [x] 2.5 Reformatting a covered rule either still parses or trips the tripwire — e8c9e2b
 
 ### Phase 3: Print harness and Playwright bootstrap
 
 #### Automated
 
-- [x] 3.1 Type check and build pass: `cd frontend && npm run build`
-- [x] 3.2 Lint passes with no new warnings: `cd frontend && npm run lint`
-- [x] 3.3 Vitest suite passes and collects no Playwright specs: `cd frontend && npm test`
-- [x] 3.4 Browser suite passes in both engines: `cd frontend && npm run test:print`
-- [x] 3.5 `dist/` contains no `print-harness.html` after `npm run build`
-- [x] 3.6 Forcing a dark text color into `print.css`'s print block fails the dark-theme assertion in both engines
+- [x] 3.1 Type check and build pass: `cd frontend && npm run build` — e8c9e2b
+- [x] 3.2 Lint passes with no new warnings: `cd frontend && npm run lint` — e8c9e2b
+- [x] 3.3 Vitest suite passes and collects no Playwright specs: `cd frontend && npm test` — e8c9e2b
+- [x] 3.4 Browser suite passes in both engines: `cd frontend && npm run test:print` — e8c9e2b
+- [x] 3.5 `dist/` contains no `print-harness.html` after `npm run build` — e8c9e2b
+- [x] 3.6 Forcing a dark text color into `print.css`'s print block fails the dark-theme assertion in both engines — e8c9e2b
 
 #### Manual
 
@@ -654,10 +654,10 @@ schema, API, or stored-data changes.
 
 #### Automated
 
-- [x] 4.1 Browser suite passes in both engines: `cd frontend && npm run test:print`
-- [x] 4.2 Narrowing the Language column below its measured floor fails `languageColumn.spec.ts` naming the binding pair
-- [x] 4.3 Changing the probe height without the `@page` margin makes sheet count and PDF page count disagree
-- [x] 4.4 The Firefox project reports no page-count test as passing (scoped out, not skipped)
+- [x] 4.1 Browser suite passes in both engines: `cd frontend && npm run test:print` — e8c9e2b
+- [x] 4.2 Narrowing the Language column below its measured floor fails `languageColumn.spec.ts` naming the binding pair — e8c9e2b
+- [x] 4.3 Changing the probe height without the `@page` margin makes sheet count and PDF page count disagree — e8c9e2b
+- [x] 4.4 The Firefox project reports no page-count test as passing (scoped out, not skipped) — e8c9e2b
 
 #### Manual
 
@@ -668,7 +668,7 @@ schema, API, or stored-data changes.
 #### Automated
 
 - [x] 5.1 Both workflows parse and a PR run shows the new `print-tests` job — YAML validated locally; the PR run itself is part of manual verification
-- [ ] 5.2 The `print-tests` job passes without AWS credentials
+- [x] 5.2 The `print-tests` job passes without AWS credentials — 51ab9f2
 - [ ] 5.3 `deploy.yml`'s `deploy` job is skipped when `print-tests` fails
 
 #### Manual
