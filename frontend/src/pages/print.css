@@ -221,19 +221,27 @@ body.print-mode .print-document {
    (11pt system-ui → Segoe UI): at the old 10% the column offered 50.9px of
    text width and 43 of the 64 names overflowed it, along with the English
    and German column headings — 'niemiecki' (62.6px) was one of many. The
-   binding case is Russian 'французский' at 90.1px, which needs 15.8%
-   including cell padding and borders; 17% leaves ~8px of headroom for
-   Firefox shaping the same font slightly differently from Chromium.
+   binding case is Russian 'французский', 90.1px in Segoe UI.
 
-   The 7 points come out of the two sentence columns, costing each sentence
-   line roughly four characters. A per-native-language width would buy ~3 of
-   those characters back on a Polish sheet (Polish needs only 14%), which is
-   not worth a hand-maintained table of eight numbers. */
+   Widened 17% → 19% on 2026-08-10. `system-ui` resolves to a different face
+   on every OS, and the 2026-08-03 measurement only ever saw one of them: on
+   a Linux runner the same name renders 104.9px, which overflowed the 17%
+   column's ~101px of text width. 19% offers ~113px, restoring against the
+   widest observed font the ~8px of headroom 17% had against the narrowest.
+   The numbers are re-derived on every run now rather than taken on trust —
+   browser-tests/languageColumn.spec.ts measures all 8 × 8 names in both
+   engines, which is what caught this.
+
+   The 9 points come out of the two sentence columns, costing each sentence
+   line roughly five characters. A per-native-language width would buy some
+   back on a Polish sheet (Polish needs only ~14%), which is still not worth
+   a hand-maintained table of eight numbers — and would now need one per
+   font as well. */
 .print-table th:nth-child(1) { width: 16%; }
-.print-table th:nth-child(2) { width: 17%; }
+.print-table th:nth-child(2) { width: 19%; }
 .print-table th:nth-child(3) { width: 20%; }
-.print-table th:nth-child(4) { width: 23.5%; }
-.print-table th:nth-child(5) { width: 23.5%; }
+.print-table th:nth-child(4) { width: 22.5%; }
+.print-table th:nth-child(5) { width: 22.5%; }
 
 .print-table tbody th {
   font-weight: 600;
