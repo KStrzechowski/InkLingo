@@ -72,23 +72,22 @@ export const fixtures: Record<string, CollectionDetail> = {
     ))
   },
 
-  // Russian-native is the worst case for the Language column: 'французский'
-  // was the binding measurement that set the column to 17%.
-  'russian-native': {
-    id: 'fixture-russian-native',
-    name: 'Печатный тест',
-    nativeLanguageCode: 'ru',
-    targetLanguageCodes: ['en', 'de', 'fr', 'es', 'it', 'pl', 'uk'],
+  // The other end of the range from five-languages: one target, so every band
+  // is a single row and the word cell's rowSpan is 1. Baseline readability
+  // case 1 of the archived manual matrix.
+  'one-language': {
+    id: 'fixture-one-language',
+    name: 'Print test — one language',
+    nativeLanguageCode: 'pl',
+    targetLanguageCodes: ['en'],
     createdAt: '2026-08-01T00:00:00.000Z',
-    entries: [
-      entry('дом', 'ru', Object.fromEntries(
-        ['en', 'de', 'fr', 'es', 'it', 'pl', 'uk'].map((code) => [code, {
-          meaning: `дом-${code}`,
-          sentence: longSentence(code, 'дом'),
-          gloss: 'Русское предложение со словом дом.'
-        }])
-      ))
-    ]
+    entries: FIVE_LANGUAGE_WORDS.slice(0, 6).map((word) => entry(word, 'pl', {
+      en: {
+        meaning: `${word}-en`,
+        sentence: longSentence('en', word),
+        gloss: `Polskie zdanie z wyrazem ${word}.`
+      }
+    }))
   },
 
   // A single band tall enough to exercise the "band taller than a page" path,

@@ -16,18 +16,18 @@ including one that Chromium's PDF output was measured against and could not see
 
 | # | Original case | Now covered by |
 |---|---|---|
-| 1 | 1-language collection, few entries | `browser-tests/pagination.spec.ts` + `test/pages/printRows.test.ts` (row model per language count) |
-| 2 | 5-language collection, few entries | `browser-tests/pagination.spec.ts` (`five-languages` fixture, column geometry + band integrity) |
-| 3 | Collection with 3+ printed pages | `browser-tests/pagination.spec.ts` — sheet count > 1, header repeated per sheet, PDF page count equals sheet count (Chromium) |
-| 4 | Collection with a backfill gap | `test/pages/printRows.test.ts` — a language the entry predates produces no row, no blank filler |
-| 5 | Legacy-code collection (`PL`, `EN`) | `test/pages/printRows.test.ts` (both matching directions) and `test/pages/printLabels.test.ts` (uppercase native code still resolves native labels) |
-| 6 | Non-English native collection | `browser-tests/languageColumn.spec.ts` — all 8 × 8 names measured, none overflow, heading fits; `test/pages/printLabels.test.ts` for the headings themselves |
-| 7 | Empty collection | `browser-tests/harness.spec.ts` — message shown, no table |
+| 1 | 1-language collection, few entries | `browser-tests/columns.spec.ts` (`one-language` fixture) — one row per entry, no rowSpan banding, Language column still populated |
+| 2 | 5-language collection, few entries | `browser-tests/pagination.spec.ts` + `languageColumn.spec.ts` (`five-languages` fixture — column geometry, band integrity) |
+| 3 | Collection with 3+ printed pages | `browser-tests/pagination.spec.ts` — sheet count > 1, header repeated per sheet, document header on the first sheet only, PDF page count equals sheet count (Chromium) |
+| 4 | Collection with a backfill gap | `test/pages/printRows.test.ts` (row model) **and** `browser-tests/columns.spec.ts` (`backfill-gap` fixture rendered — no blank language cell) |
+| 5 | Legacy-code collection (`PL`, `EN`) | `test/pages/printRows.test.ts` (both matching directions), `test/pages/printLabels.test.ts` (uppercase native code resolves native labels), and the `backfill-gap` fixture, whose stored code is uppercase `EN` |
+| 6 | Non-English native collection | `browser-tests/languageColumn.spec.ts` — all 8 × 8 names measured via the `all-languages` fixture, including `?native=ru` (the `французский` worst case); `test/pages/printLabels.test.ts` for the headings |
+| 7 | Empty collection | `browser-tests/harness.spec.ts` (message, no table) + `columns.spec.ts` (no Print button) |
 | 8 | Dark OS theme | `browser-tests/harness.spec.ts` — black on white under `colorScheme: dark`, **both engines**. Retained on paper too (see below) |
 | 9 | "Print backgrounds" off | **Manual only** — a browser preference, not a page property |
-| 10 | Cyrillic + Polish diacritics + IPA | **Manual only** — glyph rendering on paper depends on the printer's fonts |
-| 11 | Long meaning beside its IPA | `browser-tests/languageColumn.spec.ts` measures the same way; the `long-words` fixture carries the `independence /ˌɪndɪˈpendəns/` case for the paper check |
-| 12 | Word too long for its column | Fixture exists (`long-words`); hyphenation quality itself is **manual only** — it depends on Firefox's bundled dictionaries |
+| 10 | Cyrillic + Polish diacritics + IPA | **Manual only** — glyph rendering on paper depends on the printer's fonts. The browser suite renders all three (Cyrillic language names, IPA in the `long-words` fixture) but cannot speak for the printer |
+| 11 | Long meaning beside its IPA | `browser-tests/columns.spec.ts` — the space stays a break opportunity outside the `nowrap` span, and a meaning that fits alone stays on one line when its transcription also fits alone. Reproduces the measured `independence /ˌɪndɪˈpendəns/` case |
+| 12 | Word too long for its column | Partially: `columns.spec.ts` asserts a long compound is *allowed* to hyphenate (`hyphenate-limit-chars: 12 5 4` intends this). **Whether it breaks at a syllable boundary is manual only** — it depends on Firefox's bundled dictionaries, which Chromium does not have |
 
 ## The retained gate
 
