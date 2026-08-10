@@ -1,10 +1,10 @@
 ---
 change_id: testing-auth-resilience
 title: Testing auth resilience
-status: impl_reviewed
+status: archived
 created: 2026-08-06
-updated: 2026-08-08
-archived_at: null
+updated: 2026-08-10
+archived_at: 2026-08-10T15:51:19Z
 ---
 
 ## Notes
