@@ -1,10 +1,10 @@
 ---
 change_id: testing-print-output-correctness
 title: Print output correctness — catch print/A4 regressions without a manual preview
-status: implemented
+status: archived
 created: 2026-08-10
 updated: 2026-08-10
-archived_at: null
+archived_at: 2026-08-10T22:41:07Z
 ---
 
 ## Notes
