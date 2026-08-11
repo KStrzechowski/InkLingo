@@ -31,7 +31,20 @@ InkLingo is a language-learning app in early scaffolding: a Fastify + TypeScript
 ## Testing Guidelines
 
 - Backend tests live in `backend/test/`, mirroring `src/` (e.g. `test/routes/root.test.ts`), and build a full app instance per file via `test/helper.ts`'s `build(t)` helper. Running a single file needs `FASTIFY_AUTOLOAD_TYPESCRIPT=1` — see `@backend/package.json`'s `test` script for the full invocation.
-- Frontend has no test framework configured yet.
+- Frontend and extension tests live in `<app>/test/`, run with `npm test` (Vitest, configured on each app's existing `vite.config.ts`). `frontend/browser-tests/` is Playwright and runs separately via `npm run test:print`, never as part of `npm test`.
+- `context/foundation/test-plan.md` is the source of truth for what is worth testing: §2 the risk map, §5 the quality gates and where each is enforced.
+
+## Local Quality Gates
+
+Three layers run before CI. Routing for all three lives in `scripts/quality/checks.mjs` — add a risk area there once and every layer picks it up.
+
+- **Per-edit** — `.claude/settings.json` runs `.claude/hooks/post-edit-check.mjs` after each `Write`/`Edit`: oxlint on the file, plus `vitest related` when it sits in a `test-plan.md` risk area (~4s). A failure exits 2 so the agent sees it and fixes it next turn; lint *warnings* do not block (plain `oxlint` exits 0 on them, so CI does not either) but are reported as context.
+- **Pre-commit** — the same fast checks over staged files, catching edits made outside the agent.
+- **Pre-push** — typecheck plus the full Vitest suite for each app the pushed commits touch.
+
+One-time setup after cloning: `git config core.hooksPath .githooks`
+
+Backend and infra are deliberately excluded from the per-edit layer: backend has no linter, and its suite needs a full `tsc` build (~20s) plus a live Neon branch. Those gates stay at pre-push and CI.
 
 ## Commit & Pull Request Guidelines
 

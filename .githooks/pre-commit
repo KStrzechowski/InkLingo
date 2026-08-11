@@ -1,0 +1,4 @@
+#!/bin/sh
+# Local quality layer 2: fast checks over staged files.
+# Enable with: git config core.hooksPath .githooks
+exec node scripts/quality/staged-check.mjs pre-commit

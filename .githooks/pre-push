@@ -1,0 +1,4 @@
+#!/bin/sh
+# Local quality layer 3: typecheck + full test suite for the apps being pushed.
+# Git feeds this hook one ref line per push on stdin.
+exec node scripts/quality/staged-check.mjs pre-push
