@@ -1,10 +1,10 @@
 ---
 change_id: testing-frontend-extension-logic
 title: Frontend/extension logic coverage — test-plan rollout Phase 5
-status: impl_reviewed
+status: archived
 created: 2026-08-11
 updated: 2026-08-11
-archived_at: null
+archived_at: 2026-08-11T20:34:37Z
 ---
 
 ## Notes
