@@ -787,10 +787,10 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Automated
 
-- [x] 1.1 Extension tests pass: `cd extension && npm test`
-- [x] 1.2 Extension type-checks including `test/`: `cd extension && npm run build`
-- [x] 1.3 Extension lint clean: `cd extension && npm run lint`
-- [x] 1.4 Frontend suite still green: `cd frontend && npm test`
+- [x] 1.1 Extension tests pass: `cd extension && npm test` — c132dd0
+- [x] 1.2 Extension type-checks including `test/`: `cd extension && npm run build` — c132dd0
+- [x] 1.3 Extension lint clean: `cd extension && npm run lint` — c132dd0
+- [x] 1.4 Frontend suite still green: `cd frontend && npm test` — c132dd0
 
 #### Manual
 
@@ -800,8 +800,8 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Automated
 
-- [ ] 2.1 Extension tests pass: `cd extension && npm test`
-- [ ] 2.2 Extension type-checks and lints clean: `cd extension && npm run build && npm run lint`
+- [x] 2.1 Extension tests pass: `cd extension && npm test`
+- [x] 2.2 Extension type-checks and lints clean: `cd extension && npm run build && npm run lint`
 
 #### Manual
 

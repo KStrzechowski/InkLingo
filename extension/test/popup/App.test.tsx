@@ -1,14 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import App from '../../src/popup/App.tsx'
 import { installFakeBrowser, uninstallFakeBrowser, type FakeBrowser } from '../helpers/webext.ts'
-import { createCollection } from '../helpers/translations.ts'
+import {
+  createCollection,
+  createLanguage,
+  createSentence,
+  createTranslationResult,
+  createVariant
+} from '../helpers/translations.ts'
+import type { Collection, TranslationResult } from '../../src/types.ts'
+import type { CreateEntryBody } from '../../src/messages.ts'
 
 // jsdom has no speechSynthesis, so useSpeech settles to ready-with-no-voices
 // (src/speech.ts:25-27, 35-38). Every language block therefore renders its
 // "No <Language> voice is installed on this computer" line and every play
 // button is disabled. That is unavoidable here and harmless — but it is why
-// locators below are scoped by role rather than by loose text matching.
+// the locators below go through roles and accessible names rather than loose
+// text matching, which would collide with that copy.
+
+const LAST_COLLECTION_KEY = 'lastCollectionId'
 
 let fake: FakeBrowser
 
@@ -19,6 +30,37 @@ beforeEach(() => {
 afterEach(() => {
   uninstallFakeBrowser()
 })
+
+function signedIn (collections: Collection[]): void {
+  fake.handlers['auth-status'] = () => ({ authenticated: true })
+  fake.handlers['list-collections'] = () => collections
+}
+
+async function renderReady (collections: Collection[]): Promise<void> {
+  signedIn(collections)
+  render(<App />)
+  await screen.findByRole('combobox')
+}
+
+// Types a word and submits. Resolves once the results section has rendered —
+// or immediately, when the caller expects no results.
+async function translate (word = 'kot'): Promise<void> {
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: word } })
+  fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+  await screen.findByRole('button', { name: 'Save to collection' })
+}
+
+function saveButton (): HTMLElement {
+  return screen.getByRole('button', { name: 'Save to collection' })
+}
+
+function savedEntry (): CreateEntryBody {
+  const message = fake.sent.find((candidate) => candidate.type === 'save-entry')
+  if (message === undefined || message.type !== 'save-entry') {
+    throw new Error('no save-entry message was sent')
+  }
+  return message.entry
+}
 
 describe('popup bootstrap', () => {
   it('shows the login view when the background reports no session', async () => {
@@ -31,13 +73,9 @@ describe('popup bootstrap', () => {
 
   it('loads collections and renders the picker when authenticated', async () => {
     const collection = createCollection({ name: 'Polish to English' })
-    fake.handlers['auth-status'] = () => ({ authenticated: true })
-    fake.handlers['list-collections'] = () => [collection]
+    await renderReady([collection])
 
-    render(<App />)
-
-    const select = await screen.findByRole('combobox')
-    expect(select).toHaveValue(collection.id)
+    expect(screen.getByRole('combobox')).toHaveValue(collection.id)
     expect(screen.getByRole('button', { name: 'Log out' })).toBeInTheDocument()
   })
 
@@ -52,5 +90,254 @@ describe('popup bootstrap', () => {
     render(<App />)
 
     expect(await screen.findByText('Your session expired — log in again.')).toBeInTheDocument()
+  })
+
+  // FR-013's "default to the last-used collection".
+  it('opens on the last-used collection', async () => {
+    const first = createCollection({ name: 'First' })
+    const second = createCollection({ name: 'Second' })
+    fake.store[LAST_COLLECTION_KEY] = second.id
+
+    await renderReady([first, second])
+
+    expect(screen.getByRole('combobox')).toHaveValue(second.id)
+  })
+
+  // A collection deleted in the web app since the last capture must not leave
+  // the popup pointing at nothing — the input would be unusable.
+  it('falls back to the first collection when the stored one is gone', async () => {
+    const first = createCollection({ name: 'First' })
+    fake.store[LAST_COLLECTION_KEY] = 'collection-that-no-longer-exists'
+
+    await renderReady([first])
+
+    expect(screen.getByRole('combobox')).toHaveValue(first.id)
+  })
+})
+
+describe('popup variant and sentence selection', () => {
+  const meanings = ['cat (the animal)', 'cat (jazz slang)']
+
+  function oneLanguageResult (): TranslationResult {
+    return createTranslationResult({
+      languages: [createLanguage('en', { meanings })]
+    })
+  }
+
+  // A sentence belongs to a specific variant, so nothing is picked for the
+  // user there — but a language with variants always opens on its first one.
+  it('preselects the first variant and no sentence, leaving save disabled', async () => {
+    await renderReady([createCollection()])
+    fake.handlers.translate = () => oneLanguageResult()
+
+    await translate()
+
+    expect(screen.getByRole('radio', { name: meanings[0] })).toBeChecked()
+    expect(screen.getByRole('radio', { name: meanings[1] })).not.toBeChecked()
+    expect(screen.getAllByRole('radio').filter((radio) => (radio as HTMLInputElement).checked)).toHaveLength(1)
+    expect(saveButton()).toBeDisabled()
+  })
+
+  // Sentences are nested under a variant precisely so one sense's sentences
+  // can never be attached to another. Carrying the index across would defeat
+  // that.
+  it('clears the sentence pick when the variant changes', async () => {
+    const result = createTranslationResult({
+      languages: [createLanguage('en', {
+        variants: [
+          createVariant(meanings[0], { sentences: [createSentence({ targetText: 'The cat sleeps.' })] }),
+          createVariant(meanings[1], { sentences: [createSentence({ targetText: 'That cat can play.' })] })
+        ]
+      })]
+    })
+    await renderReady([createCollection()])
+    fake.handlers.translate = () => result
+
+    await translate()
+    fireEvent.click(screen.getByRole('radio', { name: /The cat sleeps/ }))
+    expect(saveButton()).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('radio', { name: meanings[1] }))
+
+    expect(screen.getByRole('radio', { name: /That cat can play/ })).not.toBeChecked()
+    expect(saveButton()).toBeDisabled()
+  })
+
+  // The model can legally return nothing for a language (src/types.ts:30-33).
+  // That language cannot be picked, so it must not hold the save hostage.
+  it('excludes a language with no variants from the save gate', async () => {
+    const result = createTranslationResult({
+      languages: [
+        createLanguage('en', {
+          variants: [createVariant('cat', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })]
+        }),
+        createLanguage('de', { meanings: [] })
+      ]
+    })
+    await renderReady([createCollection({ targetLanguageCodes: ['en', 'de'] })])
+    fake.handlers.translate = () => result
+
+    await translate()
+
+    expect(screen.getByText('Nothing came back for this language — try translating again.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('radio', { name: /The cat sleeps/ }))
+
+    expect(saveButton()).toBeEnabled()
+  })
+
+  it('counts only pickable languages in the progress line', async () => {
+    const result = createTranslationResult({
+      languages: [
+        createLanguage('en', { meanings: ['cat'] }),
+        createLanguage('de', { meanings: ['Katze'] }),
+        createLanguage('fr', { meanings: [] })
+      ]
+    })
+    await renderReady([createCollection({ targetLanguageCodes: ['en', 'de', 'fr'] })])
+    fake.handlers.translate = () => result
+
+    await translate()
+
+    expect(screen.getByText('0 of 2 languages chosen')).toBeInTheDocument()
+  })
+
+  it('keeps save disabled when no language came back with anything', async () => {
+    const result = createTranslationResult({
+      languages: [
+        createLanguage('en', { meanings: [] }),
+        createLanguage('de', { meanings: [] })
+      ]
+    })
+    await renderReady([createCollection({ targetLanguageCodes: ['en', 'de'] })])
+    fake.handlers.translate = () => result
+
+    await translate()
+
+    expect(screen.getAllByText('Nothing came back for this language — try translating again.')).toHaveLength(2)
+    expect(saveButton()).toBeDisabled()
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+  })
+
+  // The pairing is the point: each language's saved sentence must be one of
+  // the sentences belonging to that language's saved meaning.
+  it('saves each language paired with its own chosen variant and sentence', async () => {
+    const result = createTranslationResult({
+      normalizedNativeText: 'kot',
+      languages: [
+        createLanguage('en', {
+          variants: [createVariant('cat', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })]
+        }),
+        createLanguage('de', {
+          variants: [createVariant('Katze', { sentences: [createSentence({ targetText: 'Die Katze schläft.' })] })]
+        })
+      ]
+    })
+    const collection = createCollection({ name: 'Polski', targetLanguageCodes: ['en', 'de'] })
+    await renderReady([collection])
+    fake.handlers.translate = () => result
+    fake.handlers['save-entry'] = () => ({
+      id: 'entry-1',
+      wordOrPhrase: 'kot',
+      sourceLanguageCode: 'pl',
+      createdAt: '2026-08-01T00:00:00.000Z'
+    })
+
+    await translate()
+    fireEvent.click(screen.getByRole('radio', { name: /The cat sleeps/ }))
+    fireEvent.click(screen.getByRole('radio', { name: /Die Katze schläft/ }))
+    fireEvent.click(saveButton())
+
+    await screen.findByText(/Saved/)
+    const entry = savedEntry()
+    expect(entry.wordOrPhrase).toBe('kot')
+    expect(entry.translations.map((one) => [one.languageCode, one.meaningText])).toEqual([
+      ['en', 'cat'],
+      ['de', 'Katze']
+    ])
+    expect(entry.sentences.map((one) => [one.languageCode, one.sentenceText])).toEqual([
+      ['en', 'The cat sleeps.'],
+      ['de', 'Die Katze schläft.']
+    ])
+  })
+
+  it('clears the capture and remembers the choice when the collection changes', async () => {
+    const first = createCollection({ name: 'First' })
+    const second = createCollection({ name: 'Second' })
+    await renderReady([first, second])
+    fake.handlers.translate = () => oneLanguageResult()
+
+    await translate()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: second.id } })
+
+    expect(screen.queryByRole('button', { name: 'Save to collection' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(fake.store[LAST_COLLECTION_KEY]).toBe(second.id)
+  })
+})
+
+describe('popup sentence regeneration', () => {
+  // Generation is non-deterministic: a fresh response can order the senses
+  // differently or return a different set. Pairing by position would attach
+  // one sense's sentences to another.
+  it('replaces the sentences of the same meaning even when the order changes', async () => {
+    const first = createTranslationResult({
+      languages: [createLanguage('en', {
+        variants: [
+          createVariant('cat (the animal)', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] }),
+          createVariant('cat (jazz slang)', { sentences: [createSentence({ targetText: 'That cat can play.' })] })
+        ]
+      })]
+    })
+    // Same two meanings, reversed, with new sentences.
+    const second = createTranslationResult({
+      languages: [createLanguage('en', {
+        variants: [
+          createVariant('cat (jazz slang)', { sentences: [createSentence({ targetText: 'A cool cat indeed.' })] }),
+          createVariant('cat (the animal)', { sentences: [createSentence({ targetText: 'A cat crossed the road.' })] })
+        ]
+      })]
+    })
+    let calls = 0
+    await renderReady([createCollection()])
+    fake.handlers.translate = () => {
+      calls += 1
+      return calls === 1 ? first : second
+    }
+
+    await translate()
+    fireEvent.click(screen.getByRole('button', { name: 'New sentences' }))
+
+    expect(await screen.findByRole('radio', { name: /A cat crossed the road/ })).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /The cat sleeps/ })).not.toBeInTheDocument()
+    // The jazz-slang sentences belong to a meaning the user is not looking at
+    // and must not leak into the selected one.
+    expect(screen.queryByRole('radio', { name: /A cool cat indeed/ })).not.toBeInTheDocument()
+  })
+
+  it('reports a meaning the model no longer offers instead of silently keeping the old sentences', async () => {
+    const first = createTranslationResult({
+      languages: [createLanguage('en', {
+        variants: [createVariant('cat (the animal)', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })]
+      })]
+    })
+    const second = createTranslationResult({
+      languages: [createLanguage('en', {
+        variants: [createVariant('feline', { sentences: [createSentence({ targetText: 'A feline appeared.' })] })]
+      })]
+    })
+    let calls = 0
+    await renderReady([createCollection()])
+    fake.handlers.translate = () => {
+      calls += 1
+      return calls === 1 ? first : second
+    }
+
+    await translate()
+    fireEvent.click(screen.getByRole('button', { name: 'New sentences' }))
+
+    expect(await screen.findByText('No new English sentences came back for this meaning — try again.')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /The cat sleeps/ })).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /A feline appeared/ })).not.toBeInTheDocument()
   })
 })
