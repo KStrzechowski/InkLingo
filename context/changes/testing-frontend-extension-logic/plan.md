@@ -857,8 +857,8 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Automated
 
-- [x] 7.1 Both suites green: `cd frontend && npm test` and `cd extension && npm test`
-- [x] 7.2 No stale `TBD` for Phase 5 remains in `test-plan.md`
+- [x] 7.1 Both suites green: `cd frontend && npm test` and `cd extension && npm test` — cc118fc
+- [x] 7.2 No stale `TBD` for Phase 5 remains in `test-plan.md` — cc118fc
 
 #### Manual
 
