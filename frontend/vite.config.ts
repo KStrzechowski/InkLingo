@@ -8,6 +8,11 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
-    setupFiles: ['./test/setup.ts']
+    setupFiles: ['./test/setup.ts'],
+    // Narrowed from Vitest's default `**/*.{test,spec}.?(c|m)[jt]s?(x)`, which
+    // would also collect browser-tests/*.spec.ts and fail on their
+    // @playwright/test import. Vitest owns test/**/*.test.*; Playwright owns
+    // browser-tests/**/*.spec.ts.
+    include: ['test/**/*.test.{ts,tsx}']
   }
 })

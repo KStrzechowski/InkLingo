@@ -9,6 +9,61 @@ permissions:
   contents: read
 
 jobs:
+  # Browser tests for the printable sheet (context/foundation/test-plan.md §3
+  # Phase 4). Its own job rather than a step in `diff`: it needs no AWS
+  # credentials and no Neon branch, so coupling it to that job would make it
+  # unrunnable whenever those are unavailable, and would add two browser
+  # downloads to the longest pole in CI.
+  #
+  # NOTE: because this is a separate job, it needs its own required-status-check
+  # rule under Settings -> Branches to actually gate PRs — the same caveat the
+  # `diff` job carries. Unlike deploy.yml there is no dependent job here to
+  # provide that automatically.
+  print-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      # Keyed on the resolved Playwright version: browser builds are pinned to
+      # it, so a version bump must miss the cache rather than run new tests
+      # against old binaries.
+      - name: Resolve Playwright version
+        id: playwright
+        working-directory: frontend
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        # --with-deps installs the system libraries the browsers need, which the
+        # cache does not carry; it is cheap when the browsers themselves hit.
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Run print browser tests
+        working-directory: frontend
+        run: npm run test:print
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-pr
+          path: frontend/playwright-report/
+          retention-days: 7
+
   diff:
     runs-on: ubuntu-latest
     steps:
@@ -110,7 +165,18 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        run: npm run build
+        run: |
+          npm run build
+          # print-harness.html is a test-only page, reachable in dev only
+          # because Vite serves any root-level .html while `vite build`'s
+          # default input is index.html alone. frontend/test/pages/harnessBuild.test.ts
+          # guards the causes (no rollupOptions input, not in public/), but it
+          # cannot check the artifact: the test step above runs before this one,
+          # so dist/ does not exist yet. This is that check, where dist/ is real.
+          if [ -f dist/print-harness.html ]; then
+            echo "::error::print-harness.html was emitted into dist/ — the test harness would be served in production"
+            exit 1
+          fi
 
       - name: Diff
         working-directory: infra
