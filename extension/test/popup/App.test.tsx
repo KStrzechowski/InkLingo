@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import App from '../../src/popup/App.tsx'
-import { installFakeBrowser, uninstallFakeBrowser, type FakeBrowser } from '../helpers/webext.ts'
+import { deferred, installFakeBrowser, uninstallFakeBrowser, type FakeBrowser } from '../helpers/webext.ts'
 import {
   createCollection,
   createLanguage,
@@ -48,6 +48,13 @@ async function translate (word = 'kot'): Promise<void> {
   fireEvent.change(screen.getByRole('textbox'), { target: { value: word } })
   fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
   await screen.findByRole('button', { name: 'Save to collection' })
+}
+
+// Submits without waiting for a result — the races are only observable while a
+// call is still in flight.
+function startTranslate (word = 'kot'): void {
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: word } })
+  fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
 }
 
 function saveButton (): HTMLElement {
@@ -339,5 +346,179 @@ describe('popup sentence regeneration', () => {
     expect(await screen.findByText('No new English sentences came back for this meaning — try again.')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /The cat sleeps/ })).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: /A feline appeared/ })).not.toBeInTheDocument()
+  })
+})
+
+// The three cases below are races: a call that lands after the user has moved
+// on. None of them is reachable by hand — they need a ~5s AI call to be
+// interrupted at the right moment, and Firefox destroys the popup document the
+// instant it loses focus (src/useSpeech.ts:49-51). That is why three commits of
+// churn in this file never surfaced them, and why the deferred responses in
+// test/helpers/webext.ts exist.
+describe('popup in-flight races', () => {
+  const meanings = ['cat (the animal)', 'cat (jazz slang)']
+
+  // E-1. The backend only rejects the mismatch when the two collections'
+  // target languages differ (backend/src/routes/api/collections/index.ts:289-296);
+  // when they overlap — as here — it writes the entry, stamping the *new*
+  // collection's native language onto a word normalized against the old one.
+  it('drops a translate that lands after the collection changed', async () => {
+    const polish = createCollection({ name: 'Polski', nativeLanguageCode: 'pl', targetLanguageCodes: ['en'] })
+    const russian = createCollection({ name: 'Русский', nativeLanguageCode: 'ru', targetLanguageCodes: ['en'] })
+    const pending = deferred<TranslationResult>()
+    await renderReady([polish, russian])
+    fake.handlers.translate = () => pending.promise
+
+    startTranslate('kot')
+    await screen.findByRole('button', { name: 'Translating…' })
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: russian.id } })
+
+    await act(async () => {
+      pending.resolve(createTranslationResult({ normalizedNativeText: 'kot', languageCodes: ['en'] }))
+      await pending.promise
+    })
+
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save to collection' })).not.toBeInTheDocument()
+    // And the abandoned call must not strand the form: dropping a result is
+    // not the same as leaving the UI mid-request forever.
+    expect(screen.getByRole('button', { name: 'Translate' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox')).toBeEnabled()
+  })
+
+  // E-2, first half: the submit button was already disabled while a call ran,
+  // but Enter in the input was not — that is how a second concurrent call gets
+  // started.
+  it('locks the word input while a call is in flight', async () => {
+    const pending = deferred<TranslationResult>()
+    await renderReady([createCollection()])
+    fake.handlers.translate = () => pending.promise
+
+    startTranslate('kot')
+    await screen.findByRole('button', { name: 'Translating…' })
+
+    expect(screen.getByRole('textbox')).toBeDisabled()
+  })
+
+  // E-2, second half: the continuation used to rebuild state from the `capture`
+  // it closed over before the await, so a regeneration landing after the
+  // capture was cleared would resurrect it. Both the generation guard and the
+  // functional write cover this one — see the next case for the guard alone.
+  it('does not resurrect a cleared capture when a regeneration lands late', async () => {
+    const first = createCollection({ name: 'First' })
+    const second = createCollection({ name: 'Second' })
+    const pending = deferred<TranslationResult>()
+    let calls = 0
+    await renderReady([first, second])
+    fake.handlers.translate = () => {
+      calls += 1
+      return calls === 1
+        ? createTranslationResult({ languages: [createLanguage('en', { meanings })] })
+        : pending.promise
+    }
+
+    await translate()
+    fireEvent.click(screen.getByRole('button', { name: 'New sentences' }))
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: second.id } })
+
+    await act(async () => {
+      pending.resolve(createTranslationResult({ languages: [createLanguage('en', { meanings })] }))
+      await pending.promise
+    })
+
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save to collection' })).not.toBeInTheDocument()
+  })
+
+  // The generation guard on its own. Here the capture is not merely cleared but
+  // *replaced* by a newer word, so a functional write is no longer protection —
+  // it would splice the cat's fresh sentences into the dog's results. Only
+  // knowing the result is stale prevents that.
+  it('does not splice a late regeneration into a different word’s results', async () => {
+    const first = createCollection({ name: 'First' })
+    const second = createCollection({ name: 'Second' })
+    const pending = deferred<TranslationResult>()
+    let calls = 0
+    await renderReady([first, second])
+    fake.handlers.translate = () => {
+      calls += 1
+      if (calls === 1) {
+        return createTranslationResult({
+          languages: [createLanguage('en', {
+            variants: [createVariant(meanings[0], { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })]
+          })]
+        })
+      }
+      if (calls === 2) {
+        return pending.promise
+      }
+      return createTranslationResult({
+        normalizedNativeText: 'pies',
+        languages: [createLanguage('en', {
+          variants: [createVariant('dog', { sentences: [createSentence({ targetText: 'The dog barks.' })] })]
+        })]
+      })
+    }
+
+    await translate('kot')
+    fireEvent.click(screen.getByRole('button', { name: 'New sentences' }))
+    // Abandons the regeneration and frees the form for the next word.
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: second.id } })
+    await translate('pies')
+
+    await act(async () => {
+      pending.resolve(createTranslationResult({
+        languages: [createLanguage('en', {
+          variants: [createVariant(meanings[0], { sentences: [createSentence({ targetText: 'A cat crossed the road.' })] })]
+        })]
+      }))
+      await pending.promise
+    })
+
+    expect(screen.getByRole('radio', { name: 'dog' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /The dog barks/ })).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /A cat crossed the road/ })).not.toBeInTheDocument()
+  })
+
+  // E-3. The tail of handleRegenerate used to write back the variant index it
+  // read before the await, silently undoing a pick made while waiting.
+  it('keeps a variant picked while its sentences were regenerating', async () => {
+    const pending = deferred<TranslationResult>()
+    let calls = 0
+    await renderReady([createCollection()])
+    fake.handlers.translate = () => {
+      calls += 1
+      return calls === 1
+        ? createTranslationResult({
+            languages: [createLanguage('en', {
+              variants: [
+                createVariant(meanings[0], { sentences: [createSentence({ targetText: 'The cat sleeps.' })] }),
+                createVariant(meanings[1], { sentences: [createSentence({ targetText: 'That cat can play.' })] })
+              ]
+            })]
+          })
+        : pending.promise
+    }
+
+    await translate()
+    fireEvent.click(screen.getByRole('button', { name: 'New sentences' }))
+    fireEvent.click(screen.getByRole('radio', { name: meanings[1] }))
+
+    await act(async () => {
+      pending.resolve(createTranslationResult({
+        languages: [createLanguage('en', {
+          variants: [createVariant(meanings[0], { sentences: [createSentence({ targetText: 'A cat crossed the road.' })] })]
+        })]
+      }))
+      await pending.promise
+    })
+
+    expect(screen.getByRole('radio', { name: meanings[1] })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /That cat can play/ })).toBeInTheDocument()
+
+    // The regenerated sentences still landed under the meaning they were asked
+    // for — dropping the forced selection must not drop the fresh sentences.
+    fireEvent.click(screen.getByRole('radio', { name: meanings[0] }))
+    expect(screen.getByRole('radio', { name: /A cat crossed the road/ })).toBeInTheDocument()
   })
 })
