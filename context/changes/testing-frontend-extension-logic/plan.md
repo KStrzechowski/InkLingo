@@ -794,7 +794,7 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Manual
 
-- [ ] 1.5 `npm run dev` still produces a loadable add-on with a correct `dist/manifest.json`
+- [x] 1.5 `npm run dev` still produces a loadable add-on with a correct `dist/manifest.json` — c132dd0
 
 ### Phase 2: Cover the popup's existing selection behavior
 
@@ -805,7 +805,7 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Manual
 
-- [ ] 2.3 Spot-check two assertions for the oracle problem (expected values trace to requirements, not to the implementation)
+- [x] 2.3 Spot-check two assertions for the oracle problem (expected values trace to requirements, not to the implementation) — 05d1641
 
 ### Phase 3: Fix the three popup races
 
@@ -816,8 +816,8 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Manual
 
-- [ ] 3.3 Non-vacuity: each guard removed in turn fails exactly its own test; results recorded in change notes
-- [ ] 3.4 Firefox reproduction of E-1 no longer produces a cross-collection save
+- [x] 3.3 Non-vacuity: each guard removed in turn fails exactly its own test; results recorded in change notes — 2421937
+- [x] 3.4 Firefox reproduction of E-1 no longer produces a cross-collection save — 2421937
 
 ### Phase 4: Cover the frontend's language-gap detection
 
@@ -828,7 +828,7 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Manual
 
-- [ ] 4.3 Legacy-code fixture mirrors what the dev database actually stores
+- [x] 4.3 Legacy-code fixture mirrors what the dev database actually stores — 713115e
 
 ### Phase 5: Fix and cover `CollectionsListPage`
 
@@ -839,8 +839,8 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Manual
 
-- [ ] 5.3 Non-vacuity: reverting the retry control fails the L-1 proof case alone
-- [ ] 5.4 Retry recovers the list against a restarted backend, without a page reload
+- [x] 5.3 Non-vacuity: reverting the retry control fails the L-1 proof case alone — 762501d
+- [x] 5.4 Retry recovers the list against a restarted backend, without a page reload — 762501d
 
 ### Phase 6: Wire `extension/` into CI
 
@@ -862,5 +862,5 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Manual
 
-- [ ] 7.3 §6.3 reads well enough to write a new extension test from it alone
-- [ ] 7.4 §3 has every row at `complete`; `/10x-test-plan` prints the completion summary
+- [x] 7.3 §6.3 reads well enough to write a new extension test from it alone — cc118fc
+- [x] 7.4 §3 has every row at `complete`; `/10x-test-plan` prints the completion summary — cc118fc
