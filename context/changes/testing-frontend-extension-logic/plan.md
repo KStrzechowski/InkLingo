@@ -846,8 +846,8 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Automated
 
-- [x] 6.1 Workflow files parse (`actionlint` or `gh workflow view`)
-- [x] 6.2 `cd extension && npm ci && npm test && npm run lint && npm run build` green locally
+- [x] 6.1 Workflow files parse (`actionlint` or `gh workflow view`) — bc5588c
+- [x] 6.2 `cd extension && npm ci && npm test && npm run lint && npm run build` green locally — bc5588c
 
 #### Manual
 
@@ -857,8 +857,8 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Automated
 
-- [ ] 7.1 Both suites green: `cd frontend && npm test` and `cd extension && npm test`
-- [ ] 7.2 No stale `TBD` for Phase 5 remains in `test-plan.md`
+- [x] 7.1 Both suites green: `cd frontend && npm test` and `cd extension && npm test`
+- [x] 7.2 No stale `TBD` for Phase 5 remains in `test-plan.md`
 
 #### Manual
 
