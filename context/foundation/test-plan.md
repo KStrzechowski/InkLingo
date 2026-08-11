@@ -45,7 +45,7 @@ research's job, see §1 principle #3).
 | 3 | An AI translate/capture call returns a structurally valid but empty or unusable result (no variants, no sentences), and the user sees a silently broken outcome instead of an explicit error | High | Medium | lessons.md "A stubbed AI client cannot tell you the model's output is usable" (measured ~9% failure rate on real calls); interview Q1, Q2 |
 | 4 | An expired or invalid auth token is sent with a request and the failure surfaces as an opaque CORS error instead of a clean re-authentication prompt | High | Medium | lessons.md CORS/auth incident, 2026-08-04 (`fix/auth-token-refresh`); interview Q1, Q2 |
 | 5 | A user requests another user's collection or entry by ID and the request succeeds instead of being rejected (IDOR) — ownership for entries flows only through a join, not a direct column | High | Medium | archive/2026-07-23-word-collections/plan.md ("entries has no user_id column — ownership only flows through entries.collection_id → collections.user_id"); abuse-lens: authorization/access |
-| 6 | Frontend or extension business logic (collection language-gap detection, extension popup variant/sentence selection state) breaks silently — both areas have zero test coverage and own the highest recent churn in the repo | Medium | High | interview Q4 ("both equally"); hot-spot dirs `frontend/src/pages` (21 commits/30d), `extension/src` (11 commits/30d); test-base profile (`sparse`) |
+| 6 | Frontend or extension business logic (collection language-gap detection, extension popup variant/sentence selection state) breaks silently — both areas have zero test coverage and own the highest recent churn in the repo | Medium | High | interview Q4 ("both equally"); hot-spot dirs `frontend/src/pages` (21 commits/30d), `extension/src` (11 commits/30d); test-base profile (`sparse`). Refined 2026-08-11 by research: the `frontend/src/pages` figure is **majority print churn** already covered by Phase 4 — the surface this risk still owns there is `CollectionDetailPage` (7 commits/60d) and `CollectionsListPage` (4). The `extension/src` figure holds up. Confirmed not speculative: grounding found three live races in the popup and one still-open list-page defect |
 | 7 | Repeated or automated calls to the AI-calling route(s) are not capped per user, so an accidental retry loop or a leaked/scraped endpoint can run up real Anthropic + AWS cost with no built-in ceiling | Medium | Medium | interview Q1 (explicit cost worry); infrastructure.md Risk Register ("denial-of-wallet... not yet implemented, tracked here as an open item"); abuse-lens: resource abuse |
 
 ### Risk Response Guidance
@@ -57,7 +57,7 @@ research's job, see §1 principle #3).
 | #3 | A translate/capture call against the real Anthropic API returns usable (non-empty) output at a measured rate, and an unusable result surfaces as a visible error rather than an empty section | Stubbed tests prove the integration works — they only prove our code handles a response shape we invented ourselves | Current handling of empty variants/sentences arrays; whether the tool schema constrains array length at all | Keep stubs for logic/error-path coverage; add a one-off empirical script (dozen+ real calls, varied inputs) run as part of this phase | More stub-based tests whose expected values are copied from the implementation (oracle problem) — raises coverage without closing the gap |
 | #4 | A request made with an expired/invalid token triggers silent renewal before reaching the API, and a token that fails renewal drops the session with a clear re-login prompt | A CORS error means a CORS config problem — here it means an expired token, since the JWT authorizer's rejection carries no CORS headers of its own | Current token-expiry check before attaching auth headers; whether concurrent renewal calls are deduped; client behavior on a 401 that survives renewal | Frontend unit/integration test around token-attachment and renewal logic (mock an expired token, assert renewal + dedupe) | Testing only the happy path (valid token → 200) — that case was already covered and did not catch this |
 | #5 | A cross-user request for a collection or entry ID (guessed or otherwise obtained) is rejected (404/403) for every endpoint that accepts such an ID | Being authenticated is enough — a query that forgets the ownership join/filter silently returns or mutates another user's data | Every route accepting a collection/entry ID; which ones filter by the authenticated user's ownership versus row existence only | Integration test per ownership-sensitive endpoint: two seeded users, cross-user request, assert rejection | Testing only "unauthenticated request is rejected" (401) and treating that as authorization coverage — it is a different failure mode entirely |
-| #6 | The language-gap detection and popup variant/sentence selection logic produce correct output on documented edge cases (missing-language entries, multi-language collections, collection-switch mid-selection), not just the happy path | The UI looking right during manual testing proves the state logic is right — it doesn't prove state transitions (e.g. stale selection after switching collections) are handled | Which components/hooks own this logic; what edge cases are currently handled versus assumed | Component/unit tests once a test runner is bootstrapped for `frontend/` and `extension/` | Reaching for e2e/browser tests to cover a zero-coverage gap that a cheaper unit/component test would catch just as well |
+| #6 | The language-gap detection and popup variant/sentence selection logic produce correct output on documented edge cases (missing-language entries, multi-language collections, collection-switch mid-selection), not just the happy path | The UI looking right during manual testing proves the state logic is right — it doesn't prove state transitions (e.g. stale selection after switching collections) are handled. Sharper (research, 2026-08-11): manual testing *cannot* reach these — they need a race against a ~5s AI call, and Firefox destroys the popup document the moment it loses focus, which is why three commits of churn never surfaced them | Which components/hooks own this logic; what edge cases are currently handled versus assumed | **Refined 2026-08-11 by research** — component tests in the existing RTL + jsdom setup, confirmed; but the highest-value cases are *async state-transition races* needing a promise the test resolves by hand, not pure-function cases. A pure-unit reading of "unit/component tests" would miss exactly the failures worth catching | Reaching for e2e/browser tests to cover a zero-coverage gap that a cheaper unit/component test would catch just as well. Second (research, 2026-08-11): asserting the current copy as the oracle — the gap button renders the raw code (`Add EN`), so a test pinning that label is about copy, not behaviour |
 | #7 | Repeated/rapid requests to the AI-calling route(s) from one user are capped before reaching Anthropic, with a clear client-visible response when capped | Platform-level throttling already covers this — it bounds AWS-side blast radius only; the Anthropic-side per-call cost is uncapped until an application-level limit exists | Which routes call Anthropic; confirm no rate-limit plugin is registered yet; what a sane per-user limit looks like at this project's scale | Plugin-level integration test asserting the rate-limit guard is registered and enforces a cap on the AI-calling route(s) | Verifying the guard by making real Anthropic calls in a loop — burns the exact budget the guard exists to protect |
 
 ## 3. Phased Rollout
@@ -72,7 +72,7 @@ orchestrator updates Status as artifacts appear on disk.
 | 2 | AI usability + cross-user isolation | Confirm AI output is measurably usable and no endpoint lets one user reach another user's data | #3, #5 | empirical real-API script, backend integration tests (IDOR) | complete | context/changes/testing-ai-usability-cross-user-isolation/ |
 | 3 | Auth resilience | An expired/invalid token never surfaces as an opaque failure — it renews silently or drops the session cleanly | #4 | frontend unit/integration tests (bootstraps Vitest for `frontend/`) | complete | context/changes/testing-auth-resilience/ |
 | 4 | Print output correctness | Print/A4 layout changes are verifiable without a manual print-preview every time, in both OS themes | #2 | browser-free unit + static CSS-invariant checks, two-engine Playwright assertions (no pixel baselines), reduced manual paper gate | complete | context/changes/testing-print-output-correctness/ |
-| 5 | Frontend/extension logic coverage | The zero-coverage, highest-churn UI logic has tests for its documented edge cases | #6 | component/unit tests (extends Vitest; bootstraps a test runner for `extension/`) | not started | — |
+| 5 | Frontend/extension logic coverage | The zero-coverage, highest-churn UI logic has tests for its documented edge cases | #6 | component/unit tests (extends Vitest; bootstraps a test runner for `extension/`) | complete | context/changes/testing-frontend-extension-logic/ |
 
 **Status vocabulary** (fixed — parser literals):
 
@@ -95,7 +95,7 @@ the MCP/tools actually exposed in the current session.
 | Layer | Tool | Version | Notes |
 |---|---|---|---|
 | unit + integration (backend) | Node built-in `node:test` + `c8` | Node 24, c8 ^11.0.0 | 12 test files across routes/plugins/schema — real coverage, hits a real Neon DB via `test/helper.ts`'s `build(t)`; not currently run in CI (see §5) |
-| unit + integration (frontend/extension) | frontend: Vitest + `@testing-library/react` + jsdom. extension: none yet — see §3 Phase 5 | vitest ^4.1.10, @testing-library/react ^16.3.2, @testing-library/jest-dom ^7, jsdom ^30 | Shipped for `frontend/` in `testing-auth-resilience` p1: `test` field on the existing `vite.config.ts` (no second config), tests under `frontend/test/` mirroring `backend/test/`, no Vitest globals (explicit `describe`/`it`/`expect`/`vi` imports, matching the backend's `node:test` style). `frontend/tsconfig.vitest.json` puts `test/` under `tsc -b`. The extension still has no runner; same Vitest fit applies when Phase 5 bootstraps it |
+| unit + integration (frontend/extension) | Vitest + `@testing-library/react` + jsdom, in both apps | vitest ^4.1.10, @testing-library/react ^16.3.2, @testing-library/jest-dom ^7, jsdom ^30 | Shipped for `frontend/` in `testing-auth-resilience` p1 and for `extension/` in `testing-frontend-extension-logic` p1, deliberately identical: `test` field on each app's existing `vite.config.ts` (no second config), tests under `<app>/test/` mirroring `backend/test/`, no Vitest globals (explicit `describe`/`it`/`expect`/`vi` imports, matching the backend's `node:test` style), and a `tsconfig.vitest.json` project putting `test/` under `tsc -b`. The extension adds one thing the frontend does not need: a `globalThis.browser` fake (§6.3), since jsdom provides no WebExtension APIs. Note `extension/vite.config.ts`'s `writeManifest` plugin is `apply: 'build'` — Vitest runs a Vite dev server and fired its `closeBundle` on every environment, rewriting `dist/manifest.json` with wildcard placeholders on each test run; checked: 2026-08-11 |
 | API mocking | none | — | Backend tests hit a real database directly and stub only the Anthropic client at the network edge; no HTTP-mocking library installed anywhere |
 | browser (print only) | Playwright, Chromium + Firefox | @playwright/test ^1.62.1 | Shipped in `testing-print-output-correctness` p3-p4. Runs `frontend/browser-tests/*.spec.ts` against `print-harness.html` on the Vite dev server — no auth, no backend, committed fixtures. Assertions only, **no pixel baselines**: every check has an independent oracle (ISO 216, the black-and-white requirement, arithmetic). Both engines because `page.pdf()` is Chromium-only while the sheet is printed from Firefox. `npm run test:print`, never `npm test`; checked: 2026-08-10 |
 | e2e | none | — | Not currently justified by cost × signal — no rollout phase names a failure mode that requires the full deployed shape over a cheaper layer. The Playwright install above is scoped to the print document and drives no real route |
@@ -122,9 +122,11 @@ phase lands; before that, the gate is `planned`.
 | route-reachability check | `backend/test/route-reachability.test.ts`, runs as part of `npm test` | required (shipped in `testing-backend-ci-safety-net` p2) | a route that passes tests but 404s through the real gateway (Risk #1) |
 | AI-route rate-limit check | `backend/test/routes/api/collections-rate-limit.test.ts`, runs as part of `npm test` | required (shipped in `testing-backend-ci-safety-net` p1) | an unregistered or misconfigured cost guard on the AI-calling route (Risk #7) — the guard itself (`@fastify/rate-limit`) already existed; this phase added the test proving it works |
 | IDOR ownership guard | `backend/test/route-ownership.test.ts`, runs as part of `npm test` | required (shipped in `testing-ai-usability-cross-user-isolation` p2) | a route accepting a collection/entry ID without calling the shared ownership helper (Risk #5) — mirrors the route-reachability check's static-source-comparison approach, applied to authorization instead of gateway registration |
-| frontend unit + integration (`npm test` in `frontend/`) | local + CI — the "Run frontend tests" step in both `pr-diff.yml` and `deploy.yml`'s `diff` jobs (shipped in `testing-auth-resilience` p4) | enforced — needs no database or credentials, so unlike the backend gate there is nothing to configure. `deploy.yml` is auto-gated (`deploy` `needs: diff`); the PR path is covered by the `diff` required status check, since the frontend step lives inside that same job | logic regressions in auth/token handling, then wider UI logic after Phase 5 |
+| frontend unit + integration (`npm test` in `frontend/`) | local + CI — the "Run frontend tests" step in both `pr-diff.yml` and `deploy.yml`'s `diff` jobs (shipped in `testing-auth-resilience` p4) | enforced — needs no database or credentials, so unlike the backend gate there is nothing to configure. `deploy.yml` is auto-gated (`deploy` `needs: diff`); the PR path is covered by the `diff` required status check, since the frontend step lives inside that same job | logic regressions in auth/token handling, and — since Phase 5 — the collections list's language picker and its recovery from a failed load |
 | print document tests (`npm test` in `frontend/`) | local + CI — part of the existing "Run frontend tests" step (shipped in `testing-print-output-correctness` p1-p3) | enforced by the same rule as the frontend gate above — no separate configuration | row-model regressions (backfill gaps, legacy uppercase codes, sort order), a supported language with no native headings, pagination-packer logic, and drift between the three places `print.css` encodes the A4 geometry |
 | print browser tests (`npm run test:print`) | CI — its own `print-tests` job in both `pr-diff.yml` and `deploy.yml` (shipped in `testing-print-output-correctness` p5) | enforced — `deploy.yml` is auto-gated (`deploy` `needs: [diff, print-tests]`), and the PR path has `print-tests` as its own required status check on the `PR-Needed` ruleset as of 2026-08-10. It needed a separate context because, unlike the frontend/backend rows, it is not inside the `diff` job | grey-on-dark printouts under a dark OS theme, a language name overflowing the Language column, and a preview whose page count no longer matches the printed PDF |
+| extension unit + component (`npm test` in `extension/`) | local + CI — the "Run extension tests" step in both `pr-diff.yml` and `deploy.yml`'s `diff` jobs (shipped in `testing-frontend-extension-logic` p6) | enforced by the same rule as the frontend gate above — it needs no database, credentials or browsers, so there is nothing to configure, and it sits inside the already-required `diff` context | stale-AI-result races in the popup (a translate landing under the wrong collection, a regeneration overwriting a newer capture or reverting a variant pick) and the variant/sentence selection model (Risk #6) |
+| extension lint + build (`npm run lint`, `npm run build` in `extension/`) | CI — the same "Run extension tests" step (shipped in `testing-frontend-extension-logic` p6) | enforced | the extension had **no** CI presence before this phase, so this is the first automated proof that it compiles and lints at all. `npm run build` is also what type-checks `extension/test/` via `tsconfig.vitest.json` |
 | e2e on critical flows | — | not planned | no rollout phase currently justifies this layer over cheaper ones (see §4) |
 | pre-prod smoke | — | not planned | no rollout phase names this; manual verification remains the practice for now |
 
@@ -202,9 +204,38 @@ the relevant rollout phase ships; before that, the sub-section reads
 - `frontend/.env.test` is committed and holds dummy Cognito values;
   `frontend/test/env.test.ts` asserts they win over a real `.env`, which is
   what keeps CI's deployed-stack env out of the test run.
-- **Extension — TBD**, see §3 Phase 5. Its auth path
-  (`browser.identity.launchWebAuthFlow`) is unrelated to `oidc-client-ts`, so
-  expect a different fixture set even though the runner will be the same.
+- **Extension — shipped** (`testing-frontend-extension-logic` p1-p3). Same
+  shape as the frontend: tests under `extension/test/` mirroring the source
+  tree, explicit `vitest` imports, `afterEach(cleanup)` registered by hand in
+  `test/setup.ts`, shared fakes in `test/helpers/`. Imports carry the `.ts`
+  extension, matching the extension's own source style. Four things are
+  specific to it:
+- **Fake `globalThis.browser`, don't mock `messages.ts`.** jsdom provides no
+  WebExtension APIs, while `@types/firefox-webext-browser` declares `browser`
+  globally — so TypeScript is satisfied and the runtime value is simply
+  missing. `test/helpers/webext.ts`'s `installFakeBrowser()` supplies
+  `runtime.sendMessage` and `storage.local` (the popup calls the latter
+  directly), and its `sendMessage` speaks the real `{ ok, data } / { ok, error }`
+  envelope — mirroring `background.ts`'s `handle()`, where a thrown handler
+  becomes `{ ok: false }` rather than a rejection. That keeps
+  `messages.ts`'s unwrapping in the path, which the popup's entire error UI
+  depends on. Script responses per message type via `fake.handlers`, seed
+  `fake.store`, and assert what was requested via `fake.sent`.
+- **`deferred()` is how the races are tested.** The popup's interesting bugs
+  are all "a call landed after the user moved on", so a test needs to hold a
+  response open, act, then resolve it inside `await act(...)`. Every guard in
+  `popup/App.tsx` — the generation ref, the functional writes — is only
+  observable that way.
+- **No `speechSynthesis` stub is needed, and that has a visible consequence.**
+  `src/speech.ts:25-27` degrades to an empty voice list when the API is absent,
+  so `useSpeech` settles ready-with-no-voices and *every* language block renders
+  "No `<Language>` voice is installed on this computer" with its play button
+  disabled. Locate by role and accessible name; a loose text query will collide
+  with that copy, and a "no error is shown" assertion must not count it.
+- **Radio accessible names come from the whole label.** A variant radio's name
+  is its meaning text (plus `/phonetic/` when present) — match exactly. A
+  sentence radio's name concatenates target text and gloss with no separator,
+  so match those with a regex on a distinctive fragment.
 
 ### 6.4 Adding a test for a new backend API endpoint
 
@@ -317,7 +348,25 @@ and that it never reaches `dist/`. Add fixtures to
 
 ### 6.8 Per-rollout-phase notes
 
-(Filled in as each phase lands.)
+**Phase 5 — Frontend/extension logic coverage** (`testing-frontend-extension-logic`,
+2026-08-11). Four defects were found by grounding a risk that had been written
+up as a coverage gap, and all four are the same shape: **a value read before an
+`await` and written after it, with the control that changes it left enabled
+meanwhile.** Three were in the popup (a translate landing under a collection the
+user had switched away from — which the backend's target-language guard only
+catches when the two collections' targets differ; a regeneration rebuilding
+state from a pre-await closure; the same continuation forcing back a variant
+index the user had changed). The fourth was the list page's failed-load state,
+already written up in `lessons.md` and still live. See §7's new entry.
+
+Two method notes worth carrying forward. First, **defense in depth defeats
+non-vacuity checks**: the first pass at the regeneration tests passed with
+*either* of its two guards removed, because each masked the other. Splitting
+into a case that only the generation guard can satisfy (a late result landing
+on a *different* word, where a functional write is no protection) was what made
+each guard independently provable. Second, when a fix's guard makes a path
+unreachable through the UI, the test has to drive the seam instead — otherwise
+it silently tests the `disabled` attribute and the real guard can rot.
 
 ## 7. What We Deliberately Don't Test
 
@@ -345,10 +394,11 @@ Exclusions agreed during the rollout (Phase 2 interview, Q5).
 
 ## 8. Freshness Ledger
 
-- Strategy (§1–§5) last reviewed: 2026-08-10
-- Stack versions last verified: 2026-08-10
+- Strategy (§1–§5) last reviewed: 2026-08-11
+- Stack versions last verified: 2026-08-11
 - AI-native tool references last verified: 2026-08-05 (none in use)
 - Print browser tooling (Playwright, both engines) verified: 2026-08-10
+- Extension test runner (Vitest + RTL + `browser` fake) verified: 2026-08-11
 
 Refresh (`/10x-test-plan --refresh`) when:
 

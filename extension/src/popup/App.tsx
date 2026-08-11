@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { sendMessage } from '../messages.ts'
 import { languageLabel } from '../languages.ts'
 import { useSpeech, type Speech } from '../useSpeech.ts'
@@ -103,6 +103,13 @@ function App () {
   // Playback state lives entirely in the hook, so a failed utterance never
   // touches the capture/save error above it.
   const speech = useSpeech()
+  // Every AI call is tagged with the generation it started under, and anything
+  // that makes an in-flight result unwanted — a new call, a collection switch,
+  // a logout — bumps it. A continuation whose generation is stale drops its
+  // result instead of writing it. Same idiom, same reason as useSpeech.ts's
+  // tokenRef: without it, a translate started under one collection can land,
+  // render, and be saved under another.
+  const generationRef = useRef(0)
 
   const activeCollection = collections.find((collection) => collection.id === activeCollectionId)
   const working = busy !== null || regeneratingCode !== null
@@ -137,6 +144,17 @@ function App () {
     setSelections({})
   }
 
+  // Abandons whatever is in flight: the continuation will see a newer
+  // generation and drop its result. Clearing the pending flags here is what
+  // lets those continuations leave them alone — otherwise a discarded call
+  // would either strand the UI in "Translating…" or clear a flag a newer call
+  // now owns.
+  function abandonInFlight () {
+    generationRef.current += 1
+    setBusy(null)
+    setRegeneratingCode(null)
+  }
+
   async function rememberCollection (id: string) {
     await browser.storage.local.set({ [LAST_COLLECTION_KEY]: id })
   }
@@ -160,6 +178,7 @@ function App () {
   }
 
   async function handleLogout () {
+    abandonInFlight()
     await sendMessage({ type: 'logout' })
     setCollections([])
     setActiveCollectionId('')
@@ -169,7 +188,11 @@ function App () {
     setStatus('anonymous')
   }
 
+  // Switching collection mid-call is a legitimate thing to do, so the select
+  // stays enabled — but the languages the AI was asked for belong to the old
+  // collection, so its answer must not survive the switch.
   function handleCollectionChange (id: string) {
+    abandonInFlight()
     setActiveCollectionId(id)
     void rememberCollection(id)
     resetCapture()
@@ -195,17 +218,29 @@ function App () {
     if (input.length === 0 || activeCollection === undefined) {
       return
     }
+    generationRef.current += 1
+    const generation = generationRef.current
     setBusy('translate')
     setError(null)
     setSaved(null)
     try {
       const result = await sendMessage({ type: 'translate', collectionId: activeCollection.id, text: input })
+      if (generationRef.current !== generation) {
+        return
+      }
       setCapture({ input, wordOrPhrase: result.normalizedNativeText, languages: result.languages })
       setSelections(initialSelections(result.languages))
     } catch (err) {
+      if (generationRef.current !== generation) {
+        return
+      }
       setError(errorText(err))
     } finally {
-      setBusy(null)
+      // Only the call that still owns this generation clears the flag; a
+      // superseded one would otherwise unlock the form under a live request.
+      if (generationRef.current === generation) {
+        setBusy(null)
+      }
     }
   }
 
@@ -223,10 +258,15 @@ function App () {
       return
     }
 
+    generationRef.current += 1
+    const generation = generationRef.current
     setRegeneratingCode(languageCode)
     setError(null)
     try {
       const result = await sendMessage({ type: 'translate', collectionId: activeCollection.id, text: capture.input })
+      if (generationRef.current !== generation) {
+        return
+      }
       // Generation is non-deterministic, so a fresh response can order the
       // senses differently or return a different set of them — pair by
       // meaning, never by position. Attaching one sense's sentences to
@@ -239,9 +279,12 @@ function App () {
         setError(`No new ${languageLabel(languageCode)} sentences came back for this meaning — try again.`)
         return
       }
-      setCapture({
-        ...capture,
-        languages: capture.languages.map((candidate) => (
+      // Functional, not a rebuild from the closure's `capture`: that snapshot
+      // is from before the await, and writing it back would revert anything
+      // that changed meanwhile.
+      setCapture((prev) => (prev === null ? prev : {
+        ...prev,
+        languages: prev.languages.map((candidate) => (
           candidate.languageCode === languageCode
             ? {
                 ...candidate,
@@ -251,12 +294,25 @@ function App () {
               }
             : candidate
         ))
-      })
-      setSelections((prev) => ({ ...prev, [languageCode]: { variant: selectedIndex, sentence: null } }))
+      }))
+      // The sentence pick is dropped because its list was just replaced — but
+      // only if the user is still on the meaning that was regenerated. Forcing
+      // selectedIndex back would silently undo a variant they picked while
+      // waiting.
+      setSelections((prev) => (
+        prev[languageCode]?.variant === selectedIndex
+          ? { ...prev, [languageCode]: { variant: selectedIndex, sentence: null } }
+          : prev
+      ))
     } catch (err) {
+      if (generationRef.current !== generation) {
+        return
+      }
       setError(errorText(err))
     } finally {
-      setRegeneratingCode(null)
+      if (generationRef.current === generation) {
+        setRegeneratingCode(null)
+      }
     }
   }
 
@@ -285,6 +341,8 @@ function App () {
 
     setBusy('save')
     setError(null)
+    generationRef.current += 1
+    const generation = generationRef.current
     try {
       const entry = await sendMessage({
         type: 'save-entry',
@@ -303,15 +361,28 @@ function App () {
           }))
         }
       })
-      await rememberCollection(activeCollection.id)
       const languageCount = picks.length === 1 ? '1 language' : `${picks.length} languages`
+      // Shown even if the user has moved on: it names the collection the entry
+      // actually landed in, so it stays true either way.
       setSaved(`Saved “${entry.wordOrPhrase}” to ${activeCollection.name} in ${languageCount}.`)
+      if (generationRef.current !== generation) {
+        // Switched collections while the save ran. The entry is safely stored,
+        // but the last-used pointer and the input box belong to the new choice
+        // now — writing the pre-await id back would silently undo the switch.
+        return
+      }
+      await rememberCollection(activeCollection.id)
       setText('')
       resetCapture()
     } catch (err) {
+      if (generationRef.current !== generation) {
+        return
+      }
       setError(errorText(err))
     } finally {
-      setBusy(null)
+      if (generationRef.current === generation) {
+        setBusy(null)
+      }
     }
   }
 
@@ -364,6 +435,11 @@ function App () {
               onChange={(event) => setText(event.target.value)}
               placeholder="Word or phrase, in either language"
               autoFocus
+              // The submit button below is already disabled while a call runs,
+              // but Enter in this field is not — that path starts a second
+              // concurrent AI call, doubling the spend on the rate-limited
+              // route and racing two writes against the same capture.
+              disabled={working}
             />
             <button type="submit" disabled={working || text.trim().length === 0}>
               {busy === 'translate' ? 'Translating…' : 'Translate'}

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { createCollection, listCollections, type Collection } from '../api/collections'
 import { extractErrorMessage } from '../api/errors'
@@ -16,13 +16,43 @@ function CollectionsListPage () {
   const [targetLanguageCodes, setTargetLanguageCodes] = useState<string[]>([SUPPORTED_LANGUAGES[1].code])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Kept apart from `error`: that one belongs to the create form, and offering
+  // "Try again" for a rejected name would reload the list instead of doing
+  // anything about the rejection.
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [retrying, setRetrying] = useState(false)
+
+  // Callable, not inlined in the effect, because a failed load has to be
+  // recoverable: without a retry `collections` stays [] and the create below
+  // appends to that empty array, rendering one collection as the user's
+  // complete list (context/foundation/lessons.md, "Clearing a failure signal
+  // doesn't restore the view it was raised over").
+  //
+  // Deliberately the page's own control rather than a subscription to the
+  // global connectionIssue signal — a signal raised by an unrelated request
+  // would refetch everything and couple every page to that context.
+  // Never rejects, so the caller decides what a settled load means: the mount
+  // effect ends the initial loading state, the retry control only ends its own
+  // pending state. A retry deliberately does not re-enter `loading` — that
+  // would unmount the create form and discard anything typed into it.
+  const load = useCallback(async () => {
+    setLoadError(null)
+    try {
+      setCollections(await listCollections())
+    } catch (err) {
+      setLoadError(extractErrorMessage(err))
+    }
+  }, [])
 
   useEffect(() => {
-    listCollections()
-      .then((data) => setCollections(data))
-      .catch((err: unknown) => setError(extractErrorMessage(err)))
-      .finally(() => setLoading(false))
-  }, [])
+    void load().finally(() => setLoading(false))
+  }, [load])
+
+  async function handleRetry () {
+    setRetrying(true)
+    await load()
+    setRetrying(false)
+  }
 
   // The backend rejects a collection whose native language is also a target,
   // so switching native drops it from the picked targets rather than leaving
@@ -46,8 +76,15 @@ function CollectionsListPage () {
     setSubmitting(true)
     try {
       const created = await createCollection(name, nativeLanguageCode, targetLanguageCodes)
-      setCollections((prev) => [...prev, created])
       setName('')
+      if (loadError !== null) {
+        // The list never loaded, so there is nothing to append to — but this
+        // POST just proved the server is reachable, so fetch the real list
+        // rather than rendering the one new row as if it were all of them.
+        await load()
+      } else {
+        setCollections((prev) => [...prev, created])
+      }
     } catch (err) {
       setError(extractErrorMessage(err))
     } finally {
@@ -101,7 +138,15 @@ function CollectionsListPage () {
         <button type="submit" disabled={submitting || targetLanguageCodes.length === 0}>Create</button>
       </form>
       {error && <p style={{ color: 'red' }}>{error}</p>}
-      {collections.length === 0 ? (
+      {loadError !== null && (
+        <p style={{ color: 'red' }}>
+          {loadError}{' '}
+          <button type="button" onClick={() => void handleRetry()} disabled={retrying}>
+            {retrying ? 'Retrying…' : 'Try again'}
+          </button>
+        </p>
+      )}
+      {loadError !== null ? null : collections.length === 0 ? (
         <p>No collections yet.</p>
       ) : (
         <ul>

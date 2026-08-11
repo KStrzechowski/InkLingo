@@ -1,6 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { defineConfig, loadEnv, type Plugin } from 'vite'
+// vitest/config's defineConfig is a superset of vite's — same config shape plus
+// the `test` field, so it type-checks without a second config file.
+import { defineConfig } from 'vitest/config'
+import { loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
 interface Manifest {
@@ -33,6 +36,12 @@ function originPattern (value: string | undefined): string | null {
 function writeManifest (env: Record<string, string>): Plugin {
   return {
     name: 'write-manifest',
+    // Build-only. Vitest runs a Vite dev server and fires closeBundle on every
+    // environment it creates, which without this would rewrite dist/manifest.json
+    // with the checked-in wildcard placeholders every time the suite runs —
+    // silently widening host_permissions on whatever build is loaded in Firefox.
+    // `npm run dev` is `vite build --watch`, so it stays covered.
+    apply: 'build',
     closeBundle () {
       const source = resolve(import.meta.dirname, 'manifest.json')
       const manifest = JSON.parse(readFileSync(source, 'utf8')) as Manifest
@@ -63,6 +72,13 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), writeManifest(env)],
+    test: {
+      environment: 'jsdom',
+      setupFiles: ['./test/setup.ts'],
+      // Narrowed from Vitest's default glob so it never reaches into dist/ or
+      // picks up anything but the suite. Mirrors frontend/vite.config.ts.
+      include: ['test/**/*.test.{ts,tsx}']
+    },
     // The popup is loaded from moz-extension://<uuid>/popup.html, so asset
     // URLs must not assume a server root.
     base: './',

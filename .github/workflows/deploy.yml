@@ -20,9 +20,9 @@ jobs:
   print-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
 
@@ -40,7 +40,7 @@ jobs:
 
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
@@ -53,7 +53,7 @@ jobs:
         working-directory: frontend
         run: npm run test:print
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-deploy
@@ -66,9 +66,9 @@ jobs:
   diff:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # Matches what the backend test suite is actually developed/run
           # against locally (context/foundation/test-plan.md §4) — was 22,
@@ -76,7 +76,7 @@ jobs:
           # deploy job below, this one isn't pinned to the Lambda runtime.
           node-version: 24
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ vars.AWS_DIFF_ROLE_ARN }}
           aws-region: eu-central-1
@@ -95,7 +95,7 @@ jobs:
       # branch-protection configuration required.
       - name: Create ephemeral Neon branch for backend tests
         id: neon-branch
-        uses: neondatabase/create-branch-action@v6
+        uses: neondatabase/create-branch-action@fb620d43d4c565abaf088b848a4e28e5c4ea4d9c # 6.3.1
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
           # No parent_branch — defaults to the project's actual primary
@@ -127,7 +127,7 @@ jobs:
 
       - name: Delete ephemeral Neon branch
         if: always()
-        uses: neondatabase/delete-branch-action@v3
+        uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3.2.1
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
           branch: deploy-${{ github.sha }}-${{ github.run_attempt }}
@@ -151,6 +151,18 @@ jobs:
         run: |
           npm ci
           npm test
+
+      # See pr-diff.yml for why this rides inside `diff` rather than earning its
+      # own job. Here it also picks up that job's automatic gate: `deploy` below
+      # `needs: diff`, so a red extension test skips the deploy without any
+      # branch-protection configuration.
+      - name: Run extension tests
+        working-directory: extension
+        run: |
+          npm ci
+          npm test
+          npm run lint
+          npm run build
 
       - name: Write frontend env from deployed stack outputs
         working-directory: infra
@@ -186,13 +198,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22 # matches the Lambda runtime (NODEJS_22_X)
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           # Set once, after GithubOidcStack is deployed: GitHub repo ->
           # Settings -> Secrets and variables -> Actions -> Variables.
