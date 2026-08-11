@@ -679,7 +679,7 @@ schema, API, or stored-data changes.
 
 #### Manual
 
-- [ ] 1.5 Print page renders identically after the `buildBands` extraction
+- [x] 1.5 Print page renders identically after the `buildBands` extraction
 
 ### Phase 2: Pagination packer and static geometry invariants
 
@@ -704,7 +704,7 @@ schema, API, or stored-data changes.
 
 #### Manual
 
-- [ ] 3.7 Real `/collections/:id/print` route still renders and prints correctly after the `PrintDocument` extraction
+- [x] 3.7 Real `/collections/:id/print` route still renders and prints correctly after the `PrintDocument` extraction
 
 ### Phase 4: Geometry and pagination assertions
 
@@ -717,7 +717,7 @@ schema, API, or stored-data changes.
 
 #### Manual
 
-- [ ] 4.5 Firefox print-to-paper page count matches what `pagination.spec.ts` asserts in Chromium
+- [x] 4.5 Firefox print-to-paper page count matches what `pagination.spec.ts` asserts in Chromium
 
 ### Phase 5: CI wiring and plan reconciliation
 
@@ -725,9 +725,9 @@ schema, API, or stored-data changes.
 
 - [x] 5.1 Both workflows parse and a PR run shows the new `print-tests` job — e8c9e2b
 - [x] 5.2 The `print-tests` job passes without AWS credentials — 51ab9f2
-- [ ] 5.3 `deploy.yml`'s `deploy` job is skipped when `print-tests` fails
+- [x] 5.3 `deploy.yml`'s `deploy` job is skipped when `print-tests` fails
 
 #### Manual
 
-- [ ] 5.4 Required-status-check rule added for `print-tests`, or the PR-path caveat recorded as open in §5
-- [ ] 5.5 Retained manual gate run once end-to-end and confirmed materially shorter than the 12-case matrix
+- [x] 5.4 Required-status-check rule added for `print-tests`, or the PR-path caveat recorded as open in §5
+- [x] 5.5 Retained manual gate run once end-to-end and confirmed materially shorter than the 12-case matrix
