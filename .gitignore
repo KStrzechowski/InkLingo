@@ -1,4 +1,9 @@
-/.claude
+# Agent config is local by default (the 10x-cli regenerates most of it), with
+# two exceptions: the quality hooks are project infrastructure and belong in
+# review alongside the checks they run (scripts/quality/, .githooks/).
+/.claude/*
+!/.claude/settings.json
+!/.claude/hooks/
 /.agents
 skills-lock.json
 CLAUDE.md

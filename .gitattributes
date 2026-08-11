@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Git runs hooks through sh even on Windows, and a CRLF shebang breaks it
+# ("bad interpreter"). Keep these LF regardless of the checkout platform.
+.githooks/* text eol=lf
+
