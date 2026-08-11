@@ -851,7 +851,7 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Manual
 
-- [ ] 6.3 PR shows the extension step inside `diff`; a deliberately broken test turns the check red
+- [x] 6.3 PR shows the extension step inside `diff`; a deliberately broken test turns the check red — bc5588c
 
 ### Phase 7: Close out the rollout
 
