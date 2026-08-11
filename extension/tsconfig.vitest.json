@@ -1,0 +1,17 @@
+{
+  // Same extend-and-include shape as frontend/tsconfig.vitest.json and
+  // backend/test/tsconfig.json: the app's own options, widened to cover test/
+  // so `tsc -b` actually type-checks the tests instead of skipping a directory
+  // no project includes.
+  //
+  // Unlike the frontend's, this one does not widen `types` — nothing in the
+  // extension's suite reads the filesystem, so the app's
+  // ["vite/client", "firefox-webext-browser"] carries over unchanged. The
+  // webext types are what let test/helpers/webext.ts describe the fake against
+  // the same global the source uses.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.vitest.tsbuildinfo"
+  },
+  "include": ["src", "test"]
+}

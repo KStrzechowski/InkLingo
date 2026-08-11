@@ -72,7 +72,7 @@ orchestrator updates Status as artifacts appear on disk.
 | 2 | AI usability + cross-user isolation | Confirm AI output is measurably usable and no endpoint lets one user reach another user's data | #3, #5 | empirical real-API script, backend integration tests (IDOR) | complete | context/changes/testing-ai-usability-cross-user-isolation/ |
 | 3 | Auth resilience | An expired/invalid token never surfaces as an opaque failure — it renews silently or drops the session cleanly | #4 | frontend unit/integration tests (bootstraps Vitest for `frontend/`) | complete | context/changes/testing-auth-resilience/ |
 | 4 | Print output correctness | Print/A4 layout changes are verifiable without a manual print-preview every time, in both OS themes | #2 | browser-free unit + static CSS-invariant checks, two-engine Playwright assertions (no pixel baselines), reduced manual paper gate | complete | context/changes/testing-print-output-correctness/ |
-| 5 | Frontend/extension logic coverage | The zero-coverage, highest-churn UI logic has tests for its documented edge cases | #6 | component/unit tests (extends Vitest; bootstraps a test runner for `extension/`) | not started | — |
+| 5 | Frontend/extension logic coverage | The zero-coverage, highest-churn UI logic has tests for its documented edge cases | #6 | component/unit tests (extends Vitest; bootstraps a test runner for `extension/`) | planned | context/changes/testing-frontend-extension-logic/ |
 
 **Status vocabulary** (fixed — parser literals):
 
