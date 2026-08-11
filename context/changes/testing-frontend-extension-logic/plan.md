@@ -834,8 +834,8 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Automated
 
-- [x] 5.1 Frontend tests pass: `cd frontend && npm test`
-- [x] 5.2 Frontend type-checks and lints clean: `cd frontend && npm run build && npm run lint`
+- [x] 5.1 Frontend tests pass: `cd frontend && npm test` — 762501d
+- [x] 5.2 Frontend type-checks and lints clean: `cd frontend && npm run build && npm run lint` — 762501d
 
 #### Manual
 
@@ -846,8 +846,8 @@ deployed by CI, so a bad extension build cannot reach a user through this pipeli
 
 #### Automated
 
-- [ ] 6.1 Workflow files parse (`actionlint` or `gh workflow view`)
-- [ ] 6.2 `cd extension && npm ci && npm test && npm run lint && npm run build` green locally
+- [x] 6.1 Workflow files parse (`actionlint` or `gh workflow view`)
+- [x] 6.2 `cd extension && npm ci && npm test && npm run lint && npm run build` green locally
 
 #### Manual
 

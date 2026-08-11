@@ -152,6 +152,18 @@ jobs:
           npm ci
           npm test
 
+      # See pr-diff.yml for why this rides inside `diff` rather than earning its
+      # own job. Here it also picks up that job's automatic gate: `deploy` below
+      # `needs: diff`, so a red extension test skips the deploy without any
+      # branch-protection configuration.
+      - name: Run extension tests
+        working-directory: extension
+        run: |
+          npm ci
+          npm test
+          npm run lint
+          npm run build
+
       - name: Write frontend env from deployed stack outputs
         working-directory: infra
         run: node scripts/write-frontend-env.mjs

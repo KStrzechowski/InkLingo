@@ -161,6 +161,25 @@ jobs:
           npm ci
           npm test
 
+      # The extension had no CI presence at all before test-plan.md §3 Phase 5 —
+      # no test, no lint, no build — so this is also the first automated proof
+      # that it still compiles. It rides inside `diff` rather than earning its
+      # own job the way print-tests did: it needs no credentials, no database
+      # and no browsers, so there is nothing here that would make the job
+      # unrunnable, and no second required status check to configure.
+      #
+      # `npm run build` warns that host_permissions keep their wildcard
+      # placeholders — expected, since the VITE_* values come from gitignored
+      # .env files that CI has no reason to write. The extension is loaded
+      # manually, never shipped from this pipeline.
+      - name: Run extension tests
+        working-directory: extension
+        run: |
+          npm ci
+          npm test
+          npm run lint
+          npm run build
+
       - name: Write frontend env from deployed stack outputs
         working-directory: infra
         run: node scripts/write-frontend-env.mjs
