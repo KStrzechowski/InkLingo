@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import CollectionsListPage from '../../src/pages/CollectionsListPage'
-import type { Collection } from '../../src/api/collections'
+// Aliased: the mocked API module below also exports a `createCollection`, and
+// the two must not shadow each other.
+import { createCollection as buildCollection } from '../helpers/collections'
 
 // Two things live here. The recovery cases exist because of the defect
 // context/foundation/lessons.md records under "Clearing a failure signal
@@ -21,18 +23,10 @@ vi.mock('../../src/api/collections', () => ({
 
 const { listCollections, createCollection } = await import('../../src/api/collections')
 
-let sequence = 0
-
-function collection (name: string, overrides: Partial<Collection> = {}): Collection {
-  sequence += 1
-  return {
-    id: `collection-${sequence}`,
-    name,
-    nativeLanguageCode: 'en',
-    targetLanguageCodes: ['pl'],
-    createdAt: '2026-08-01T00:00:00.000Z',
-    ...overrides
-  }
+// buildCollection returns a CollectionDetail, which is assignable wherever a
+// Collection is expected — the extra `entries` field is simply unused here.
+function collection (name: string) {
+  return buildCollection({ name })
 }
 
 async function renderPage (): Promise<void> {

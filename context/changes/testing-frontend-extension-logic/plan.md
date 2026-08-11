@@ -564,6 +564,23 @@ request the API would reject.
 5. Create is disabled with zero targets (`:101`) and enabled again once one is
    picked.
 
+### Addendum (added 2026-08-11 during impl-review, finding F2)
+
+Two behaviours shipped beyond the contract above, both because the retry-only
+design leaves a state worse than the one it fixes: a create that succeeds while
+the load is still broken would otherwise show the user *nothing*.
+
+1. **A create that succeeds while `loadError` is set refetches instead of
+   appending.** This is the option rejected during planning — brought back
+   deliberately narrowed: it fires only in the error state, never on the normal
+   path, and it is justified by evidence the plain version lacked, namely that
+   the POST just proved the server reachable.
+2. **The list section is hidden while `loadError` is set.** "No collections
+   yet." is a claim about the server that a page whose load failed cannot make —
+   the same class of lie as rendering one collection as the complete list.
+
+Both are covered by their own cases and by their own non-vacuity check.
+
 ### Success Criteria:
 
 #### Automated Verification:

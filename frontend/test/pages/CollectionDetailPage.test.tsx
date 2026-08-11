@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import CollectionDetailPage from '../../src/pages/CollectionDetailPage'
 import { createCollection, createEntry, createSentence, createTranslation } from '../helpers/collections'
+import { deferred } from '../helpers/deferred'
 import type { AddedEntryTranslation, CollectionDetail } from '../../src/api/collections'
 
 // FR-018's gap detection: a collection teaches a set of languages, an entry
@@ -25,22 +26,6 @@ vi.mock('../../src/api/collections', () => ({
 }))
 
 const { getCollection, addEntryTranslation } = await import('../../src/api/collections')
-
-interface Deferred<T> {
-  promise: Promise<T>
-  resolve: (value: T) => void
-  reject: (reason: unknown) => void
-}
-
-function deferred<T> (): Deferred<T> {
-  let resolve: (value: T) => void = () => {}
-  let reject: (reason: unknown) => void = () => {}
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
 
 async function renderPage (collection: CollectionDetail): Promise<void> {
   vi.mocked(getCollection).mockResolvedValue(collection)

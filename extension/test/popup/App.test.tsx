@@ -480,6 +480,43 @@ describe('popup in-flight races', () => {
     expect(screen.queryByRole('radio', { name: /A cat crossed the road/ })).not.toBeInTheDocument()
   })
 
+  // F1 from the p1-p7 impl-review. The entry lands in the collection it was
+  // saved to either way — what must not happen is the pre-await id being
+  // written back as "last used", silently undoing a switch made while the save
+  // was in flight.
+  it('does not rewrite the last-used collection when one is chosen mid-save', async () => {
+    const first = createCollection({ name: 'First' })
+    const second = createCollection({ name: 'Second' })
+    const pending = deferred<{ id: string, wordOrPhrase: string, sourceLanguageCode: string, createdAt: string }>()
+    await renderReady([first, second])
+    fake.handlers.translate = () => createTranslationResult({
+      languages: [createLanguage('en', {
+        variants: [createVariant('cat', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })]
+      })]
+    })
+    fake.handlers['save-entry'] = () => pending.promise
+
+    await translate('kot')
+    fireEvent.click(screen.getByRole('radio', { name: /The cat sleeps/ }))
+    fireEvent.click(saveButton())
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: second.id } })
+
+    await act(async () => {
+      pending.resolve({
+        id: 'entry-1',
+        wordOrPhrase: 'kot',
+        sourceLanguageCode: 'pl',
+        createdAt: '2026-08-01T00:00:00.000Z'
+      })
+      await pending.promise
+    })
+
+    expect(fake.store[LAST_COLLECTION_KEY]).toBe(second.id)
+    // The entry still went to the collection that was active when it was saved.
+    const sent = fake.sent.find((candidate) => candidate.type === 'save-entry')
+    expect(sent !== undefined && sent.type === 'save-entry' && sent.collectionId).toBe(first.id)
+  })
+
   // E-3. The tail of handleRegenerate used to write back the variant index it
   // read before the await, silently undoing a pick made while waiting.
   it('keeps a variant picked while its sentences were regenerating', async () => {

@@ -341,6 +341,8 @@ function App () {
 
     setBusy('save')
     setError(null)
+    generationRef.current += 1
+    const generation = generationRef.current
     try {
       const entry = await sendMessage({
         type: 'save-entry',
@@ -359,15 +361,28 @@ function App () {
           }))
         }
       })
-      await rememberCollection(activeCollection.id)
       const languageCount = picks.length === 1 ? '1 language' : `${picks.length} languages`
+      // Shown even if the user has moved on: it names the collection the entry
+      // actually landed in, so it stays true either way.
       setSaved(`Saved “${entry.wordOrPhrase}” to ${activeCollection.name} in ${languageCount}.`)
+      if (generationRef.current !== generation) {
+        // Switched collections while the save ran. The entry is safely stored,
+        // but the last-used pointer and the input box belong to the new choice
+        // now — writing the pre-await id back would silently undo the switch.
+        return
+      }
+      await rememberCollection(activeCollection.id)
       setText('')
       resetCapture()
     } catch (err) {
+      if (generationRef.current !== generation) {
+        return
+      }
       setError(errorText(err))
     } finally {
-      setBusy(null)
+      if (generationRef.current === generation) {
+        setBusy(null)
+      }
     }
   }
 
