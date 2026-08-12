@@ -23,8 +23,11 @@ const CLIENT_ID = 'testplaceholderclientid'
 export const SESSION_STORAGE_KEY = `oidc.user:${AUTHORITY}:${CLIENT_ID}`
 
 // Every backend call the frontend makes goes through apiClient's baseURL
-// (http://localhost:3000 under .env.test) to /api/*.
+// (http://localhost:3000 under .env.test) to /api/*. The two globs are
+// deliberately distinct: '**/api/collections' does not match a path with a
+// further segment, so a list stub never swallows a detail request.
 export const API_COLLECTIONS = '**/api/collections'
+export const API_COLLECTION_DETAIL = '**/api/collections/*'
 
 export interface SeedSessionOptions {
   email?: string

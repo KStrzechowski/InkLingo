@@ -59,6 +59,19 @@ jobs:
         working-directory: frontend
         run: npm run test:print
 
+      # App-level E2E (frontend/e2e). Deliberately a step in *this* job rather
+      # than a job of its own: it reuses the Playwright browsers and frontend
+      # deps already installed above, and — because `print-tests` is already a
+      # required status check on the PR-Needed ruleset — it is enforced the
+      # moment it lands, with no second context to register by hand. The cost is
+      # that an E2E failure reports under a job named for the print suite; split
+      # it out (and add the new context to the ruleset) if that gets confusing.
+      # Needs no secrets, no database and no Anthropic calls: the session is
+      # seeded into localStorage and /api/* is stubbed. See test-plan.md §5.
+      - name: Run app-level E2E tests
+        working-directory: frontend
+        run: npm run test:e2e
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: ${{ !cancelled() }}
         with:
