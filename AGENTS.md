@@ -32,6 +32,7 @@ InkLingo is a language-learning app in early scaffolding: a Fastify + TypeScript
 
 - Backend tests live in `backend/test/`, mirroring `src/` (e.g. `test/routes/root.test.ts`), and build a full app instance per file via `test/helper.ts`'s `build(t)` helper. Running a single file needs `FASTIFY_AUTOLOAD_TYPESCRIPT=1` — see `@backend/package.json`'s `test` script for the full invocation.
 - Frontend and extension tests live in `<app>/test/`, run with `npm test` (Vitest, configured on each app's existing `vite.config.ts`). `frontend/browser-tests/` is Playwright and runs separately via `npm run test:print`, never as part of `npm test`.
+- `frontend/e2e/` is the app-level Playwright suite (`npm run test:e2e`), separate from the print suite above and driven by its own `playwright.e2e.config.ts`. Read `frontend/e2e/E2E-RULES.md` and model new specs on `frontend/e2e/seed.spec.ts` before adding one — and check first that the risk actually needs a browser.
 - `context/foundation/test-plan.md` is the source of truth for what is worth testing: §2 the risk map, §5 the quality gates and where each is enforced.
 
 ## Local Quality Gates
