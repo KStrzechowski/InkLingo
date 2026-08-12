@@ -9,5 +9,8 @@
     // process.env.
     "types": ["vite/client", "node"]
   },
-  "include": ["browser-tests", "playwright.config.ts"]
+  // Both Playwright suites: browser-tests/ (the print harness) and e2e/ (the
+  // app-level specs). They share a runner and a tsconfig shape, so splitting
+  // them into two projects would buy nothing.
+  "include": ["browser-tests", "e2e", "playwright.config.ts", "playwright.e2e.config.ts"]
 }
