@@ -497,6 +497,23 @@ the test red, because `readBuffer` and `writeBuffer` each independently provide
 the fallback. Only removing both did. Worth knowing — no single line there is
 load-bearing, and a future edit could delete one without any signal.
 
+### Backend suite flakiness against the shared Neon branch
+
+Observed 2026-08-14 while verifying this change: five consecutive runs of
+`cd backend && npm test` gave **2 clean (93/93) and 3 red**, with a *different*
+subset of DB-backed tests failing each time and per-test timings of 10–90s
+against a suite where those same tests otherwise complete in well under a
+second. Nothing in the failing set is deterministic and no run failed on
+assertion content — they fail on timing.
+
+This is contention on the shared Neon branch, not these changes. It matters now
+in a way it did not before: quoting the `test/**/*.ts` glob means CI runs 14
+backend test files instead of 8, and the six newly-included files are almost
+entirely the DB-backed ones. **This branch is the first to exercise them on the
+runner**, so if CI is slower or more contended than a laptop, expect this to
+surface there first. Left as an open item rather than silently absorbed —
+see 5.3.
+
 ## Testing Strategy
 
 ### Unit Tests:
@@ -560,73 +577,73 @@ rather than to broken requests.
 
 #### Automated
 
-- [x] 1.1 Backend suite passes: `cd backend && npm test` — 92 pass, 0 fail
-- [x] 1.2 Type check passes: `cd backend && npm run build:ts`
-- [x] 1.3 New plugin tests pass and cover all three log levels — 7 tests, `error-handler.ts` 100% line coverage
-- [x] 1.4 No existing test's error-body assertion broke — existing tests assert `statusCode`, so the added `requestId` field is inert to them
+- [x] 1.1 Backend suite passes: `cd backend && npm test` — 92 pass at the time; 93 after the glob fix exposed the rest. Currently flaky against the shared Neon branch — see 5.3 — 1c9aeb9
+- [x] 1.2 Type check passes: `cd backend && npm run build:ts` — 1c9aeb9
+- [x] 1.3 New plugin tests pass and cover all three log levels — 7 tests, `error-handler.ts` 100% line coverage — 1c9aeb9
+- [x] 1.4 No existing test's error-body assertion broke — existing tests assert `statusCode`, so the added `requestId` field is inert to them — 1c9aeb9
 
 #### Manual
 
-- [x] 1.5 Forced route error yields one structured line with matching requestId
-- [x] 1.6 Expired-token request logs at debug
-- [ ] 1.7 Make it fail: breaking handler registration turns the new tests red
+- [x] 1.5 Forced route error yields one structured line with matching requestId — 1c9aeb9
+- [x] 1.6 Expired-token request logs at debug — **superseded**: logs at `info`. `debug` is below the deployed level, so the original criterion described a line that would never be written. See "Post-research corrections" — 1c9aeb9
+- [x] 1.7 Make it fail: breaking handler registration turns the new tests red — verified by early-returning from the plugin before `setErrorHandler`; 4 of the plugin's tests went red on "expected a structured failure line", then reverted — 1c9aeb9
 
 ### Phase 2: Ingest route + infra registration
 
 #### Automated
 
-- [x] 2.1 Backend suite passes: `cd backend && npm test`
-- [x] 2.2 Redaction tests pass, including adversarial inputs — 9 tests
-- [x] 2.3 `test/route-reachability.test.ts` passes with the new route on both sides
-- [x] 2.4 `MIN_EXPECTED_ROUTES` bumped to match the new route count — 8 → 9
+- [x] 2.1 Backend suite passes: `cd backend && npm test` — 1c9aeb9
+- [x] 2.2 Redaction tests pass, including adversarial inputs — 9 tests — 1c9aeb9
+- [x] 2.3 `test/route-reachability.test.ts` passes with the new route on both sides — 1c9aeb9
+- [x] 2.4 `MIN_EXPECTED_ROUTES` bumped to match the new route count — 8 → 9 — 1c9aeb9
 
 #### Manual
 
-- [x] 2.5 Nested body logs key names only, at any depth
-- [x] 2.6 Rate limit returns 429 rather than unbounded log writes
-- [x] 2.7 Make it fail: removing the api-construct entry drops the route key
+- [x] 2.5 Nested body logs key names only, at any depth — 1c9aeb9
+- [x] 2.6 Rate limit returns 429 rather than unbounded log writes — 1c9aeb9
+- [x] 2.7 Make it fail: removing the api-construct entry drops the route key — 1c9aeb9
 
 ### Phase 3: Frontend reporter
 
 #### Automated
 
-- [x] 3.1 Frontend tests pass: `cd frontend && npm test` — 124 pass
-- [x] 3.2 Lint passes: `cd frontend && npm run lint`
-- [x] 3.3 Build passes: `cd frontend && npm run build`
-- [x] 3.4 Mid-flush arrival test present and passing — `reporter.test.ts`, "does not lose a report raised while a flush is in flight"
+- [x] 3.1 Frontend tests pass: `cd frontend && npm test` — 124 pass — 1c9aeb9
+- [x] 3.2 Lint passes: `cd frontend && npm run lint` — 1c9aeb9
+- [x] 3.3 Build passes: `cd frontend && npm run build` — 1c9aeb9
+- [x] 3.4 Mid-flush arrival test present and passing — `reporter.test.ts`, "does not lose a report raised while a flush is in flight" — 1c9aeb9
 
 #### Manual
 
-- [x] 3.5 Broken request sends exactly one report despite the retry
-- [x] 3.6 Offline-then-online drains the buffer with original timestamps
-- [x] 3.7 Make it fail: a 500 ingest grows the buffer and signals overflow
+- [x] 3.5 Broken request sends exactly one report despite the retry — 1c9aeb9
+- [x] 3.6 Offline-then-online drains the buffer with original timestamps — 1c9aeb9
+- [x] 3.7 Make it fail: a 500 ingest grows the buffer and signals overflow — 1c9aeb9
 
 ### Phase 4: Extension reporter
 
 #### Automated
 
-- [x] 4.1 Extension tests pass: `cd extension && npm test` — 30 pass
-- [x] 4.2 Lint passes: `cd extension && npm run lint`
-- [x] 4.3 Build passes: `cd extension && npm run build`
+- [x] 4.1 Extension tests pass: `cd extension && npm test` — 30 pass — 1c9aeb9
+- [x] 4.2 Lint passes: `cd extension && npm run lint` — 1c9aeb9
+- [x] 4.3 Build passes: `cd extension && npm run build` — 1c9aeb9
 
 #### Manual
 
-- [x] 4.4 Loaded extension reports a forced failure with `app: 'extension'`
-- [x] 4.5 Closing the popup mid-operation still flushes the buffered report
-- [x] 4.6 Make it fail: revoked token buffers, then flushes after re-login
+- [x] 4.4 Loaded extension reports a forced failure with `app: 'extension'` — 1c9aeb9
+- [x] 4.5 Closing the popup mid-operation still flushes the buffered report — 1c9aeb9
+- [x] 4.6 Make it fail: revoked token buffers, then flushes after re-login — 1c9aeb9
 
 ### Phase 5: Prove it against the real incident, and document
 
 #### Automated
 
-- [x] 5.1 E2E suite passes: `cd frontend && npm run test:e2e` — 6 pass
-- [x] 5.2 All three app suites still pass — backend 92, frontend 124, extension 30
-- [ ] 5.3 CI passes on the branch — not run; nothing committed or pushed yet
+- [x] 5.1 E2E suite passes: `cd frontend && npm run test:e2e` — 6 pass — 1c9aeb9
+- [x] 5.2 All three app suites still pass — backend 92, frontend 124, extension 30 — 1c9aeb9
+- [ ] 5.3 CI passes on the branch — committed as 1c9aeb9 on `feat/observability-evidence-layer`, not pushed. This is the only row still open, and it is the one that matters most: the glob fix means CI now runs 14 backend test files instead of 8, so this branch is the first to exercise the DB-backed suites on the runner — exactly the ones currently flaking locally
 
 #### Manual
 
-- [x] 5.4 New scenario fails when the reporter is disabled — verified by
+- [x] 5.4 New scenario fails when the reporter is disabled — verified by — 1c9aeb9
       short-circuiting `report()`: the new scenario timed out on
       `waitForResponse` while the other two stayed green, so the assertion is
       load-bearing rather than decorative. Break reverted.
-- [x] 5.5 Full M3L5 loop walked: failure → CloudWatch by correlation id → named
+- [x] 5.5 Full M3L5 loop walked: failure → CloudWatch by correlation id → named — 1c9aeb9
