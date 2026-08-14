@@ -31,5 +31,9 @@ declare module 'fastify' {
 
   export interface FastifyRequest {
     authUser: AuthUser;
+    // Set per request by plugins/error-handler.ts, returned on every response
+    // as x-request-id, and echoed into each structured failure line — the one
+    // value that joins "a user says it broke" to a log entry.
+    correlationId: string;
   }
 }

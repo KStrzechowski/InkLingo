@@ -122,7 +122,13 @@ export class ApiConstruct extends Construct {
           apigatewayv2.CorsHttpMethod.POST,
           apigatewayv2.CorsHttpMethod.OPTIONS
         ],
-        allowHeaders: ['authorization', 'content-type']
+        allowHeaders: ['authorization', 'content-type'],
+        // Without this the browser hides x-request-id from page JS, so a
+        // client error report can never carry the correlation id that joins
+        // it to the backend's own log line for the same failure. The local
+        // path needs the matching @fastify/cors entry (backend/src/plugins/
+        // cors.ts).
+        exposeHeaders: ['x-request-id']
       }
     });
 
@@ -188,6 +194,15 @@ export class ApiConstruct extends Construct {
     // /api/collections/{id}, so neither of the entries above covers it.
     this.httpApi.addRoutes({
       path: '/api/collections/{id}/entries/{entryId}/translations',
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration
+    });
+
+    // Where the frontend and extension deliver their buffered error reports.
+    // Authenticated like the rest of /api — a client whose session is dead
+    // buffers instead, and flushes once it recovers.
+    this.httpApi.addRoutes({
+      path: '/api/client-errors',
       methods: [apigatewayv2.HttpMethod.POST],
       integration
     });

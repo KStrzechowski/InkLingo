@@ -35,6 +35,17 @@ InkLingo is a language-learning app in early scaffolding: a Fastify + TypeScript
 - `frontend/e2e/` is the app-level Playwright suite (`npm run test:e2e`), separate from the print suite above and driven by its own `playwright.e2e.config.ts`. Read `frontend/e2e/E2E-RULES.md` and model new specs on `frontend/e2e/seed.spec.ts` before adding one — and check first that the risk actually needs a browser.
 - `context/foundation/test-plan.md` is the source of truth for what is worth testing: §2 the risk map, §5 the quality gates and where each is enforced.
 
+## Error Evidence (Observability)
+
+When something fails, this is where the evidence lands. Read before changing anything under `*/src/observability/`, `backend/src/plugins/error-handler.ts`, or `backend/src/routes/api/client-errors/`.
+
+- **Correlation id.** `backend/src/plugins/error-handler.ts` stamps every response — success or failure — with `x-request-id`, and repeats it as `requestId` in the JSON error body. That id is what joins a user's "it broke" to a log line. Both CORS layers must expose the header: `backend/src/plugins/cors.ts` for local, `exposeHeaders` in `infra/lib/constructs/api-construct.ts` for deployed.
+- **Log levels**: 5xx → `error` with stack; non-401 4xx → `warn` without; 401 → `info`. **The deployed level is pino's default `info`** — `backend/src/server.ts` is `Fastify({ logger: true })` and the Lambda runs that file via `run.sh`, so `package.json`'s `-l info` never applies and nothing below `info` is ever written in production. Pick any new level against that floor; a line at `debug` is a line that does not exist. Request-log noise is handled at the source with `disableRequestLogging`, not by demoting failures.
+- **Never log** the Authorization header, a token, or a request/response body. The payloads on these routes are user vocabulary data.
+- **Client reports** go to `POST /api/client-errors`, authenticated like the rest of `/api`. The frontend and extension each buffer reports (`localStorage`; `browser.storage.local` in the extension, because Firefox destroys the popup document on focus loss) and flush on the next successful authenticated request. That buffer is not an optimization — it is the only way a failure during a dead session is ever seen, which is the incident `lessons.md` records for 2026-08-04.
+- **Reports carry key names, never values.** `*/src/observability/bodyKeys.ts` is where that promise is made; `backend/.../client-errors/redact.ts` only bounds what arrives and cannot tell a key from a mislabelled value. Widening either is a data-handling decision, not a refactor.
+- **A reporter that silently stops reporting is the failure mode.** Overflow and age-out emit their own report plus a `console.warn` rather than dropping quietly (`lessons.md`, "A quality gate that can silently not run is worse than no gate").
+
 ## Local Quality Gates
 
 Three layers run before CI. Routing for all three lives in `scripts/quality/checks.mjs` — add a risk area there once and every layer picks it up.

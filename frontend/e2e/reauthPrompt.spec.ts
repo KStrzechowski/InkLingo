@@ -1,5 +1,17 @@
 import { expect, test } from '@playwright/test'
+import type { Response } from '@playwright/test'
 import { API_COLLECTIONS, seedSession } from './support/session'
+
+const API_CLIENT_ERRORS = '**/api/client-errors'
+
+interface DeliveredReport {
+  eventId: string
+  app: string
+  name: string
+  message: string
+  routePath?: string
+  occurredAt: string
+}
 
 // Risk #4 (context/foundation/test-plan.md §2): "An expired or invalid auth
 // token is sent with a request and the failure surfaces as an opaque CORS error
@@ -67,4 +79,66 @@ test('a rejected token drops the session to the signed-out view', async ({ page 
   // rather than a signed-in shell over an API that rejects every call.
   await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible()
   await expect(page.getByText(`Signed in as ${email}`)).toBeHidden()
+})
+
+// The evidence half of the same risk, and the reason the client buffers at all.
+//
+// The incident this reproduces (lessons.md, 2026-08-04) was expensive because
+// it left no trace: the failure was invisible to the server, since the request
+// never reached it, and invisible to us, since the browser only said "CORS".
+// The ingest route is authenticated like everything else under /api, so a
+// client in this state cannot report at the moment it happens — it has to
+// survive until a working session returns. This asserts exactly that, and it
+// is the assertion that goes red if the buffer is ever replaced with a
+// fire-and-forget POST.
+test('a failure during a dead session is still delivered once the session recovers', async ({ page }) => {
+  await seedSession(page)
+
+  const delivered: DeliveredReport[] = []
+  await page.route(API_CLIENT_ERRORS, async (route) => {
+    const body = route.request().postDataJSON() as { reports: DeliveredReport[] }
+    delivered.push(...body.reports)
+    // Echo the ids back, as the real route does — the client drains exactly
+    // what was acknowledged.
+    await route.fulfill({ json: { accepted: body.reports.map((report) => report.eventId) } })
+  })
+
+  // Phase one: the session is unusable. Same shape as the first test — a
+  // request blocked before any status can be read.
+  await page.route(API_COLLECTIONS, async (route) => {
+    await route.abort()
+  })
+
+  await page.goto('/')
+  await expect(page.getByRole('alert')).toBeVisible()
+
+  // Nothing could be delivered while the session was dead. If this is ever
+  // non-empty, the reporter is posting into a route that cannot accept it.
+  expect(delivered).toHaveLength(0)
+
+  // Phase two: the session recovers. The next successful authenticated request
+  // is what drains the buffer.
+  await page.unroute(API_COLLECTIONS)
+  await page.route(API_COLLECTIONS, async (route) => {
+    await route.fulfill({ json: { collections: [] } })
+  })
+
+  // waitForResponse, not waitForRequest: the route handler above records the
+  // batch as it fulfills, so waiting on the request alone would race the
+  // recording.
+  const delivery: Promise<Response> = page.waitForResponse(
+    (response) => response.url().includes('/api/client-errors') && response.request().method() === 'POST'
+  )
+  await page.reload()
+  await delivery
+
+  // The business outcome: the failure that happened while nobody could see it
+  // is now on the server, named, and timestamped when it actually occurred.
+  expect(delivered.length).toBeGreaterThan(0)
+  const report = delivered[0]
+  expect(report.app).toBe('frontend')
+  expect(report.routePath).toContain('/api/collections')
+  // Not the delivery time — a report stamped on arrival would place the
+  // incident minutes after it happened.
+  expect(Date.parse(report.occurredAt)).toBeLessThanOrEqual(Date.now())
 })
