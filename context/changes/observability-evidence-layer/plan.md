@@ -638,7 +638,7 @@ rather than to broken requests.
 
 - [x] 5.1 E2E suite passes: `cd frontend && npm run test:e2e` — 6 pass — 1c9aeb9
 - [x] 5.2 All three app suites still pass — backend 92, frontend 124, extension 30 — 1c9aeb9
-- [ ] 5.3 CI passes on the branch — committed as 1c9aeb9 on `feat/observability-evidence-layer`, not pushed. This is the only row still open, and it is the one that matters most: the glob fix means CI now runs 14 backend test files instead of 8, so this branch is the first to exercise the DB-backed suites on the runner — exactly the ones currently flaking locally
+- [x] 5.3 CI passes on the branch — PR #8, run 31792925351: `tests 93 / pass 93 / fail 0`, both jobs green. Confirms the glob fix on the runner (93 tests, not the ~40 that 8 files yielded) and that the DB-backed suites — first ever run in CI — passed there. The flake described above did **not** reproduce on the runner, so it is local-environment only. Merged as 861cb97
 
 #### Manual
 
