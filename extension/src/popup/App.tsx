@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { sendMessage } from '../messages.ts'
+import { reportFromPopup, sendMessage } from '../messages.ts'
 import { languageLabel } from '../languages.ts'
 import { useSpeech, type Speech } from '../useSpeech.ts'
 import type { Collection, TranslationLanguage } from '../types.ts'
@@ -228,6 +228,19 @@ function App () {
       if (generationRef.current !== generation) {
         return
       }
+      // Counted here, not in render: a language with no variants renders the
+      // "Nothing came back" line on every re-render, and this is a
+      // once-per-result fact. A 200 that is useless to the user is invisible
+      // to every other layer — the request succeeded and the body parsed.
+      // lessons.md measured this class at ~9% of live calls.
+      const empty = result.languages.filter((language) => language.variants.length === 0)
+      if (empty.length > 0) {
+        reportFromPopup({
+          name: 'DegradedAiResult',
+          message: `translate returned no variants for ${String(empty.length)} of ${String(result.languages.length)} language(s)`,
+          routePath: `ai:translate:${empty.map((language) => language.languageCode).join(',')}`
+        })
+      }
       setCapture({ input, wordOrPhrase: result.normalizedNativeText, languages: result.languages })
       setSelections(initialSelections(result.languages))
     } catch (err) {
@@ -276,6 +289,16 @@ function App () {
         .find((candidate) => candidate.languageCode === languageCode)
         ?.variants.find((candidate) => sameMeaning(candidate.meaningText, selected.meaningText))
       if (fresh === undefined) {
+        // A 200 that is useless to the user. Nothing else in the system can
+        // see this: the request succeeded, so no interceptor fires, and the
+        // response parsed fine. lessons.md measured this class at ~9% of live
+        // calls ("A stubbed AI client cannot tell you the model's output is
+        // usable") — reporting it is the only way that number stays known.
+        reportFromPopup({
+          name: 'DegradedAiResult',
+          message: 'regenerate returned no matching sense for the selected meaning',
+          routePath: `ai:regenerate:${languageCode}`
+        })
         setError(`No new ${languageLabel(languageCode)} sentences came back for this meaning — try again.`)
         return
       }
@@ -468,7 +491,11 @@ function App () {
                 {/* One reason line per language, not per row — the popup is
                     380px wide and a block can hold several variants and
                     several sentences. */}
-                {speech.ready && !speech.hasVoice(language.languageCode) && (
+                {speech.loadFailed ? (
+                  <p className="muted">
+                    Audio playback is unavailable — the voice list could not be read.
+                  </p>
+                ) : speech.ready && !speech.hasVoice(language.languageCode) && (
                   <p className="muted">
                     No {languageLabel(language.languageCode)} voice is installed on this computer, so playback is unavailable here.
                   </p>

@@ -10,6 +10,8 @@
 // shared package between its apps, the same reason languages.ts exists three
 // times (see CLAUDE.md's Architecture section).
 
+import { report } from './observability/reporter'
+
 // Firefox returns an empty voice list from the first getVoices() call and
 // only fills it in by the time 'voiceschanged' fires (measured 2026-08-03:
 // first call [], second call en + pl). Without the event a cold browser
@@ -104,6 +106,17 @@ export function speak (text: string, voice: SpeechSynthesisVoice, handlers: Spea
       handlers.onEnd()
       return
     }
+    // Reported here rather than at the useSpeech call site: this is where the
+    // engine's own reason (`event.error`) exists. It arrives as a callback on
+    // the utterance — no request, so the axios hook never sees it; not a window
+    // event, so globalHandlers never sees it either. Without this it is
+    // invisible everywhere except the user's screen.
+    report({
+      name: 'SpeechSynthesisError',
+      message: event.error,
+      routePath: 'speech:utterance',
+      request: { bodyKeys: [voice.lang] }
+    })
     handlers.onError(`Could not play this audio (${event.error}).`)
   }
   speech.speak(utterance)

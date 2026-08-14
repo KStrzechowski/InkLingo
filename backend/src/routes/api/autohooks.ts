@@ -21,7 +21,10 @@ const authHooks: FastifyPluginAsync = async (fastify): Promise<void> => {
     try {
       payload = await fastify.jwtVerifier.verify(token)
     } catch (err) {
-      fastify.log.warn({ err }, 'jwt verification failed')
+      // request.log, not fastify.log: the root logger emits no reqId and no
+      // correlationId, so this line — the one carrying *why* the token was
+      // rejected — could not be joined to the 401 it caused.
+      request.log.warn({ err, requestId: request.correlationId }, 'jwt verification failed')
       return reply.unauthorized()
     }
 

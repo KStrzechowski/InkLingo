@@ -32,6 +32,7 @@ export function createFakeUser (options: FakeUserOptions = {}): User {
 export function createFakeUserManager () {
   const userLoadedListeners = new Set<(user: User) => void>()
   const userUnloadedListeners = new Set<() => void>()
+  const silentRenewErrorListeners = new Set<(err: Error) => void>()
 
   return {
     getUser: vi.fn(async (): Promise<User | null> => null),
@@ -49,6 +50,15 @@ export function createFakeUserManager () {
       }),
       removeUserUnloaded: vi.fn((listener: () => void) => {
         userUnloadedListeners.delete(listener)
+      }),
+      // automaticSilentRenew's timer path reports failure only through this
+      // event — oidc-client-ts swallows it otherwise. The fake carried no
+      // stub for it, which is a fair mirror of the app: neither subscribed.
+      addSilentRenewError: vi.fn((listener: (err: Error) => void) => {
+        silentRenewErrorListeners.add(listener)
+      }),
+      removeSilentRenewError: vi.fn((listener: (err: Error) => void) => {
+        silentRenewErrorListeners.delete(listener)
       })
     },
     // AuthProvider subscribes through the events API above and never calls
@@ -59,6 +69,9 @@ export function createFakeUserManager () {
     },
     emitUserUnloaded () {
       for (const listener of userUnloadedListeners) listener()
+    },
+    emitSilentRenewError (err: Error) {
+      for (const listener of silentRenewErrorListeners) listener(err)
     }
   }
 }

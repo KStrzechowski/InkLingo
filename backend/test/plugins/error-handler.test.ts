@@ -175,6 +175,31 @@ test('the Authorization header never reaches a log line', async (t) => {
   assert.ok(!serialized.includes(token), 'a token must never be written to a log')
 })
 
+test('a 404 is structured and correlated, not a bare info string', async (t) => {
+  const { fastify, lines } = await buildWithCollectedLogs()
+  t.after(() => void fastify.close())
+
+  const res = await fastify.inject({ method: 'GET', url: '/no-such-route' })
+
+  assert.equal(res.statusCode, 404)
+
+  const body = JSON.parse(res.payload) as { requestId: string, error: string }
+  const header = res.headers['x-request-id']
+
+  // Fastify's default 404 sends a plain object rather than an Error, so it
+  // never reached setErrorHandler — while the onSend hook still stamped an
+  // x-request-id. The client got an id that matched no log line anywhere, so
+  // searching for it came back empty and read as "no such failure".
+  assert.equal(body.requestId, header)
+  assert.equal(body.error, 'Not Found')
+
+  const line = lines.find((entry) => entry.msg === 'route not found')
+  assert.ok(line !== undefined, 'a 404 must leave a structured line')
+  assert.equal(line.requestId, header)
+  assert.equal(line.statusCode, 404)
+  assert.equal(line.level, WARN)
+})
+
 test('a successful response also carries a correlation id', async (t) => {
   const { fastify } = await buildWithCollectedLogs()
   t.after(() => void fastify.close())

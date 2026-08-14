@@ -91,4 +91,51 @@ export default fp<ErrorHandlerPluginOptions>(async (fastify) => {
       requestId: request.correlationId
     })
   })
+
+  // Fastify's default 404 sends a plain object, not an Error, so it never
+  // reaches setErrorHandler above. The onSend hook still stamps x-request-id,
+  // which made it worse than useless: the client got a correlation id that
+  // matched no log line anywhere, so searching for it came back empty and read
+  // as "no such failure". A 404 is also the shape a missing API Gateway route
+  // takes (lessons.md), which is exactly when you want to find it.
+  fastify.setNotFoundHandler((request, reply) => {
+    const context = {
+      requestId: request.correlationId,
+      method: request.method,
+      routePath: request.url,
+      statusCode: 404,
+      userId: request.authUser?.id
+    }
+    request.log.warn(context, 'route not found')
+
+    void reply.status(404).send({
+      statusCode: 404,
+      error: 'Not Found',
+      message: `Route ${request.method}:${request.url} not found`,
+      requestId: request.correlationId
+    })
+  })
 }, { name: 'error-handler' })
+
+// A boot failure in server.ts's top-level await, or any floating promise that
+// rejects after a response is sent, kills the container. Node's default prints
+// a raw stack to stderr — not pino JSON, no correlation id, nothing that
+// CloudWatch Insights can query. These make the last thing the process ever
+// says match the shape of everything else it said.
+export function installProcessHandlers (log: {
+  error: (obj: object, msg: string) => void
+}): void {
+  process.on('unhandledRejection', (reason: unknown) => {
+    log.error(
+      { err: reason instanceof Error ? reason : new Error(String(reason)) },
+      'unhandled rejection'
+    )
+  })
+  process.on('uncaughtException', (err: Error) => {
+    log.error({ err }, 'uncaught exception')
+    // Deliberately not swallowed: after an uncaught exception the process is
+    // in an undefined state and Lambda should replace the container. Logging
+    // first is the only thing worth adding.
+    process.exit(1)
+  })
+}

@@ -159,7 +159,15 @@ function CollectionDetailPage () {
       <p>
         <small>{collection.nativeLanguageCode} → {collection.targetLanguageCodes.join(', ')}</small>
       </p>
-      {silentCodes.length > 0 && (
+      {speech.loadFailed ? (
+        <p>
+          <small>
+            Audio playback is unavailable — the voice list could not be read from
+            this browser. This is not a missing-voice problem, so installing one
+            will not help; reloading might.
+          </small>
+        </p>
+      ) : silentCodes.length > 0 && (
         <p>
           <small>
             No voice is installed on this computer for {silentCodes.map(languageLabel).join(', ')},
