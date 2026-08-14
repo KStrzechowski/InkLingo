@@ -6,6 +6,8 @@
 // speak(text, voice, handlers) is deliberately the seam a cloud fallback
 // would slot in behind: no call site learns where the audio came from.
 
+import { reportFromPopup } from './messages.ts'
+
 // Firefox returns an empty voice list from the first getVoices() call and
 // only fills it in by the time 'voiceschanged' fires (measured 2026-08-03:
 // first call [], second call en + pl). Without the event a cold browser
@@ -100,6 +102,14 @@ export function speak (text: string, voice: SpeechSynthesisVoice, handlers: Spea
       handlers.onEnd()
       return
     }
+    // Arrives as a callback on the utterance: no request for apiFetch to see,
+    // and not a window event either. Invisible everywhere but the user's
+    // screen until reported. Routed through the background script (messages.ts).
+    reportFromPopup({
+      name: 'SpeechSynthesisError',
+      message: event.error,
+      routePath: 'speech:utterance'
+    })
     handlers.onError(`Could not play this audio (${event.error}).`)
   }
   speech.speak(utterance)

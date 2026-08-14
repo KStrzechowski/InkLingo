@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cancel, findVoice, loadVoices, speak } from './speech.ts'
+import { reportFromPopup } from './messages.ts'
 
 // Plain .ts, no JSX: a file exporting a hook next to a component trips
 // oxlint's react/only-export-components (see context/foundation/lessons.md).
@@ -15,6 +16,11 @@ export interface Speech {
   // language", and treating it as such disables every control on a cold
   // browser.
   ready: boolean
+  // True when the voice list could not be read at all. Distinct from "loaded,
+  // but none for this language": the old code collapsed both into an empty
+  // list, so a failed load rendered as "No X voice is installed on this
+  // computer" — a confident, specific, and wrong diagnosis.
+  loadFailed: boolean
   hasVoice: (languageCode: string) => boolean
   speakingKey: string | null
   play: (key: string, text: string, languageCode: string) => void
@@ -24,6 +30,7 @@ export interface Speech {
 
 export function useSpeech (): Speech {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[] | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [speakingKey, setSpeakingKey] = useState<string | null>(null)
   const [error, setError] = useState<SpeechError | null>(null)
   // Every utterance is tagged with the token it started under. cancel() fires
@@ -40,10 +47,19 @@ export function useSpeech (): Speech {
           setVoices(resolved)
         }
       })
-      .catch(() => {
-        if (!cancelled) {
-          setVoices([])
+      .catch((err: unknown) => {
+        if (cancelled) {
+          return
         }
+        // Through the background script, not directly — see messages.ts.
+        reportFromPopup({
+          name: err instanceof Error ? err.name : 'VoiceLoadError',
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+          routePath: 'speech:loadVoices'
+        })
+        setLoadFailed(true)
+        setVoices([])
       })
 
     // Firefox destroys the popup document when it loses focus, and speech
@@ -97,5 +113,5 @@ export function useSpeech (): Speech {
     })
   }, [voices])
 
-  return { ready: voices !== null, hasVoice, speakingKey, play, stop, error }
+  return { ready: voices !== null, loadFailed, hasVoice, speakingKey, play, stop, error }
 }

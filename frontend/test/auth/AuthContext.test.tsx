@@ -4,6 +4,7 @@ import { AuthProvider } from '../../src/auth/AuthContext'
 import { useAuth } from '../../src/auth/useAuth'
 import { createFakeUser } from '../helpers/oidc'
 import type { FakeUserManager } from '../helpers/oidc'
+import { flush, resetForTests, type BufferedReport } from '../../src/observability/reporter'
 
 // Mocking oidc-client-ts rather than cognito.ts leaves the real getFreshUser
 // in the path, so these cases exercise the provider *and* the renewal it
@@ -41,6 +42,9 @@ function renderProvider () {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  // Reports persist in localStorage, so without this a report raised by one
+  // case is delivered during another and the counts stop meaning anything.
+  resetForTests()
 })
 
 describe('AuthProvider', () => {
@@ -109,5 +113,69 @@ describe('AuthProvider', () => {
 
     expect(state.manager.events.removeUserLoaded).toHaveBeenCalledTimes(1)
     expect(state.manager.events.removeUserUnloaded).toHaveBeenCalledTimes(1)
+    expect(state.manager.events.removeSilentRenewError).toHaveBeenCalledTimes(1)
+  })
+
+  // The other half of the blind spot: getFreshUser's own renewal, on the path
+  // taken when a page is opened with an already-expired token. Its catch ends
+  // the session, which destroys the evidence — so the report has to happen
+  // before removeUser().
+  it('reports a failed renewal before dropping the session', async () => {
+    state.manager.getUser.mockResolvedValue(createFakeUser({ expired: true }))
+    state.manager.signinSilent.mockRejectedValue(new Error('refresh token revoked'))
+
+    renderProvider()
+    await screen.findByText('signed out')
+
+    const batches: BufferedReport[][] = []
+    await flush(async (reports) => {
+      batches.push(reports)
+      return reports.map((entry) => entry.eventId)
+    })
+
+    expect(batches[0]).toHaveLength(1)
+    expect(batches[0][0].message).toBe('refresh token revoked')
+    expect(batches[0][0].routePath).toBe('auth:signinSilent')
+    // The session still ends — this adds evidence, it does not change behavior.
+    expect(state.manager.removeUser).toHaveBeenCalledTimes(1)
+  })
+
+  // automaticSilentRenew (cognito.ts) renews on a timer. When that path fails,
+  // oidc-client-ts raises this event and does nothing else — so before this
+  // subscriber existed, a long-open tab could quietly stop working with no
+  // trace anywhere. This is the failure the evidence layer was built for.
+  it('reports a silent-renew failure that the library would otherwise swallow', async () => {
+    state.manager.getUser.mockResolvedValue(null)
+    renderProvider()
+    await screen.findByText('signed out')
+
+    act(() => {
+      state.manager.emitSilentRenewError(new Error('token endpoint unreachable'))
+    })
+
+    const batches: BufferedReport[][] = []
+    await flush(async (reports) => {
+      batches.push(reports)
+      return reports.map((entry) => entry.eventId)
+    })
+
+    expect(batches[0]).toHaveLength(1)
+    expect(batches[0][0].message).toBe('token endpoint unreachable')
+    expect(batches[0][0].routePath).toBe('auth:silentRenewError')
+  })
+
+  it('does not treat a failed renewal as a logout on its own', async () => {
+    state.manager.getUser.mockResolvedValue(createFakeUser({ email: 'still@example.com' }))
+    renderProvider()
+    await screen.findByText('still@example.com')
+
+    act(() => {
+      state.manager.emitSilentRenewError(new Error('transient blip'))
+    })
+
+    // A renewal failing is evidence, not a verdict. oidc-client-ts raises
+    // userUnloaded separately when the session actually ends; signing the user
+    // out here would turn a recoverable blip into a forced re-login.
+    expect(screen.getByText('still@example.com')).toBeInTheDocument()
   })
 })

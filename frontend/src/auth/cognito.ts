@@ -1,4 +1,5 @@
 import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts'
+import { report } from '../observability/reporter'
 
 const userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID
 const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID
@@ -54,7 +55,18 @@ export async function getFreshUser (): Promise<User | null> {
   // A page load fires several requests at once; without this each one would
   // start its own refresh-token grant against Cognito.
   renewal ??= userManager.signinSilent()
-    .catch(async () => {
+    .catch(async (err: unknown) => {
+      // Reported before the session is dropped, because dropping it destroys
+      // the evidence. This catch cannot tell "refresh token genuinely expired"
+      // from "Cognito had a bad minute" — both end the session identically, and
+      // until this report existed the difference was invisible. It is the
+      // failure the evidence layer was built for and the one it could not see.
+      report({
+        name: err instanceof Error ? err.name : 'SilentRenewError',
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        routePath: 'auth:signinSilent'
+      })
       // Refresh token expired too (30 days by default) or was revoked — the
       // session is genuinely over. removeUser() raises userUnloaded, which
       // AuthProvider listens for to drop back to the logged-out view.

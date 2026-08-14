@@ -1,5 +1,6 @@
 import Fastify from 'fastify'
 import app from './app.ts'
+import { installProcessHandlers } from './plugins/error-handler.ts'
 
 const fastify = Fastify({
   // Default pino level, `info` — the deployed level, since the Lambda runs
@@ -15,6 +16,10 @@ const fastify = Fastify({
   // requests worth reading about.
   disableRequestLogging: true
 })
+
+// Before register: a plugin throwing during boot is exactly one of the cases
+// this exists to make legible.
+installProcessHandlers(fastify.log)
 
 await fastify.register(app)
 await fastify.ready()

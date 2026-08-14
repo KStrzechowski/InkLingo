@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { type FastifyInstance } from 'fastify'
+import { type FastifyInstance, type FastifyBaseLogger } from 'fastify'
 import { type FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { NeonDbError } from '@neondatabase/serverless'
 import { SUPPORTED_LANGUAGE_CODES } from '../../../languages.ts'
@@ -41,8 +41,16 @@ function hasDuplicates (codes: string[]): boolean {
 // Wraps the Anthropic call in the request timeout and turns any failure into
 // null, so callers reply with a clean error instead of leaking an SDK
 // exception. Shared by the capture route and FR-018's per-entry backfill.
+// Takes the *request's* logger, not fastify.log. This is the line carrying the
+// actual cause — a timeout, a 529, a malformed tool_use block — while the 502
+// the caller returns carries only the generic "could not generate a
+// translation". Logged through the root logger it had no reqId and no
+// correlationId, so the id the user could quote pointed at the useless half of
+// the pair and the informative half was unfindable.
 async function generateWithTimeout (
   fastify: FastifyInstance,
+  log: FastifyBaseLogger,
+  correlationId: string,
   params: Omit<GenerateTranslationParams, 'signal'>
 ): Promise<TranslationResult | null> {
   const controller = new AbortController()
@@ -50,7 +58,7 @@ async function generateWithTimeout (
   try {
     return await generateTranslation(fastify.anthropicClient, { ...params, signal: controller.signal })
   } catch (err) {
-    fastify.log.error({ err }, 'anthropic translate call failed')
+    log.error({ err, requestId: correlationId }, 'anthropic translate call failed')
     return null
   } finally {
     clearTimeout(timeout)
@@ -230,7 +238,7 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
     // One call covers every target language: the response is all-or-nothing,
     // so a failure blanks the whole capture rather than one language's
     // section. Decided during Phase 5 implementation — see change.md.
-    const result = await generateWithTimeout(fastify, {
+    const result = await generateWithTimeout(fastify, request.log, request.correlationId, {
       text,
       nativeLanguageCode: collection.native_language_code,
       targetLanguageCodes
@@ -380,7 +388,7 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       return reply.conflict('this entry already has a translation in that language')
     }
 
-    const result = await generateWithTimeout(fastify, {
+    const result = await generateWithTimeout(fastify, request.log, request.correlationId, {
       text: entry.word_or_phrase,
       nativeLanguageCode: collection.native_language_code,
       targetLanguageCodes: [languageCode]

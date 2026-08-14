@@ -142,6 +142,12 @@ async function run (message: Message): Promise<unknown> {
         `/api/collections/${message.collectionId}/entries`,
         message.entry
       )
+    case 'report-error':
+      // A failure the popup saw itself — a render crash, a storage read, a
+      // degraded AI result. It never touched the network, so nothing else in
+      // this file would ever have seen it.
+      await report({ ...message.report })
+      return null
   }
 }
 

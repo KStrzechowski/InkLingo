@@ -10,6 +10,17 @@ export interface CreateEntryBody {
   sentences: Array<{ languageCode: string, sentenceText: string, nativeGlossText: string }>
 }
 
+// What the popup can say about a failure it saw itself. Deliberately a subset
+// of the reporter's ReportInput: the popup never sets app/version/timestamps,
+// and never sees a backend correlation id, because by definition these are the
+// failures that never reached the network.
+export interface PopupErrorReport {
+  name: string
+  message: string
+  stack?: string
+  routePath?: string
+}
+
 export type Message =
   | { type: 'auth-status' }
   | { type: 'login' }
@@ -17,6 +28,10 @@ export type Message =
   | { type: 'list-collections' }
   | { type: 'translate', collectionId: string, text: string }
   | { type: 'save-entry', collectionId: string, entry: CreateEntryBody }
+  // Reporting has to run in the background script: that is where the buffer
+  // and host_permissions live, and where a report can outlive the popup
+  // document Firefox destroys on focus loss.
+  | { type: 'report-error', report: PopupErrorReport }
 
 // What each message resolves to, keyed by its `type` so sendMessage()
 // infers the right payload at every call site.
@@ -27,6 +42,22 @@ export interface MessageResults {
   'list-collections': Collection[]
   translate: TranslationResult
   'save-entry': SavedEntry
+  'report-error': null
+}
+
+// Fire-and-forget reporting from the popup. Never throws and never rejects:
+// every call site is already handling a failure, and a reporting problem must
+// not displace the error the user is being shown. A background script that is
+// asleep or restarting is itself one of the conditions worth reporting, which
+// is exactly when this would fail — so it stays silent rather than cascading.
+export function reportFromPopup (report: PopupErrorReport): void {
+  void (async () => {
+    try {
+      await browser.runtime.sendMessage({ type: 'report-error', report })
+    } catch {
+      // Nothing further to do from inside a dying document.
+    }
+  })()
 }
 
 export type MessageResponse<T> =
