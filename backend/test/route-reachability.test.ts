@@ -80,7 +80,7 @@ function routeKey (route: RouteEntry): string {
 // legitimately added. Catches the parser silently extracting fewer routes
 // than it used to (e.g. a call-shape change it no longer recognizes),
 // which a plain > 0 check would miss.
-const MIN_EXPECTED_ROUTES = 8
+const MIN_EXPECTED_ROUTES = 9
 
 test('every backend route has a matching API Gateway entry, and vice versa', () => {
   const backendRoutes = new Set(extractBackendRoutes().map(routeKey))

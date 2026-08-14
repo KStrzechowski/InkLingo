@@ -2,6 +2,8 @@ import axios from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
 import { getFreshUser, userManager } from '../auth/cognito'
 import { clearConnectionIssue, signalConnectionIssue } from '../auth/connectionIssue'
+import { bodyKeysOf } from '../observability/bodyKeys'
+import { flush, report, type BufferedReport } from '../observability/reporter'
 
 // axios re-runs every response interceptor on a manually retried request,
 // including the one that issued the retry — so the retry has to leave a mark
@@ -45,6 +47,20 @@ export const apiClient = axios.create({
   timeout: 8000
 })
 
+// The ingest route. Failures of the reporter itself are never reported through
+// the reporter — that recurses — and a successful delivery never triggers
+// another flush.
+const REPORT_PATH = '/api/client-errors'
+
+function isReportDelivery (url: string | undefined): boolean {
+  return url === REPORT_PATH
+}
+
+async function sendReports (reports: BufferedReport[]): Promise<string[]> {
+  const response = await apiClient.post<{ accepted: string[] }>(REPORT_PATH, { reports })
+  return response.data.accepted
+}
+
 apiClient.interceptors.request.use(async (config) => {
   // getFreshUser, not getUser — an expired id_token comes back from API
   // Gateway's authorizer as a CORS-header-less 401, which the browser
@@ -66,11 +82,50 @@ apiClient.interceptors.response.use(
     // Any success clears a standing signal, including the retry below that
     // turns out to succeed — so a genuine one-off blip never reaches the user.
     clearConnectionIssue()
+
+    // A working authenticated request is the moment buffered reports can
+    // finally be delivered — including ones raised while the session was dead,
+    // which is the case the buffer exists for. Not awaited: reporting stays
+    // off the caller's critical path.
+    if (!isReportDelivery(response.config.url) && response.config.headers.Authorization !== undefined) {
+      void flush(sendReports)
+    }
     return response
   },
   async (error: unknown) => {
     if (!axios.isAxiosError(error)) {
+      // Still reported. axios routes a rejected *request* interceptor into this
+      // chain, so anything getFreshUser() throws above — an oidc-client-ts
+      // failure, a corrupt stored session — arrives here. Returning first would
+      // drop it, and the page would render the generic 'Request failed' from
+      // api/errors.ts with nothing recorded anywhere.
+      if (error instanceof Error) {
+        report({ name: error.name, message: error.message, stack: error.stack })
+      }
       return Promise.reject(error)
+    }
+
+    // Report before any of the handling below, so a failure is captured
+    // whatever branch it takes — including the one that drops the session and
+    // leaves no chance to report afterwards. The reporter dedupes, so the
+    // retry further down does not double-count one user-visible failure.
+    if (!isReportDelivery(error.config?.url)) {
+      report({
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        routePath: error.config?.url,
+        // Present only when a response came back at all. Its absence is itself
+        // evidence: a blocked request is the CORS-masked-401 shape.
+        requestId: typeof error.response?.headers['x-request-id'] === 'string'
+          ? error.response.headers['x-request-id']
+          : undefined,
+        request: {
+          method: error.config?.method?.toUpperCase(),
+          status: error.response?.status,
+          bodyKeys: bodyKeysOf(error.config?.data)
+        }
+      })
     }
 
     // A 401 that survives the renewal above means the session is unusable —

@@ -5,6 +5,7 @@ import { AI_REQUEST_TIMEOUT_MS, apiClient } from '../../src/api/client'
 import { addEntryTranslation, listCollections } from '../../src/api/collections'
 import { clearConnectionIssue, onConnectionIssueChange } from '../../src/auth/connectionIssue'
 import { createFakeUser } from '../helpers/oidc'
+import { flush, resetForTests, type BufferedReport } from '../../src/observability/reporter'
 
 // client.ts imports getFreshUser/userManager from cognito.ts directly, so
 // that module — not oidc-client-ts underneath it — is the seam here.
@@ -76,10 +77,22 @@ function respondWith (...steps: Step[]) {
 let connectionIssue = false
 let unsubscribe: () => void
 
+// A failed request now buffers an error report, and the next successful
+// authenticated request delivers it — so `attempts` counts that delivery too.
+// These cases are about how many times the *original* request was sent, so
+// they count that URL rather than all traffic.
+function attemptsTo (url: string): number {
+  return sentConfigs.filter((config) => config.url === url).length
+}
+
 beforeEach(() => {
   vi.resetAllMocks()
   attempts = 0
   sentConfigs = []
+  // Reports persist in localStorage, so without this a buffered report from
+  // one case is delivered during another — the tests would stop being
+  // independent.
+  resetForTests()
   state.getFreshUser.mockResolvedValue(null)
   state.removeUser.mockResolvedValue(undefined)
   clearConnectionIssue()
@@ -147,6 +160,29 @@ describe('response interceptor — session handling', () => {
   })
 })
 
+describe('error reporting', () => {
+  it('reports a failure thrown by the request interceptor', async () => {
+    // Regression: the response-error interceptor returned early for anything
+    // that wasn't an AxiosError, before reporting. axios routes a rejected
+    // *request* interceptor into this same chain, so a corrupt stored session
+    // or an oidc-client-ts failure was dropped with no trace and rendered as
+    // the generic 'Request failed'.
+    state.getFreshUser.mockRejectedValue(new Error('stored session is corrupt'))
+    respondWith(200)
+
+    await expect(apiClient.get('/api/collections')).rejects.toThrow('stored session is corrupt')
+
+    const batches: BufferedReport[][] = []
+    await flush(async (reports) => {
+      batches.push(reports)
+      return reports.map((entry) => entry.eventId)
+    })
+
+    expect(batches[0]).toHaveLength(1)
+    expect(batches[0][0].message).toBe('stored session is corrupt')
+  })
+})
+
 describe('response interceptor — retry then signal', () => {
   it('retries once and signals when the same request fails response-less twice', async () => {
     state.getFreshUser.mockResolvedValue(createFakeUser())
@@ -167,7 +203,7 @@ describe('response interceptor — retry then signal', () => {
     const response = await apiClient.get('/api/collections')
 
     expect(response.status).toBe(200)
-    expect(attempts).toBe(2)
+    expect(attemptsTo('/api/collections')).toBe(2)
     expect(connectionIssue).toBe(false)
   })
 
@@ -246,7 +282,7 @@ describe('response interceptor — write safety', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(attempts).toBe(2)
+    expect(attemptsTo('/api/collections')).toBe(2)
     expect(connectionIssue).toBe(false)
   })
 
