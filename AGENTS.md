@@ -58,6 +58,10 @@ One-time setup after cloning: `git config core.hooksPath .githooks`
 
 Backend and infra are deliberately excluded from the per-edit layer: backend has no linter, and its suite needs a full `tsc` build (~20s) plus a live Neon branch. Those gates stay at pre-push and CI.
 
+### Dependency rules
+
+`node scripts/depcruise.mjs` runs dependency-cruiser over all four apps in one pass (~17s, nothing to install — it goes through npx). Rules live in `.dependency-cruiser.cjs` at the repo root: no imports across app boundaries, no popup→network in the extension, no cross-route imports in the backend, no circulars, no devDependency in shipped code. It is not wired into the hooks yet — run it after a refactor that moves modules around, or add it to pre-push if it starts catching things. `node scripts/depcruise.mjs --output-type archi | dot -T svg > archi.svg` draws the module graph.
+
 ## Commit & Pull Request Guidelines
 
 No commit convention is established yet (history is a single "Initial commit") — agree on one (e.g. Conventional Commits) before the first feature PR.
