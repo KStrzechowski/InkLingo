@@ -45,6 +45,11 @@ const SOURCES = [
   'infra/bin',
   'infra/lib',
   'infra/test',
+  // Build/deploy glue rather than app code, but first-party either way — and
+  // infra/scripts/ is where two of the four filesystem-level cross-app
+  // couplings live (it packages backend/dist and writes frontend/.env.production).
+  'infra/scripts',
+  'scripts',
 ]
 
 const forwarded = process.argv.slice(2)

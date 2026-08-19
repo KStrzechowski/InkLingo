@@ -11,10 +11,10 @@ InkLingo is a language-learning app in early scaffolding: a Fastify + TypeScript
 ## Project Structure & Module Organization
 
 - `backend/src/routes/` and `backend/src/plugins/` are autoloaded by `@fastify/autoload` (wired in `backend/src/app.ts`) — new endpoints and shared decorators are picked up with no manual registration.
-- `frontend/src/` is a stock Vite + React scaffold (`App.tsx`, `main.tsx`); no routing or data-layer library is wired up yet.
+- `frontend/src/` is a Vite + React app: `main.tsx` mounts `App.tsx`, which owns `react-router` routing and the auth provider. `src/pages/` holds the three routed pages, `src/api/` the transport layer (`client.ts` wraps axios + token refresh; `collections.ts` declares the backend response shapes by hand), `src/auth/` the Cognito/OIDC session.
 - `extension/src/` builds to two entry points: `background.ts` (the event page that owns every backend call) and `popup/` (the capture UI). See `extension/README.md` — the pinned add-on ID in `manifest.json` determines the Cognito callback URL registered in `infra/lib/stacks/auth-stack.ts`.
 - `context/foundation/` holds living docs (`prd.md`, `shape-notes.md`, `tech-stack.md`); `context/changes/<change-id>/` holds in-flight work; `context/archive/2026-07-18-bootstrap-verification/` holds the scaffold audit logs (`verification-backend.md`, `verification-frontend.md`).
-- See `@CLAUDE.md` for the full 10xDevs toolkit workflow this repo follows.
+- See `@CLAUDE.md` for the full 10xDevs toolkit workflow this repo follows. **It is gitignored on purpose** (the 10x-cli regenerates most of it), so a fresh clone does not have it — ask the maintainer for a copy, or read `context/foundation/` and this file instead. Everything a contributor strictly needs is here.
 
 ## Build, Test, and Development Commands
 
