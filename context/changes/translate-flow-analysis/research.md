@@ -5,10 +5,11 @@ git_commit: 98ddef935e36723533b9feafc15030db406eba09
 branch: docs/repo-map
 repository: InkLingo
 topic: "Capture → translate → save: E2E trace, test gaps, blast radius"
-tags: [research, codebase, capture-translate-save, extension, backend, ai, neon, repo-map, technical-debt]
+tags: [research, codebase, capture-translate-save, extension, backend, ai, neon, repo-map, technical-debt, ast-grep-verified]
 status: complete
-last_updated: 2026-08-20
+last_updated: 2026-08-22
 last_updated_by: KStrzechowski
+verification: ast-grep 0.45.1, 2026-08-22 — see § 6
 ---
 
 # Research: the capture → translate → save flow
@@ -38,19 +39,24 @@ Description only. No proposals, no redesign.
 ## Summary
 
 The flow works, and it is the most carefully-reasoned code in the repo — the
-popup alone carries four separate stale-result guards written in response to
-bugs that already happened. What it does **not** have is any mechanism that
-checks the seams it is built out of.
+popup alone carries nine generation-guard comparisons across four invalidation
+points, written in response to bugs that already happened. What it does
+**not** have is any mechanism that checks the seams it is built out of.
 
 Five findings dominate:
 
-1. **The contract is the type, and the type is copied three times.** The
-   backend declares no response schemas at all. `TranslationResult`
+1. **The contract is the type — hand-copied on the write path, undeclared on
+   the read path.** The backend declares no response schemas at all (verified:
+   zero `response:` keys anywhere in `backend/src`; all six `schema:` blocks
+   carry `body`/`params` only). `TranslationResult`
    (`backend/src/ai/translate.ts:37-40`) *is* the public API shape — the route
-   returns the AI layer's object verbatim (`collections/index.ts:249`) — and it
-   is re-declared by hand in `extension/src/types.ts:33-36` and, for the read
-   path, in `frontend/src/api/collections.ts:3-37`. Nothing anywhere compares
-   the three.
+   returns the AI layer's object verbatim (`collections/index.ts:249`) — and
+   the whole four-interface family is re-declared by hand in
+   `extension/src/types.ts:14-36`. The read path is worse than a copy: the
+   shapes `GET /api/collections/:id` returns are declared **only** in
+   `frontend/src/api/collections.ts:3-37` (`EntryTranslation`, `EntrySentence`,
+   `Entry`, `CollectionDetail`) and have no backend type at all. Nothing
+   anywhere compares any of them.
 2. **`extension/src/background.ts` — the entire HTTP client for this flow —
    has zero test coverage, and its quality gate passes vacuously.** No test
    file imports it. Verified empirically: `vitest related src/background.ts
@@ -68,7 +74,9 @@ Five findings dominate:
    `DegradedAiResult` report (`App.tsx:236-243`) — the only place in the system
    that can see it, because the request was a 200 that parsed fine.
 5. **The two paths through this flow that call a paid API are the only two
-   rate-limited routes in the repo, and the limiter is per-Lambda-instance.**
+   rate-limited routes *on this flow*, and the limiter is per-Lambda-instance.**
+   (Repo-wide there is a third: `POST /api/client-errors` carries its own
+   60/min per-user limit, `client-errors/index.ts:14-19,28`.)
    Documented and accepted in
    `context/archive/2026-07-25-capture-translate-save/change.md`; the real
    backstop is the Anthropic Console spend limit, not code.
@@ -335,7 +343,7 @@ logic is never exercised by any local gate.
 
 | Unit | File:line | Status | Covered by |
 | --- | --- | --- | --- |
-| `POST /:id/translate` | `index.ts:218-250` | partial | `backend/test/routes/api/translate.test.ts` (7 cases), `collections-rate-limit.test.ts:26` |
+| `POST /:id/translate` | `index.ts:218-250` | partial | `backend/test/routes/api/translate.test.ts` (9 cases), `collections-rate-limit.test.ts:26` |
 | `POST /:id/entries` | `index.ts:252-353` | partial | `entries.test.ts` (10 cases, incl. transaction rollback at `:243-264`) |
 | `POST /:id/entries/:entryId/translations` | `index.ts:358-436` | partial | `entry-translations.test.ts` (6 cases) |
 | `generateWithTimeout` | `index.ts:50-66` | partial — **abort branch never reached** | success/failure stubs only |
@@ -349,7 +357,7 @@ logic is never exercised by any local gate.
 | `popup/App.tsx` handlers + race guards | `:215-410` | **best-covered code on the flow** | `extension/test/popup/App.test.tsx`, incl. 6 in-flight race cases at `:358-561` |
 | `frontend/src/api/collections.ts` `getCollection` / `createCollection` | `:44-58` | **not covered as real code** — module mocked | page tests mock the whole module |
 | `addEntryTranslation` | `collections.ts:62-77` | covered (real impl) | `frontend/test/api/client.test.ts` asserts the 25s timeout |
-| `CollectionDetailPage` load / gap detection / backfill | `:65-128` | covered | `CollectionDetailPage.test.tsx` (13 cases) |
+| `CollectionDetailPage` load / gap detection / backfill | `:65-128` | covered | `CollectionDetailPage.test.tsx` (9 cases) |
 
 ## Branch gaps worth naming
 
@@ -429,7 +437,7 @@ Read the ratios as directional.
 | `extension/src/popup/App.tsx` | 5 | 2 | — |
 | `extension/src/background.ts` | 6 | **0** | Vite entry point, wired by `manifest.json` |
 | `extension/src/types.ts` | 0 | 5 | pure leaf |
-| `extension/src/messages.ts` | 1 | 4 | the only typed popup↔background contract |
+| `extension/src/messages.ts` | 1 | **8** | the only typed popup↔background contract — 5 src + 3 test importers |
 | `frontend/src/api/collections.ts` | 1 | **10** | widest fan-in in the repo |
 | `infra/lib/constructs/api-construct.ts` | 12 | 1 | highest fan-out in the repo |
 | `backend/migrations/*` | — | — | **outside the cruise entirely** (`scripts/depcruise.mjs` `SOURCES`) |
@@ -452,10 +460,10 @@ Read the ratios as directional.
 | # | Group | Evidence | What breaks if one moves alone |
 | --- | --- | --- | --- |
 | 1 | `collections/index.ts` ↔ `schemas.ts` ↔ `ai/translate.ts` | **[import]** + **[git]** 4/8, 4/4, 3/3 | Compile error — the strongest binding on the flow, and the only one a tool catches |
-| 2 | `backend/migrations/*` ↔ the 18 raw `sql` calls in the route | **[git]** 3/4, **[unknown]** by tooling | A renamed column breaks every referencing statement with **no compile-time signal** — SQL template strings are not typechecked. Only the CI-only backend integration tests would see it |
-| 3 | `messages.ts` ↔ `App.tsx` ↔ `background.ts` | **[import]** to `messages.ts` from both; **[unknown]** between the two ends | A new `Message` variant without a matching `case` in `run()` compiles and fails at runtime with an undefined response |
+| 2 | `backend/migrations/*` ↔ the 15 raw `sql` calls in the route (18 backend-wide) | **[git]** 3/4, **[unknown]** by tooling | A renamed column breaks every referencing statement with **no compile-time signal** — SQL template strings are not typechecked. Only the CI-only backend integration tests would see it |
+| 3 | `messages.ts` ↔ `App.tsx` ↔ `background.ts` | **[import]** to `messages.ts` from both; **[unknown]** between the two ends | A new `Message` variant without a matching `case` in `run()` compiles and fails at runtime with an undefined response. Verified: `run()` has exactly 7 `case` clauses for 7 variants, **no `default`**, and returns `Promise<unknown>` — so the fall-through is `undefined`, not a type error |
 | 4 | `frontend/src/api/collections.ts` ↔ `extension/src/types.ts` ↔ the backend's actual JSON | **[unknown]** + **[git]** weak (1/2, 1/5) | Silent runtime `undefined` in whichever client was forgotten. `repo-map.md` risk #1; `artifact-2-dependencies.md` calls it "no guard of any kind" |
-| 5 | `ai/translate.ts`'s tool `input_schema` ↔ `schemas.ts`'s `createEntryBodySchema` | **[unknown]** — no import, no direct co-change | Both hand-encode the same field names (`meaningText`, `phoneticTranscription`, `targetText`, `nativeGlossText`). Rename in one and the save step stops mapping — caught only by integration tests |
+| 5 | `ai/translate.ts`'s tool `input_schema` ↔ `schemas.ts`'s `createEntryBodySchema` | **[unknown]** — no import, no direct co-change | Both hand-encode three of the same field names (`meaningText`, `phoneticTranscription`, `nativeGlossText`, plus `languageCode`). The fourth is *already* renamed across the seam — the tool schema says `targetText`, `createEntryBodySchema` says `sentenceText`, and the popup performs the mapping at `App.tsx:382`, which is exactly the untyped hop a rename would break. Rename in one and the save step stops mapping — caught only by integration tests |
 | 6 | `infra/.../api-construct.ts` ↔ `backend/src/routes/**` | **[unknown]** + **[git]** 1/8 | A new route passes the whole backend suite and 404s in production. Shipped broken twice. `route-reachability.test.ts` is a text backstop, not a substitute |
 | 7 | the three `languages.ts` | **[unknown]**, **[git]** one shared commit ever | A 9th code in `backend/src/languages.ts` (the actual validation gate, `index.ts:112-113`) leaves both clients unable to label it — degraded, not broken, and undetected |
 | 8 | tests that move with each of the above | **[import]** | `translate.test.ts` is `translate.ts`'s only 3/3 co-changer; `App.test.tsx` and `CollectionDetailPage.test.tsx` are the client-side equivalents |
@@ -467,14 +475,26 @@ Read the ratios as directional.
 Current state only. Each item is what exists, the evidence for it, and its
 known consequence.
 
-## 5.1 The response contract is triplicated and unguarded — the repo's #1 risk
+## 5.1 The response contract is hand-copied on one leg and undeclared on the other — the repo's #1 risk
 
 The backend declares **no response schemas**. `schemas.ts` covers request
 bodies and params only. `POST /:id/translate` returns the AI layer's object
 verbatim (`index.ts:249`), which makes `TranslationResult`
 (`ai/translate.ts:37-40`) the public API shape by accident of implementation.
-That shape is re-declared by hand in `extension/src/types.ts:14-36`, and the
-read-path shapes are re-declared again in `frontend/src/api/collections.ts:3-37`.
+That shape is re-declared by hand in `extension/src/types.ts:14-36` — verified
+identical field-for-field across all four interfaces (`TranslationSentence`,
+`TranslationVariant`, `TranslationLanguage`, `TranslationResult`), declared at
+`translate.ts:21-40` and `types.ts:14-36` and nowhere else.
+
+The read path is a different and sharper problem. `GET /api/collections/:id`'s
+response shapes — `EntryTranslation`, `EntrySentence`, `Entry`,
+`CollectionDetail` — are declared **only** in
+`frontend/src/api/collections.ts:3-37`. The backend has no counterpart type for
+any of them; the body is assembled inline from four SELECTs
+(`index.ts:155-216`). So this is not a copy that could drift out of sync — it is
+a client-side guess with no source of truth to drift *from*. `Collection` is
+the one interface declared on both clients (`types.ts:6-12`,
+`collections.ts:3-9`, identical) and on neither server.
 
 Both duplicate files carry a comment explaining the duplication
 (`types.ts:1-4`, `backend/src/languages.ts:1-3`) — so this is a known,
@@ -492,8 +512,14 @@ currently harmless. Neither is enforced.
 
 ## 5.2 The model's output is cast, not validated
 
-`translate.ts:148` — `const result = toolUse.input as TranslationResult`.
-There is no runtime validation anywhere on that boundary.
+`translate.ts:148` — `const result = toolUse.input as TranslationResult`. It is
+the only `as TranslationResult` in `backend/src` (the other five are all in
+`translate.test.ts`, on payloads the test wrote itself). There is no runtime
+validation anywhere on that boundary — only two defensive fallbacks that
+prevent a *throw* rather than check a shape: `result.languages ?? []` (`:151`)
+and `match?.variants ?? []` (`:118`). Both turn a malformed response into an
+empty-but-well-formed one, which is precisely the shape §5.3's retry cannot
+distinguish from a bad roll.
 `alignToRequested` normalizes the language *array*; nothing checks
 `normalizedNativeText` exists, that `variants` is an array, or that a sentence
 has both halves. `minItems: 1` on the tool schema is advisory (the code says so
@@ -566,18 +592,27 @@ Anthropic Console spend limit. No code substitutes for that last one.
 
 ## 5.9 Route registration is hand-kept, and its guard is partial
 
-`api-construct.ts:149-209` lists eight route keys explicitly; there is no
-`{proxy+}`. Five of the eight belong to this flow. A backend route without a
+`api-construct.ts:149-209` makes eight `addRoutes` calls
+(`:149,160,166,172,181,187,195,204`) covering **nine** method+path route keys —
+`/api/collections` carries GET and POST in one call. There is no `{proxy+}`.
+The backend registers exactly nine routes (four `fastify.get`, five
+`fastify.post`), so the two sides balance at nine today. Five of the eight
+blocks belong to this flow. A backend route without a
 matching entry passes the entire suite and 404s in production — it shipped
 broken twice (`POST /:id/translate` and `POST /:id/entries`, both in this
 change). `route-reachability.test.ts` now catches literal-shaped drift by text
-comparison, and is blind to any non-literal route declaration.
+comparison, and is blind to any non-literal route declaration. That blind spot
+is currently **latent, not active**: there are zero `fastify.route({...})` call
+sites in `backend/src`, so every route in the repo is in a shape both
+extractors can see.
 
 ## 5.10 The data model is invisible to every static tool
 
 `backend/migrations/` is not in `scripts/depcruise.mjs`'s `SOURCES`, so it is
-not in the dependency graph at all. The route issues 18 raw `sql` template
-calls; TypeScript checks none of them. Co-change says migrations move with the
+not in the dependency graph at all. The route issues 13 raw `sql` template
+calls plus 2 `sql.transaction` blocks — 15 SQL call sites in the route file,
+18 across `backend/src` once `ownership.ts:20,32` and `autohooks.ts:34` are
+counted; TypeScript checks none of them. Co-change says migrations move with the
 route 3 times in 4 — the coupling is real and entirely undeclared. The only
 thing that would catch a bad rename is the backend integration suite, which
 runs in CI only.
@@ -621,7 +656,7 @@ have drifted — several have; the anchors in this document are current as of
 
 ## 5.15 Smaller items, current-state
 
-- **`POST /api/collections` is not transactional** (`index.ts:128-137`): the
+- **`POST /api/collections` is not transactional** (`index.ts:129-139`): the
   `collections` insert is followed by a loop of separate
   `collection_target_languages` inserts. A failure mid-loop leaves a collection
   with a partial language set. The save path, by contrast, uses
@@ -639,6 +674,98 @@ have drifted — several have; the anchors in this document are current as of
 - **Legacy uppercase language codes exist in the dev database.** Two guards
   compare case-insensitively specifically because of them (`index.ts:294-296`,
   `CollectionDetailPage.tsx:188-191`). The rows were never normalized.
+
+---
+
+# 6. Structural verification (ast-grep)
+
+Every structural claim in this document — call-site counts, "only here",
+"always through X", method/variant arity, repeated call shapes — was re-derived
+mechanically with `ast-grep 0.45.1` on **2026-08-22**, against the same commit
+the document was written from (`98ddef9`). Patterns ran over `backend/src`,
+`backend/test`, `extension/src`, `extension/test`, `frontend/src`,
+`frontend/test`, `infra/lib` — the same `SOURCES` set `scripts/depcruise.mjs`
+cruises.
+
+Four claims came back wrong and are corrected in place above; six were made
+more precise. The rest held.
+
+## 6.1 Refuted
+
+| # | Claim as written | ast-grep pattern | What the tool found | Fix |
+| --- | --- | --- | --- | --- |
+| R-1 | "the only two rate-limited routes **in the repo**" (Summary §5) | `kind: pair` / key `^config$` and `^rateLimit$` over `backend/src` | **3** rate-limited routes: `collections/index.ts:223` (translate, 20/min), `:363` (backfill, 20/min), and `client-errors/index.ts:28` (reports, 60/min, defined `:14-19`) | narrowed to "on this flow"; third limiter named |
+| R-2 | `extension/src/messages.ts` fan-in **4** | importers of `./messages.ts` | **8**: `background.ts:3`, `popup/App.tsx:2`, `popup/main.tsx:5`, `speech.ts:9`, `useSpeech.ts:3`, `test/helpers/webext.ts:12`, `test/observability/popupReporting.test.ts:2`, `test/popup/App.test.tsx:13` | table corrected to 8 |
+| R-3 | `translate.test.ts` "**7** cases" | `test($NAME, $$$REST)` | **9** — `:18,50,80,115,151,180,205,220,240` | corrected to 9 |
+| R-4 | `CollectionDetailPage.test.tsx` "**13** cases" | `it($NAME, $$$REST)` | **9** — `:62,73,87,100,117,137,160,175,199` | corrected to 9 |
+
+R-1 is the one that changes a conclusion rather than a number: the AI routes
+are not the only place in the repo where per-user throttling was thought
+necessary, so "rate limiting exists only where money is at stake" is not the
+pattern. `POST /api/client-errors` carries one for a log-flooding / CloudWatch
+cost argument — the same denial-of-wallet shape, a different bill.
+
+## 6.2 Made more precise
+
+| # | Claim as written | What the tool found |
+| --- | --- | --- |
+| P-1 | "18 raw `sql` calls in the route" (§5.10, blast-radius #2) | ``$O.sql`$$$A` `` matched **13** in `collections/index.ts` (`:30,78,129,135,167,175,180,314,319,324,383,406,411`); `$O.sql.transaction($$$A)` matched **2** (`:311,405`) — **15** SQL call sites in the route file. 18 is the `backend/src`-wide figure, adding `ownership.ts:20,32` and `autohooks.ts:34` |
+| P-2 | "the type is copied **three times**" (Summary §1, §5.1) | The AI-contract family is declared **twice** (`translate.ts:21-40` ↔ `types.ts:14-36`). The frontend does **not** re-declare `TranslationResult`; it declares a separate read-path family with **no backend counterpart at all**. `Collection` is declared on both clients and on neither server |
+| P-3 | blast-radius #5's shared field names include `targetText` | `targetText` is **not** shared: the tool schema (`translate.ts:95`) says `targetText`, `createEntryBodySchema` (`schemas.ts:56`) says `sentenceText`. The rename already happens, in the popup, at `App.tsx:382`. Genuinely shared: `meaningText`, `phoneticTranscription`, `nativeGlossText`, `languageCode` |
+| P-4 | "**four** separate stale-result guards" (Summary lead) | **4** `generationRef.current += 1` invalidation points (`App.tsx:153,221,274,367`) and **9** guard comparisons: six `!==` early-returns (`:228,247,280,331,391,401`) and three `===` commit-guards (`:254,336,406`) |
+| P-5 | "`api-construct.ts` lists **eight** route keys" (§5.9) | **8** `$O.addRoutes($$$A)` calls covering **9** method+path route keys (`/api/collections` carries GET+POST). Backend side: 4 `fastify.get` + 5 `fastify.post` = 9. The two sides balance |
+| P-6 | "no runtime validation anywhere on that boundary" (§5.2) | True of the cast, but two `??` fallbacks exist (`translate.ts:118,151`). They prevent a throw, not a bad shape — they convert malformed into empty, which §5.3's retry cannot tell from a bad roll |
+
+## 6.3 Confirmed
+
+Each row is a claim the pattern reproduced exactly.
+
+| Claim | Pattern | Result |
+| --- | --- | --- |
+| The backend declares **no response schemas** | `kind: pair` / key `^response$` over `backend/src` | **0 matches.** Six `schema:` blocks exist (`collections/index.ts:101,156,219,253,359`, `client-errors/index.ts:28`), all `body`/`params` |
+| The route returns the AI object **verbatim** | read of `index.ts:249` | `return result` — no mapping, no reshaping |
+| `generateWithTimeout` is the **shared** AI seam | `generateWithTimeout($$$A)` | exactly **2** call sites: `index.ts:241` (translate), `:391` (backfill) |
+| The 20s abort lives in one place | `new AbortController()` over all three apps | exactly **1**: `index.ts:56` |
+| The extension has **no** client-side timeout | `new AbortController()` in `extension/src` | **0**. `fetch` appears at `background.ts:75` and `auth.ts:89`, neither with a signal |
+| Frontend's two-tier scheme | read of `client.ts` | `AI_REQUEST_TIMEOUT_MS = 25_000` (`:41`), default `timeout: 8000` (`:48`) |
+| The model's output is **cast**, never validated | `$X as TranslationResult` | **1** in `backend/src` (`translate.ts:148`); the other five are in `translate.test.ts:44,72,105,146,175` |
+| `isEmpty` is `.every(...)` | `$A.every($B)` in `translate.ts` | **1** match, `:123` — the retry cannot see a partial failure |
+| `background.ts` has **zero** importers | repo-wide import search | **0** files import it. Ce = 6 (`:1-6`), Ca = 0 |
+| its gate passes **vacuously** | re-ran `vitest related src/background.ts --run` | `No test files found, exiting with code 0` — reproduced 2026-08-22 |
+| a new `Message` variant fails at runtime, not compile time | `kind: switch_case` in `background.ts` | **7** cases (`:125,127,130,133,135,140,145`) for **7** `Message` variants, **no `default`**, return type `Promise<unknown>` — the fall-through is `undefined` |
+| report dedupe via `WeakSet` | read of `background.ts:45` | `const alreadyReported = new WeakSet<object>()`. Note: the pattern `new WeakSet($$$A)` misses this — a type argument changes the node shape; `new WeakSet<$T>()` is required |
+| the 429 special case | `background.ts:16` | `if (response.status === 429)` |
+| the Anthropic stubs never inspect arguments | read of `test/helpers/anthropic.ts` | **3** stubs, all `create: async () => …` with **zero parameters**. `stubAnthropicSequence` counts calls, still not arguments |
+| the abort path is untested | `abort`/`AbortSignal`/`signal` over `backend/test` | **0 occurrences** |
+| the 429 is tested for `/translate` only | `test($NAME, $$$REST)` in `collections-rate-limit.test.ts` | **1** test, `:26`, translate only. Backfill carries the same limiter and has no 429 test |
+| `POST /:id/entries` is the one unlimited route on the flow | `kind: pair` / key `^config$` | present at `:223` and `:363` only; the entries route at `:252` has none |
+| ownership is checked on every `:id` route | `fetchOwnedCollection($$$A)`, `fetchOwnedEntry($$$A)` | **4** and **1**, at `index.ts:160,230,288,367` and `:372` — one per `:id` route, matching `route-ownership.test.ts`'s `MIN_EXPECTED_ID_ROUTES = 4` |
+| `route-ownership.test.ts` greps for the call, not the check | read of `:68-72` | `handlerSource.includes('fetchOwnedCollection(')` — string containment |
+| `route-reachability.test.ts` is blind to `fastify.route({...})` | `$F.route($$$A)` over `backend/src` | **0 matches** — the blind spot is real but **latent**; every route today is in a shape both extractors see |
+| `POST /api/collections` is not transactional | `$O.sql.transaction($$$A)` | **2** in the repo (`:311`, `:405`), neither in the create-collection handler — which is one INSERT (`:129`) plus a `for` loop of INSERTs (`:134-139`) |
+| `SavedEntry` is a four-field subset | read of `types.ts:38-43` vs `index.ts:334-352` | 4 fields vs **6** top-level keys — the 201 also sends `translations` and `sentences` |
+| the `nativeGlossText` asymmetry | interface declarations | `string` at `extension/src/types.ts:16`; `string \| null` at `frontend/src/api/collections.ts:21` |
+| eight supported language codes, three `languages.ts` | read of `backend/src/languages.ts:4` | 8 codes; `backend/src/languages.ts`, `extension/src/languages.ts`, `frontend/src/languages.ts` |
+| seven message types | `messages.ts` union + `MessageResults` | **7** variants, **7** result keys |
+| six in-flight race cases | `it($NAME, $$$REST)` in `App.test.tsx` | `describe('popup in-flight races')` opens at `:358`; its tests are `:365,392,407,437,487,522` = **6** |
+| `entries.test.ts` 10 cases, `entry-translations.test.ts` 6 | `test($NAME, $$$REST)` | **10** and **6** |
+| fan-in / fan-out table (every row but `messages.ts`) | import counts | `collections/index.ts` Ce 8 / Ca **0**; `ai/translate.ts` Ca **4** (route + `helpers/anthropic.ts`, `entry-translations.test.ts`, `translate.test.ts`); `schemas.ts` Ca 1; `ownership.ts` Ca 1; `types.ts` Ca **5**; `popup/App.tsx` Ce 5 / Ca **2** (`main.tsx:4`, `App.test.tsx:3`); `background.ts` Ce 6 / Ca **0**; `frontend/src/api/collections.ts` Ca **10**; `api-construct.ts` Ce **12** |
+
+## 6.4 Anchor drift found while verifying
+
+Small and non-material, listed so the next reader does not re-derive them:
+`randomUUID()` is called at `index.ts:310` (`:306-309` is the comment above it);
+`handleSave` opens at `App.tsx:360` (`:358` is `readyToSave`);
+`handleRegenerate` at `:264` (`:258` is its comment); `sameMeaning` at `:36`.
+
+## 6.5 What ast-grep could not adjudicate
+
+Worth stating explicitly, because the verification does **not** extend to them:
+every `[unknown]` edge stays unknown. A pattern can count the `case` clauses in
+`run()`; it cannot tell you the popup and the background script agree on what a
+`translate` message means. It can prove `TranslationResult` is declared twice;
+it cannot prove either declaration matches a JSON body the backend never types.
+The co-change ratios in §4 are git evidence and were not re-derived here.
 
 ---
 
