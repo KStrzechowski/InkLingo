@@ -157,8 +157,9 @@ layer's object verbatim (`index.ts:249`), so `TranslationResult`
 (`ai/translate.ts:21-40`) is the public API shape by accident of implementation,
 re-declared by hand at `extension/src/types.ts:14-36` [evidence]. The read path
 is worse: `GET /api/collections/:id`'s shapes are declared **only** at
-`frontend/src/api/collections.ts:3-37` — the repo's widest hub, 10 dependents —
-with no backend counterpart to drift from [evidence].
+`frontend/src/api/collections.ts:3-37` — 10 dependents, the widest hub carrying
+a cross-app response contract — with no backend counterpart to drift from
+[evidence].
 
 `backend/src/ai/translate.ts` simultaneously owns the model config, the tool
 JSON-Schema, **the wire type the HTTP API returns**, and response repair
@@ -277,7 +278,8 @@ validator is the instrument that answers that question.
 ## C-03 — Extension HTTP client has no seam
 
 **Current shape.** `background.ts`, 176 lines, **zero importers** and **zero
-tests** [evidence]. `apiFetch` (`:55-121`) bundles token fetch and
+tests** [evidence]. `auth.ts` — imported at `background.ts:2`, 182 lines — is
+equally untested, putting **~358 lines** inside this seam [evidence]. `apiFetch` (`:55-121`) bundles token fetch and
 session-expiry error, header construction, method inference, URL construction, a
 self-exclusion flag, network-error reporting, HTTP-error reporting, the 429
 special case, WeakSet dedupe marking, the flush trigger and JSON parsing — 67
@@ -711,6 +713,29 @@ Ranked by risk of silent production failure, leverage for the coming pivot, and
 value as an Architect-module refactor narrative — with feasibility, including
 IL-24 rework risk, as the qualifying axis.
 
+**Ranking confirmed after verification — decided 2026-08-23, not to be
+re-opened at planning.** The ast-grep pass moved six claims (see
+§ Weryfikacja twierdzeń); two of them land in this section. Both are
+corrections to *superlatives*, not to premises, so the ranking below stands
+unchanged. Recorded here so the planning session does not re-litigate it:
+
+- **#1 (C-01)** rests on *"no guard exists at any of the four layers"* — held
+  (V-7, V-11, V-14) — and on `frontend/src/api/collections.ts` being the widest
+  hub **carrying a cross-app response contract**, which it is. The module that
+  beats it on raw fan-in, `frontend/src/observability/reporter.ts` (12
+  dependents), is a leaf that crosses no app boundary and is already policed by
+  its own error-severity rule (`observability-stays-a-leaf`), so it is not this
+  kind of risk at all.
+- **#2 (C-03)** rests on the guiding-star-flow argument and on being the only
+  candidate covered by all four gate layers — both held (V-28). Only the size
+  superlative failed, and the file that beats it does not compete with C-03: it
+  is inside it. `extension/src/auth.ts` (182 lines, equally untested) is what
+  `background.ts` imports at `:2` to get its tokens, so it sits within the same
+  seam. **The wholly untested surface on this flow is ~358 lines, not 176** —
+  which strengthens #2 rather than weakening it.
+
+The superlatives themselves are dropped from the prose below.
+
 ## 5.1 The ranking
 
 ### #1 — C-01: give the response contract a declared source of truth
@@ -719,8 +744,8 @@ IL-24 rework risk, as the qualifying axis.
 layer's return type is the API contract by accident (`translate.ts:21-40` →
 returned verbatim at `index.ts:249`), hand-copied into
 `extension/src/types.ts:14-36`. The read path has no server-side declaration at
-all — its shapes exist only in `frontend/src/api/collections.ts:3-37`, the
-repo's widest hub at 10 dependents.
+all — its shapes exist only in `frontend/src/api/collections.ts:3-37`, which
+10 other modules depend on.
 
 **Target shape.** One declared response schema per route, owned by the route's
 existing `schemas.ts`, with the AI module consuming an app-owned type rather
@@ -742,8 +767,8 @@ days later, and hardened into an enforced lint rule three weeks after that. And
 the tool that fixes half of it has been an installed, unused dependency since
 2026-07-30, adopted in a commit whose own body scopes it to *request* DTOs.
 
-**Cost of debt vs cost of change.** Debt: unbounded and silent, on the repo's
-widest hub. Change: additive and per-route — response schemas need no new
+**Cost of debt vs cost of change.** Debt: unbounded and silent, on the widest
+hub carrying a cross-app response contract. Change: additive and per-route — response schemas need no new
 dependency and no import; the contract test has two working precedents in the
 repo. The expensive option (a shared package) is forbidden by name in
 `.dependency-cruiser.cjs` and is explicitly **not** what this proposes.
@@ -777,7 +802,9 @@ first**; leave the translate leg's response schema until IL-24's shape is known.
 ### #2 — C-03: give the extension's HTTP client a seam
 
 **Current shape.** `background.ts` is 176 lines with zero importers and zero
-tests. `apiFetch` bundles ten responsibilities in 67 lines. `run()` dispatches 7
+tests — and `auth.ts`, the 182-line module it imports at `:2` for its tokens, is
+equally untested, so the seam covers **~358 lines** of wholly untested source.
+`apiFetch` bundles ten responsibilities in 67 lines. `run()` dispatches 7
 message variants with no `default` and returns `Promise<unknown>`, so a new
 variant compiles and yields `undefined` at runtime. Nothing in `extension/src`
 constructs an `AbortController`.
@@ -786,8 +813,9 @@ constructs an `AbortController`.
 dispatcher, with the deadline and `fetch` injectable, and a dispatcher whose
 return type is narrowed per variant.
 
-**Why second.** This is the entire HTTP client for the guiding-star flow, and it
-is the repo's largest wholly untested source file. On the pivot axis it does not
+**Why second.** This is the entire HTTP client for the guiding-star flow, and
+with `auth.ts` inside the same seam it is ~358 lines of wholly untested source.
+On the pivot axis it does not
 merely survive — **it appreciates**: IL-24's set-cursor is explicitly the change
 that adds a request field, i.e. exactly the `Message`-variant edit whose failure
 mode is today a runtime `undefined`. Doing the exhaustiveness work before that
@@ -983,9 +1011,11 @@ recorded below only, annotated **do decyzji na etapie planowania**.
 | V-5 | C-12: *"`routes → plugins` is 0 import edges and **22** decorator calls"* | 0 edges **potwierdzone**; count **doprecyzowane** → **20** | `fastify.sql` ×18, `fastify.anthropicClient` ×1, `fastify.jwtVerifier` ×1 (`autohooks.ts`). 38 if the request decorators `authUser` (13) and `correlationId` (5) are counted too | `grep -rn "from '.*plugins"` over `backend/src/routes` → 0 hits (classic-grep confirmation of the zero); per-decorator `grep -rno` counts. 22 is not reproducible under any grouping tried |
 | V-6 | §6: *"`rate-limit.ts` and `sensible.ts` are the only **two** plugins without `{ name, dependencies }`"* | **doprecyzowane** → **three** | `plugins/support.ts:9-13` closes its `fp<SupportPluginOptions>(...)` with no options object either | read of all nine files in `backend/src/plugins/` |
 
-**V-3 and V-4 fall inside `§ 5`, which this pass leaves untouched — do decyzji
-na etapie planowania.** Neither disturbs a ranking position on the reasoning
-actually given:
+**V-3 and V-4 fall inside `§ 5`. Resolved 2026-08-23 — the ranking stands, and
+the decision is recorded at the head of `§ 5` so planning does not re-open it.**
+Both are corrections to superlatives, not to premises; the two superlatives have
+been dropped from `§ 5`'s prose, and neither disturbs a ranking position on the
+reasoning actually given:
 
 - **#1 (C-01)** rests on *"no guard exists at any of the four layers"*, which
   held (V-7, V-11, V-14). `collections.ts` is still the widest hub **carrying a
@@ -996,8 +1026,9 @@ actually given:
 - **#2 (C-03)** rests on *"the entire HTTP client for the guiding-star flow"*
   and *"the only candidate covered by all four gate layers"*, both of which
   held (V-28). Only the size superlative fails — and `auth.ts`, the file that
-  beats it, is the module `background.ts` imports at `:2`, so it sits on the
-  same seam rather than competing with it.
+  beats it, is the module `background.ts` imports at `:2`, so it sits **inside**
+  the seam rather than competing with it: the untested surface on this flow is
+  ~358 lines, not 176, which strengthens #2.
 
 ### Potwierdzone
 
