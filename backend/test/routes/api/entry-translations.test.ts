@@ -173,3 +173,44 @@ test('POST /:id/entries/:entryId/translations returns 502 when the model returns
   ) as Array<{ language_code: string }>
   assert.deepStrictEqual(rows.map((row) => row.language_code), ['en'])
 })
+
+// Fastify strips any property the response schema does not declare, so a
+// missing declaration drops a field silently rather than erroring. The ids and
+// timestamp are generated, so they are asserted by shape and then substituted
+// in — everything else is compared exactly.
+test('POST /:id/entries/:entryId/translations serializes the full body, stripping nothing', async (t) => {
+  const app = await build(t)
+  const { collectionId, entryId, token } = await backfillFixture(app, t, 'Backfill serialization')
+  stubDraft(app, germanResult())
+
+  const res = await app.inject({
+    url: `/api/collections/${collectionId}/entries/${entryId}/translations`,
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { languageCode: 'de' }
+  })
+
+  assert.equal(res.statusCode, 201)
+  const body = JSON.parse(res.payload) as AddedTranslation
+
+  assert.equal(typeof body.translation.id, 'string')
+  assert.equal(typeof body.sentence.id, 'string')
+  assert.equal(typeof body.sentence.createdAt, 'string')
+
+  assert.deepStrictEqual(body, {
+    entryId,
+    translation: {
+      id: body.translation.id,
+      languageCode: 'de',
+      meaningText: 'Hund',
+      phoneticTranscription: '/hʊnt/'
+    },
+    sentence: {
+      id: body.sentence.id,
+      languageCode: 'de',
+      sentenceText: 'Der Hund rennt.',
+      nativeGlossText: 'Pies biegnie.',
+      createdAt: body.sentence.createdAt
+    }
+  })
+})

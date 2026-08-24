@@ -949,14 +949,14 @@ this reason.
 
 #### Automated
 
-- [x] 3.1 Backend suite passes: `cd backend && npm test`
-- [x] 3.2 Type check passes: `cd backend && npm run build:ts`
-- [x] 3.3 `grep -rl "@anthropic-ai/sdk" backend/src backend/test` returns exactly the adapter and its test
-- [x] 3.4 `grep -rn "anthropicClient\|TranslationResult\|toolUse\|tool_use" backend/src/routes backend/src/plugins` returns nothing
-- [x] 3.5 `grep -rn "claude-haiku\|return_translation" backend/src backend/test | grep -v "adapters/"` returns nothing
-- [x] 3.6 `backend/src/ai/` no longer exists
-- [x] 3.7 `backend/test/route-reachability.test.ts` passes
-- [x] 3.8 Boundary test goes red on an SDK import added to a route, green when removed
+- [x] 3.1 Backend suite passes: `cd backend && npm test` — 9980860
+- [x] 3.2 Type check passes: `cd backend && npm run build:ts` — 9980860
+- [x] 3.3 `grep -rl "@anthropic-ai/sdk" backend/src backend/test` returns exactly the adapter and its test — 9980860
+- [x] 3.4 `grep -rn "anthropicClient\|TranslationResult\|toolUse\|tool_use" backend/src/routes backend/src/plugins` returns nothing — 9980860
+- [x] 3.5 `grep -rn "claude-haiku\|return_translation" backend/src backend/test | grep -v "adapters/"` returns nothing — 9980860
+- [x] 3.6 `backend/src/ai/` no longer exists — 9980860
+- [x] 3.7 `backend/test/route-reachability.test.ts` passes — 9980860
+- [x] 3.8 Boundary test goes red on an SDK import added to a route, green when removed — 9980860
 
 #### Manual
 
@@ -968,9 +968,9 @@ this reason.
 
 #### Automated
 
-- [ ] 4.1 Backend suite passes: `cd backend && npm test`
-- [ ] 4.2 Type check passes: `cd backend && npm run build:ts`
-- [ ] 4.3 Removing a property from `translateResponseSchema` turns the deep-equal assertion red
+- [x] 4.1 Backend suite passes: `cd backend && npm test`
+- [x] 4.2 Type check passes: `cd backend && npm run build:ts`
+- [x] 4.3 Removing a property from `translateResponseSchema` turns the deep-equal assertion red
 
 #### Manual
 

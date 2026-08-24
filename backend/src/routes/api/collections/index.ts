@@ -9,7 +9,9 @@ import {
   entryParamsSchema,
   translateBodySchema,
   createEntryBodySchema,
-  addEntryTranslationBodySchema
+  addEntryTranslationBodySchema,
+  translateResponseSchema,
+  addEntryTranslationResponseSchema
 } from './schemas.ts'
 import { RequestedLanguages, type TranslationDraft } from '../../../domain/translationDraft.ts'
 import { fetchOwnedCollection, fetchOwnedEntry } from './ownership.ts'
@@ -237,7 +239,11 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
   fastify.post('/:id/translate', {
     schema: {
       params: collectionParamsSchema,
-      body: translateBodySchema
+      body: translateBodySchema,
+      // Fastify serializes against this rather than against whatever object
+      // the handler returns — impossible while the body *was* the model's
+      // tool-call object, cheap now that one function produces it.
+      response: { 200: translateResponseSchema }
     },
     config: translateRateLimit
   }, async (request, reply) => {
@@ -395,7 +401,8 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
   fastify.post('/:id/entries/:entryId/translations', {
     schema: {
       params: entryParamsSchema,
-      body: addEntryTranslationBodySchema
+      body: addEntryTranslationBodySchema,
+      response: { 201: addEntryTranslationResponseSchema }
     },
     config: translateRateLimit
   }, async (request, reply) => {

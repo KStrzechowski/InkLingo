@@ -242,3 +242,63 @@ test('POST /api/collections/:id/translate returns a clean 502 (not a raw excepti
   const body = JSON.parse(res.payload) as { message: string }
   assert.equal(body.message, 'could not generate a translation — try again')
 })
+
+// Fastify strips any property a response schema does not declare, so a missing
+// declaration drops a field silently rather than erroring. A spot check on a
+// few fields is exactly the shape of test that misses that — this asserts the
+// entire body.
+test('POST /api/collections/:id/translate serializes the full body, stripping nothing', async (t) => {
+  const app = await build(t)
+  const sub = randomUUID()
+  const userId = await createUserRow(app, t, sub)
+  const collectionId = await createCollectionRow(app, userId, 'Full body serialization', 'pl', ['en', 'de'])
+
+  stubTranslator(app, {
+    normalizedNativeText: 'pies',
+    languages: [
+      { languageCode: 'en', variants: [variant('dog')] },
+      {
+        languageCode: 'de',
+        variants: [{
+          meaningText: 'Hund',
+          phoneticTranscription: null,
+          sentences: [{ targetText: 'Der Hund rennt.', nativeGlossText: 'Pies biegnie.' }]
+        }]
+      }
+    ]
+  }, 'pl', ['en', 'de'])
+
+  app.jwtVerifier.cacheJwks(jwks)
+  const token = await signToken({ sub })
+
+  const res = await app.inject({
+    url: `/api/collections/${collectionId}/translate`,
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { text: 'pies' }
+  })
+
+  assert.equal(res.statusCode, 200)
+  assert.deepStrictEqual(JSON.parse(res.payload), {
+    normalizedNativeText: 'pies',
+    languages: [
+      {
+        languageCode: 'en',
+        variants: [{
+          meaningText: 'dog',
+          phoneticTranscription: '/dog/',
+          sentences: [{ targetText: 'A sentence with dog.', nativeGlossText: 'Zdanie po polsku.' }]
+        }]
+      },
+      {
+        languageCode: 'de',
+        variants: [{
+          meaningText: 'Hund',
+          // A null phonetic must survive serialization as null, not vanish.
+          phoneticTranscription: null,
+          sentences: [{ targetText: 'Der Hund rennt.', nativeGlossText: 'Pies biegnie.' }]
+        }]
+      }
+    ]
+  })
+})
