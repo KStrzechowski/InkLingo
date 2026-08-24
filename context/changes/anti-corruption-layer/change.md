@@ -3,7 +3,7 @@ change_id: anti-corruption-layer
 title: Seal the model provider behind a translator port
 status: implementing
 created: 2026-08-23
-updated: 2026-08-23
+updated: 2026-08-24
 archived_at: null
 ---
 

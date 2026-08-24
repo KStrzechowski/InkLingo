@@ -991,10 +991,10 @@ this reason.
 
 #### Automated
 
-- [x] 6.1 `cd extension && npm run lint`
-- [x] 6.2 `cd extension && npm run build`
-- [x] 6.3 `cd extension && npx vitest run test/popup/App.test.tsx`
-- [x] 6.4 `grep -n "DegradedAiResult" extension/src/popup/App.tsx` returns only the regenerate report
+- [x] 6.1 `cd extension && npm run lint` — e44a272
+- [x] 6.2 `cd extension && npm run build` — e44a272
+- [x] 6.3 `cd extension && npx vitest run test/popup/App.test.tsx` — e44a272
+- [x] 6.4 `grep -n "DegradedAiResult" extension/src/popup/App.tsx` returns only the regenerate report — e44a272
 
 #### Manual
 
