@@ -980,8 +980,8 @@ this reason.
 
 #### Automated
 
-- [x] 5.1 `cd backend && npm run build:ts`, then `node --check context/changes/translation-pivot/measure-cost.mjs`
-- [x] 5.2 `grep -n "return_translation\|claude-haiku\|You are a translation assistant" context/changes/translation-pivot/measure-cost.mjs` returns only the import line
+- [x] 5.1 `cd backend && npm run build:ts`, then `node --check context/changes/translation-pivot/measure-cost.mjs` — a942ca1
+- [x] 5.2 `grep -n "return_translation\|claude-haiku\|You are a translation assistant" context/changes/translation-pivot/measure-cost.mjs` returns only the import line — a942ca1
 
 #### Manual
 
@@ -991,10 +991,10 @@ this reason.
 
 #### Automated
 
-- [ ] 6.1 `cd extension && npm run lint`
-- [ ] 6.2 `cd extension && npm run build`
-- [ ] 6.3 `cd extension && npx vitest run test/popup/App.test.tsx`
-- [ ] 6.4 `grep -n "DegradedAiResult" extension/src/popup/App.tsx` returns only the regenerate report
+- [x] 6.1 `cd extension && npm run lint`
+- [x] 6.2 `cd extension && npm run build`
+- [x] 6.3 `cd extension && npx vitest run test/popup/App.test.tsx`
+- [x] 6.4 `grep -n "DegradedAiResult" extension/src/popup/App.tsx` returns only the regenerate report
 
 #### Manual
 

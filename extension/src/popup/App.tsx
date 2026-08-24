@@ -228,19 +228,11 @@ function App () {
       if (generationRef.current !== generation) {
         return
       }
-      // Counted here, not in render: a language with no variants renders the
-      // "Nothing came back" line on every re-render, and this is a
-      // once-per-result fact. A 200 that is useless to the user is invisible
-      // to every other layer — the request succeeded and the body parsed.
-      // lessons.md measured this class at ~9% of live calls.
-      const empty = result.languages.filter((language) => language.variants.length === 0)
-      if (empty.length > 0) {
-        reportFromPopup({
-          name: 'DegradedAiResult',
-          message: `translate returned no variants for ${String(empty.length)} of ${String(result.languages.length)} language(s)`,
-          routePath: `ai:translate:${empty.map((language) => language.languageCode).join(',')}`
-        })
-      }
+      // The degradation counting that used to live here is gone. Its all-empty
+      // half is now a 502 the catch below already handles, and its partial half
+      // is logged by the backend on every request rather than only by popups
+      // that stayed open long enough to report. Counting it here too would
+      // count one condition twice in two systems.
       setCapture({ input, wordOrPhrase: result.normalizedNativeText, languages: result.languages })
       setSelections(initialSelections(result.languages))
     } catch (err) {
