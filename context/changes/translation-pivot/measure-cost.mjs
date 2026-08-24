@@ -7,10 +7,19 @@
 //   cd backend && node ../context/changes/translation-pivot/measure-cost.mjs
 //
 // Reads ANTHROPIC_API_KEY from backend/.env. Costs roughly $0.02 per run.
-// Deliberately duplicates the tool schema and system prompt from
-// backend/src/ai/translate.ts rather than importing them, so it keeps
-// measuring the CURRENT shipped shape even after that file changes — if the
-// two drift, that drift is itself the thing worth noticing.
+//
+// PREREQUISITE: run `npm run build:ts` in backend/ first — this imports the
+// compiled adapter from backend/dist/.
+//
+// It used to carry a hand-copied second copy of the tool schema, prompt, model
+// id and token formula, on the theory that a copy keeps measuring the shipped
+// shape. It did the opposite: nothing detected when the two drifted, so the
+// instrument could quietly measure a contract the app no longer sent. Now it
+// imports the one definition from the adapter — the only place a provider
+// contract lives — so the thing measured is the thing shipped, by
+// construction. It still builds its own client and calls the API directly;
+// that is what a cost instrument is for, and routing it through the port would
+// measure the wrong thing.
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -26,71 +35,29 @@ for (const line of fs.readFileSync(path.join(repoRoot, 'backend/.env'), 'utf8').
   if (m) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '')
 }
 
-const MODEL = 'claude-haiku-4-5-20251001'
-const TOOL = 'return_translation'
+// The one definition of the provider contract, imported rather than copied.
+// Reads from dist/ because this is a plain .mjs script with no TS loader —
+// hence the build:ts prerequisite in the header above.
+const distUrl = (relative) =>
+  new URL(`file:///${path.join(repoRoot, relative).split(path.sep).join('/')}`).href
+
+const { ANTHROPIC_MODEL, TRANSLATION_TOOL_NAME, MAX_TOKENS_PER_LANGUAGE, translationTool, systemPrompt } =
+  await import(distUrl('backend/dist/adapters/anthropicTranslator.js'))
+const { RequestedLanguages } = await import(distUrl('backend/dist/domain/translationDraft.js'))
+
+const MODEL = ANTHROPIC_MODEL
+const TOOL = TRANSLATION_TOOL_NAME
 // Haiku 4.5 pricing per million tokens, as of 2026-08-01. Verify before trusting.
 const IN = 1.0 / 1e6
 const OUT = 5.0 / 1e6
-
-const translationTool = {
-  name: TOOL,
-  description: 'Return structured translation variants with IPA phonetics and bilingual example sentences for a captured word or phrase, for every requested target language.',
-  input_schema: {
-    type: 'object',
-    required: ['normalizedNativeText', 'languages'],
-    properties: {
-      normalizedNativeText: { type: 'string', description: 'The input word/phrase normalized to its base form in the native language, regardless of which language it was typed in.' },
-      languages: {
-        type: 'array',
-        description: 'One entry per requested target language, in the order they were requested.',
-        items: {
-          type: 'object',
-          required: ['languageCode', 'variants'],
-          properties: {
-            languageCode: { type: 'string', description: 'The target language code this entry covers, copied exactly from the requested list.' },
-            variants: {
-              type: 'array',
-              minItems: 1,
-              description: 'The distinct meanings of the word in this target language. Never empty.',
-              items: {
-                type: 'object',
-                required: ['meaningText', 'phoneticTranscription', 'sentences'],
-                properties: {
-                  meaningText: { type: 'string', description: 'This variant\'s translation in this target language.' },
-                  phoneticTranscription: { type: ['string', 'null'], description: 'IPA phonetic transcription of the target-language translation, or null if one cannot be produced.' },
-                  sentences: {
-                    type: 'array',
-                    minItems: 1,
-                    items: {
-                      type: 'object',
-                      required: ['targetText', 'nativeGlossText'],
-                      properties: {
-                        targetText: { type: 'string', description: 'An example sentence in this target language using this variant.' },
-                        nativeGlossText: { type: 'string', description: 'That same sentence translated into the native language.' }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-const systemPrompt = (native, targets) => `You are a translation assistant inside a language-learning app. The active collection's native language is "${native}" and its target (learning) languages are: ${targets.map((c) => `"${c}"`).join(', ')}. The user will type a word or phrase in the native language or in any one of the target languages — detect which one, then respond only via the provided tool call. Return one entry in "languages" for every requested target language, using the exact codes listed above. Within each language, give several translation variants covering distinct meanings if the word is ambiguous, each with an IPA phonetic transcription of that language's form, and a few example sentences per variant, each paired with a native-language gloss.
-
-Every language entry must contain at least one variant, and every variant at least one example sentence. An empty "variants" array is never an acceptable answer — if the word is unfamiliar or you are unsure of it, still give your best single translation rather than returning nothing.`
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 async function run (label, text, targets) {
   const msg = await client.messages.create({
     model: MODEL,
-    max_tokens: 2048 * Math.max(targets.length, 1),
-    system: systemPrompt('pl', targets),
+    max_tokens: MAX_TOKENS_PER_LANGUAGE * Math.max(targets.length, 1),
+    system: systemPrompt(RequestedLanguages.of('pl', targets)),
     messages: [{ role: 'user', content: text }],
     tools: [translationTool],
     tool_choice: { type: 'tool', name: TOOL }

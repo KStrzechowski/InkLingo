@@ -968,9 +968,9 @@ this reason.
 
 #### Automated
 
-- [x] 4.1 Backend suite passes: `cd backend && npm test`
-- [x] 4.2 Type check passes: `cd backend && npm run build:ts`
-- [x] 4.3 Removing a property from `translateResponseSchema` turns the deep-equal assertion red
+- [x] 4.1 Backend suite passes: `cd backend && npm test` — 7a62f42
+- [x] 4.2 Type check passes: `cd backend && npm run build:ts` — 7a62f42
+- [x] 4.3 Removing a property from `translateResponseSchema` turns the deep-equal assertion red — 7a62f42
 
 #### Manual
 
@@ -980,8 +980,8 @@ this reason.
 
 #### Automated
 
-- [ ] 5.1 `cd backend && npm run build:ts`, then `node --check context/changes/translation-pivot/measure-cost.mjs`
-- [ ] 5.2 `grep -n "return_translation\|claude-haiku\|You are a translation assistant" context/changes/translation-pivot/measure-cost.mjs` returns only the import line
+- [x] 5.1 `cd backend && npm run build:ts`, then `node --check context/changes/translation-pivot/measure-cost.mjs`
+- [x] 5.2 `grep -n "return_translation\|claude-haiku\|You are a translation assistant" context/changes/translation-pivot/measure-cost.mjs` returns only the import line
 
 #### Manual
 
