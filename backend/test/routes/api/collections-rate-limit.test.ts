@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { build } from '../../helper.js'
 import { jwks, signToken } from '../../helpers/jwks.js'
 import { createUserRow, createCollectionRow } from '../../helpers/fixtures.js'
-import { stubAnthropicSuccess } from '../../helpers/anthropic.js'
+import { stubTranslator } from '../../helpers/fakeTranslator.js'
 
 const STUB_PAYLOAD = {
   normalizedNativeText: 'pies',
@@ -29,7 +29,7 @@ test('POST /api/collections/:id/translate rejects the 21st request within the ra
   const userId = await createUserRow(app, t, sub)
   const collectionId = await createCollectionRow(app, userId, 'Rate limit test', 'pl', ['en'])
 
-  stubAnthropicSuccess(app, STUB_PAYLOAD)
+  stubTranslator(app, STUB_PAYLOAD)
 
   app.jwtVerifier.cacheJwks(jwks)
   const token = await signToken({ sub })

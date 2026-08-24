@@ -936,10 +936,10 @@ this reason.
 
 #### Automated
 
-- [x] 2.1 Backend suite passes: `cd backend && npm test`
-- [x] 2.2 Type check passes: `cd backend && npm run build:ts`
-- [x] 2.3 Tool schema and system prompt are byte-identical to `translate.ts:49-107` and `:133-135`
-- [x] 2.4 `grep -rln "@anthropic-ai/sdk" backend/src` returns exactly the four expected files
+- [x] 2.1 Backend suite passes: `cd backend && npm test` — 224e2f5
+- [x] 2.2 Type check passes: `cd backend && npm run build:ts` — 224e2f5
+- [x] 2.3 Tool schema and system prompt are byte-identical to `translate.ts:49-107` and `:133-135` — 224e2f5
+- [x] 2.4 `grep -rln "@anthropic-ai/sdk" backend/src` returns exactly the four expected files — 224e2f5
 
 #### Manual
 
@@ -949,14 +949,14 @@ this reason.
 
 #### Automated
 
-- [ ] 3.1 Backend suite passes: `cd backend && npm test`
-- [ ] 3.2 Type check passes: `cd backend && npm run build:ts`
-- [ ] 3.3 `grep -rl "@anthropic-ai/sdk" backend/src backend/test` returns exactly the adapter and its test
-- [ ] 3.4 `grep -rn "anthropicClient\|TranslationResult\|toolUse\|tool_use" backend/src/routes backend/src/plugins` returns nothing
-- [ ] 3.5 `grep -rn "claude-haiku\|return_translation" backend/src backend/test | grep -v "adapters/"` returns nothing
-- [ ] 3.6 `backend/src/ai/` no longer exists
-- [ ] 3.7 `backend/test/route-reachability.test.ts` passes
-- [ ] 3.8 Boundary test goes red on an SDK import added to a route, green when removed
+- [x] 3.1 Backend suite passes: `cd backend && npm test`
+- [x] 3.2 Type check passes: `cd backend && npm run build:ts`
+- [x] 3.3 `grep -rl "@anthropic-ai/sdk" backend/src backend/test` returns exactly the adapter and its test
+- [x] 3.4 `grep -rn "anthropicClient\|TranslationResult\|toolUse\|tool_use" backend/src/routes backend/src/plugins` returns nothing
+- [x] 3.5 `grep -rn "claude-haiku\|return_translation" backend/src backend/test | grep -v "adapters/"` returns nothing
+- [x] 3.6 `backend/src/ai/` no longer exists
+- [x] 3.7 `backend/test/route-reachability.test.ts` passes
+- [x] 3.8 Boundary test goes red on an SDK import added to a route, green when removed
 
 #### Manual
 
