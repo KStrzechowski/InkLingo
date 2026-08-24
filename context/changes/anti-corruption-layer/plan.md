@@ -910,10 +910,10 @@ this reason.
 
 #### Automated
 
-- [x] 0.1 `grep -rl "@anthropic-ai/sdk" backend/src backend/test` returns 5 files
-- [x] 0.2 `grep -rn "anthropicClient" backend/src backend/test | wc -l` returns 7
-- [x] 0.3 `grep -rn "claude-haiku\|return_translation" backend/src backend/test` returns 2 hits, both in `translate.ts`
-- [x] 0.4 `cd backend && npm test` passes and the test count is recorded
+- [x] 0.1 `grep -rl "@anthropic-ai/sdk" backend/src backend/test` returns 5 files — 5369a9c
+- [x] 0.2 `grep -rn "anthropicClient" backend/src backend/test | wc -l` returns 7 — 5369a9c
+- [x] 0.3 `grep -rn "claude-haiku\|return_translation" backend/src backend/test` returns 2 hits, both in `translate.ts` — 5369a9c
+- [x] 0.4 `cd backend && npm test` passes and the test count is recorded — 5369a9c
 
 #### Manual
 
@@ -923,10 +923,10 @@ this reason.
 
 #### Automated
 
-- [x] 1.1 Backend suite passes: `cd backend && npm test`
-- [x] 1.2 Type check passes: `cd backend && npm run build:ts`
-- [x] 1.3 `grep -rn "@anthropic-ai/sdk" backend/src/domain` returns nothing
-- [x] 1.4 `grep -rn "from 'fastify'" backend/src/domain` returns nothing
+- [x] 1.1 Backend suite passes: `cd backend && npm test` — 5369a9c
+- [x] 1.2 Type check passes: `cd backend && npm run build:ts` — 5369a9c
+- [x] 1.3 `grep -rn "@anthropic-ai/sdk" backend/src/domain` returns nothing — 5369a9c
+- [x] 1.4 `grep -rn "from 'fastify'" backend/src/domain` returns nothing — 5369a9c
 
 #### Manual
 
@@ -936,10 +936,10 @@ this reason.
 
 #### Automated
 
-- [ ] 2.1 Backend suite passes: `cd backend && npm test`
-- [ ] 2.2 Type check passes: `cd backend && npm run build:ts`
-- [ ] 2.3 Tool schema and system prompt are byte-identical to `translate.ts:49-107` and `:133-135`
-- [ ] 2.4 `grep -rln "@anthropic-ai/sdk" backend/src` returns exactly the four expected files
+- [x] 2.1 Backend suite passes: `cd backend && npm test`
+- [x] 2.2 Type check passes: `cd backend && npm run build:ts`
+- [x] 2.3 Tool schema and system prompt are byte-identical to `translate.ts:49-107` and `:133-135`
+- [x] 2.4 `grep -rln "@anthropic-ai/sdk" backend/src` returns exactly the four expected files
 
 #### Manual
 
