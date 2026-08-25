@@ -204,13 +204,23 @@ export class TranslationDraft {
     }
   }
 
-  // The spend meter `translation-pivot/research.md:1010-1014` asks for: the
-  // DeepL grant is finite and non-renewing and the Azure allowance resets
-  // monthly, both metered per character, so a provider swap needs somewhere a
-  // running total can be read. Counts the translated text this draft carries —
-  // the only quantity the draft itself can honestly measure — so a language
-  // that came back empty costs nothing.
-  billableCharacters (): number {
+  // Counts the translated text this draft carries: every meaning, phonetic,
+  // sentence and gloss, so a language that came back empty costs nothing.
+  //
+  // Named for what it measures, not for what it costs. It was
+  // `billableCharacters()` — the name `03-anti-corruption-layer.md:1173` gives
+  // it as `research.md:1010-1014`'s spend meter — but that name matches no
+  // provider's invoice: Anthropic bills tokens, and DeepL and Azure bill
+  // characters *submitted*, per target language. This is characters
+  // *produced*, which is the only quantity a draft can honestly measure, since
+  // it does not hold the request.
+  //
+  // So this is half of the counter the pivot needs. The other half — metering
+  // submitted characters — belongs in the adapter, which knows the request,
+  // alongside the per-call log line `03-anti-corruption-layer.md:1014`
+  // specifies and this change did not build. Recorded as a follow-up in
+  // change.md; until it exists, nothing reads this number.
+  producedCharacters (): number {
     return this.languages.reduce((languageTotal, language) => (
       languageTotal + language.senses.reduce((senseTotal, sense) => (
         senseTotal +

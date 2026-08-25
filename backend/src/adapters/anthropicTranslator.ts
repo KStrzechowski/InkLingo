@@ -122,31 +122,30 @@ Every language entry must contain at least one variant, and every variant at lea
 
 export interface AnthropicTranslatorOptions {
   apiKey: string
-  log: TranslatorLog
-}
-
-export interface TranslatorLog {
-  error: (o: object, msg: string) => void
 }
 
 // The application always goes through this: it owns which client the adapter
 // speaks to, so no caller chooses the transport policy by accident.
 export function createAnthropicTranslator (options: AnthropicTranslatorOptions): Translator {
-  return anthropicTranslatorOver(
-    new Anthropic({
-      apiKey: options.apiKey,
-      maxRetries: PROVIDER_MAX_RETRIES,
-      timeout: PROVIDER_TIMEOUT_MS
-    }),
-    options.log
-  )
+  return anthropicTranslatorOver(new Anthropic({
+    apiKey: options.apiKey,
+    maxRetries: PROVIDER_MAX_RETRIES,
+    timeout: PROVIDER_TIMEOUT_MS
+  }))
 }
 
 // Split out so the adapter's own test can drive it with a stubbed SDK client —
 // the one place in the suite that builds a provider response envelope. Named
 // separately rather than as an optional parameter on the factory above so the
 // provider type cannot reach the plugin that wires it.
-export function anthropicTranslatorOver (client: Pick<Anthropic, 'messages'>, log: TranslatorLog): Translator {
+//
+// Deliberately takes no logger. Every failure leaves here as a domain error
+// carrying its `cause`, and the route logs exactly one line for it with the
+// correlationId a user can quote — pino serializes the whole cause chain, so
+// nothing is lost. An adapter-side line would be a second record of the same
+// event, and the one *without* the correlation id: precisely the split that
+// made the informative half unfindable before this change.
+export function anthropicTranslatorOver (client: Pick<Anthropic, 'messages'>): Translator {
   async function attempt (request: TranslationRequest): Promise<TranslationDraft> {
     const { text, languages, signal } = request
 
@@ -184,18 +183,16 @@ export function anthropicTranslatorOver (client: Pick<Anthropic, 'messages'>, lo
           draft = await attempt(request)
         }
       } catch (err) {
-        // The string an operator greps for should not name a vendor the rest
-        // of the system cannot see. This line carries the provider-level
-        // detail — which SDK error, which status — that the route cannot see
-        // from behind the port; the route logs its own line with the
-        // correlationId a user can quote.
-        log.error({ err }, 'translator provider call failed')
         // Both domain errors are already the right answer. Re-wrapping a
         // MalformedDraftError as "unavailable" would collapse "the provider
         // is down" and "the provider replied with something that is not a
         // translation" into one, which is the distinction the taxonomy exists
         // to keep.
         if (err instanceof TranslatorUnavailableError || err instanceof MalformedDraftError) throw err
+        // The cause carries the SDK's own error — status, retry state, body —
+        // to whoever logs this. The message names no vendor, because the
+        // string an operator greps for should not name one the rest of the
+        // system cannot see.
         throw new TranslatorUnavailableError('the translator provider call failed', { cause: err })
       }
 

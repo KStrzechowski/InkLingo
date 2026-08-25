@@ -83,20 +83,13 @@ function failingClient (err: Error): Pick<Anthropic, 'messages'> {
   } as unknown as Pick<Anthropic, 'messages'>
 }
 
-const silentLog = { error: (): void => {} }
-
-function collectingLog (): { error: (o: object, msg: string) => void, messages: () => string[] } {
-  const messages: string[] = []
-  return { error: (_o, msg) => { messages.push(msg) }, messages: () => messages }
-}
-
 function request (): { text: string, languages: RequestedLanguages, signal: AbortSignal } {
   return { text: 'pies', languages: requested, signal: new AbortController().signal }
 }
 
 test('a populated response becomes a domain draft with no provider shape left on it', async () => {
   const { client, recorder } = stubClient([POPULATED])
-  const translator = anthropicTranslatorOver(client, silentLog)
+  const translator = anthropicTranslatorOver(client)
 
   const draft = await translator.draft(request())
 
@@ -109,7 +102,7 @@ test('a populated response becomes a domain draft with no provider shape left on
 test('the request carries the moved model id, token formula and system prompt', async () => {
   const { client, recorder } = stubClient([POPULATED])
 
-  await anthropicTranslatorOver(client, silentLog).draft(request())
+  await anthropicTranslatorOver(client).draft(request())
 
   const [body] = recorder.params()
   assert.equal(body.model, ANTHROPIC_MODEL)
@@ -122,7 +115,7 @@ test('the request carries the moved model id, token formula and system prompt', 
 test('an all-empty draft is re-asked exactly once, and the second answer is kept', async () => {
   const { client, recorder } = stubClient([ALL_EMPTY, POPULATED])
 
-  const draft = await anthropicTranslatorOver(client, silentLog).draft(request())
+  const draft = await anthropicTranslatorOver(client).draft(request())
 
   assert.equal(recorder.calls(), 2)
   assert.equal(draft.isDegenerate(), false)
@@ -135,7 +128,7 @@ test('an always-empty sequence stops after two attempts and raises DegenerateDra
   const { client, recorder } = stubClient([ALL_EMPTY])
 
   await assert.rejects(
-    async () => await anthropicTranslatorOver(client, silentLog).draft(request()),
+    async () => await anthropicTranslatorOver(client).draft(request()),
     (err: unknown) => {
       assert.ok(err instanceof DegenerateDraftError)
       assert.deepStrictEqual(err.languageCodes, ['en', 'de'])
@@ -150,28 +143,27 @@ test('an always-empty sequence stops after two attempts and raises DegenerateDra
 test('a partially-empty draft is returned as-is, without a retry', async () => {
   const { client, recorder } = stubClient([PARTIALLY_EMPTY])
 
-  const draft = await anthropicTranslatorOver(client, silentLog).draft(request())
+  const draft = await anthropicTranslatorOver(client).draft(request())
 
   assert.equal(recorder.calls(), 1)
   assert.equal(draft.isDegenerate(), false)
   assert.deepStrictEqual(draft.degenerateLanguageCodes(), ['de'])
 })
 
-test('a thrown SDK error becomes TranslatorUnavailableError, keeping the cause and logging once', async () => {
+// The adapter logs nothing: the cause travels on the error, and the route
+// emits the single correlated line for it. pino serializes the whole cause
+// chain, so the provider detail survives without a second, uncorrelated record.
+test('a thrown SDK error becomes TranslatorUnavailableError, keeping the cause', async () => {
   const cause = new Error('529 overloaded_error')
-  const log = collectingLog()
 
   await assert.rejects(
-    async () => await anthropicTranslatorOver(failingClient(cause), log).draft(request()),
+    async () => await anthropicTranslatorOver(failingClient(cause)).draft(request()),
     (err: unknown) => {
       assert.ok(err instanceof TranslatorUnavailableError)
       assert.equal(err.cause, cause)
       return true
     }
   )
-  // The line an operator greps for must not name a vendor the rest of the
-  // system cannot see.
-  assert.deepStrictEqual(log.messages(), ['translator provider call failed'])
 })
 
 test('a response with no tool_use block becomes TranslatorUnavailableError', async () => {
@@ -182,7 +174,7 @@ test('a response with no tool_use block becomes TranslatorUnavailableError', asy
   } as unknown as Pick<Anthropic, 'messages'>
 
   await assert.rejects(
-    async () => await anthropicTranslatorOver(client, silentLog).draft(request()),
+    async () => await anthropicTranslatorOver(client).draft(request()),
     TranslatorUnavailableError
   )
 })
@@ -195,7 +187,7 @@ test('a tool_use block under a different tool name is not mistaken for a transla
   } as unknown as Pick<Anthropic, 'messages'>
 
   await assert.rejects(
-    async () => await anthropicTranslatorOver(client, silentLog).draft(request()),
+    async () => await anthropicTranslatorOver(client).draft(request()),
     TranslatorUnavailableError
   )
 })
@@ -207,7 +199,7 @@ test('an unparseable payload surfaces as MalformedDraftError, not as unavailable
   const { client } = stubClient(['not an object at all'])
 
   await assert.rejects(
-    async () => await anthropicTranslatorOver(client, silentLog).draft(request()),
+    async () => await anthropicTranslatorOver(client).draft(request()),
     MalformedDraftError
   )
 })

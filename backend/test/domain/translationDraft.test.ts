@@ -262,7 +262,7 @@ test('toWire emits the wire key `variants` with the shape the popup already pars
   })
 })
 
-test('billableCharacters counts every character of translated text the draft carries', () => {
+test('producedCharacters counts every character of translated text the draft carries', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
     {
       languageCode: 'en',
@@ -276,7 +276,7 @@ test('billableCharacters counts every character of translated text the draft car
   ]), requested)
 
   // 3 (dog) + 5 (/dog/) + 5 (Woof.) + 4 (Hau.) — the empty language costs nothing.
-  assert.equal(draft.billableCharacters(), 17)
+  assert.equal(draft.producedCharacters(), 17)
 })
 
 // The native code is interpolated verbatim into the system prompt, so

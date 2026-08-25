@@ -20,8 +20,7 @@ export interface TranslatorPluginOptions {
 // adapters/ — no route, schema, migration, client type or component moves.
 export default fp<TranslatorPluginOptions>(async (fastify) => {
   const translator = createAnthropicTranslator({
-    apiKey: fastify.config.anthropicApiKey,
-    log: fastify.log
+    apiKey: fastify.config.anthropicApiKey
   })
 
   fastify.decorate('translator', translator)

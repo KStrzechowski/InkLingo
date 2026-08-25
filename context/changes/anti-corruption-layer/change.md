@@ -23,8 +23,9 @@ that will carry its own live-verification gate.
 `docs/reference/contract-surfaces.md` does not exist in this repo):
 `Translator`, `TranslationDraft`, `TranslationDraft.fromProviderPayload`,
 `RequestedLanguages`, `PersistableRendering`, `toWire()` /
-`TranslateResponseBody`, `billableCharacters()`, `TranslatorUnavailableError`,
+`TranslateResponseBody`, `producedCharacters()`, `TranslatorUnavailableError`,
 `MalformedDraftError`, `DegenerateDraftError`, `createAnthropicTranslator`,
+`anthropicTranslatorOver`,
 and the `backend/src/adapters/` directory as an enforced grep boundary.
 
 **Follow-ups this change deliberately leaves open**: D-1/D-2 tool-schema
@@ -44,3 +45,26 @@ exactly.
 | `anthropicClient` references across `backend/src` + `backend/test` | 7 |
 | `claude-haiku` / `return_translation` hits | 2, both in `src/ai/translate.ts` (`:3`, `:4`) |
 | Backend test suite | 94 tests, 94 pass, 0 fail |
+
+## Post-review changes (2026-08-24)
+
+The full-plan review (`reviews/impl-review.md`) raised two warnings, both
+applied:
+
+- **`billableCharacters()` renamed to `producedCharacters()`.** The old name
+  matches no provider's invoice — Anthropic bills tokens, DeepL and Azure bill
+  characters *submitted* per target language, and this counts characters
+  *produced*. `context/domain/03-anti-corruption-layer.md:1173` still records
+  the old name; that document is the source analysis and was left unedited.
+- **The adapter no longer logs.** `createAnthropicTranslator` lost its `log`
+  option, because the route already emits one line carrying the correlationId
+  *and* the full cause chain (verified: pino serializes `cause`). The adapter's
+  line was a second record of the same failure, and the one without the id a
+  user can quote.
+
+**New follow-up.** `03-anti-corruption-layer.md:1014` specifies the character
+counter as "`billableCharacters()` **plus a per-call log line in the adapter**".
+Only the first half exists, so nothing reads the number today. The second half —
+and metering *submitted* characters, which needs the request and therefore
+belongs in the adapter — is left to the provider-swap change that actually needs
+a budget alarm.

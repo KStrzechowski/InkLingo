@@ -595,6 +595,32 @@ adapter (provider-shaped), and the split between the two is the whole point.
 **Contract**: The directory `backend/src/ai/` is removed. No import of it may
 remain anywhere.
 
+#### 7b. Discovered scope (added during implementation, not in the original plan)
+
+**Files**: `backend/test/helper.ts`, `backend/test/helpers/logs.ts` (new),
+`backend/src/adapters/anthropicTranslator.ts`, `backend/src/routes/api/collections/index.ts`
+
+**Intent**: Four additions the plan did not anticipate, recorded here so the
+plan stays usable as ground truth.
+
+- `build(t)` gains an optional `serverOptions` parameter and `helpers/logs.ts`
+  is new, because this phase requires asserting that the degradation log line
+  fired and pino child loggers cannot be spied on by reassigning `app.log`.
+  Backward compatible — every existing `build(t)` call is untouched.
+- `anthropicTranslatorOver(client)` is exported alongside
+  `createAnthropicTranslator`, because the planned factory constructs its own
+  client and nothing could otherwise stub it. The provider type stays out of
+  the plugin.
+- The translate route re-checks `draft.isDegenerate()` even though the adapter
+  raises `DegenerateDraftError`, so "all-empty is a 502" holds for any
+  `Translator` rather than for one adapter — the port's type cannot express
+  non-degenerate.
+- `routes/api/collections/index.ts` gains the `fastify.d.ts` forcing import.
+  Renaming `plugins/anthropic.ts` to `plugins/translator.ts` moved that plugin's
+  forcing import from first to last in `@fastify/autoload`'s alphabetical order,
+  and this file — which had never carried its own — began failing 9 of 127 tests
+  non-deterministically. See `lessons.md`.
+
 #### 8. The boundary test
 
 **File**: `backend/test/architecture/providerBoundary.test.ts` (new)
@@ -617,7 +643,7 @@ a route, confirm red, remove it.
 
 - Backend suite passes: `cd backend && npm test`
 - Type check passes: `cd backend && npm run build:ts`
-- `grep -rl "@anthropic-ai/sdk" backend/src backend/test` returns exactly `backend/src/adapters/anthropicTranslator.ts` and `backend/test/adapters/anthropicTranslator.test.ts`
+- `grep -rl "@anthropic-ai/sdk" backend/src backend/test | grep -v "test/architecture/"` returns exactly `backend/src/adapters/anthropicTranslator.ts` and `backend/test/adapters/anthropicTranslator.test.ts`. The exclusion is not a loophole: `providerBoundary.test.ts` necessarily contains every string it searches for, so it excludes itself from its own walk and asserts the same two-file set as a committed gate.
 - `grep -rn "anthropicClient\|TranslationResult\|toolUse\|tool_use" backend/src/routes backend/src/plugins` returns nothing
 - `grep -rn "claude-haiku\|return_translation" backend/src backend/test | grep -v "backend/src/adapters/\|backend/test/adapters/"` returns nothing
 - `backend/src/ai/` no longer exists
@@ -870,6 +896,13 @@ degraded copy, not a break. Phase 6 is client-only and the extension is
 side-loaded manually (`extension/README.md`), so it can follow whenever
 convenient.
 
+**A second, smaller behavior change.** `parseSenses` drops any sense with a
+blank `meaningText` or an empty `sentences` array *before* `isDegenerate()` is
+evaluated. So a response whose variants are all individually unusable — one that
+previously returned 200 and rendered variants with no examples — is now
+indistinguishable from an all-empty one and becomes a 502 plus a retry. Intended
+(both rules are specified above), but broader than "all-empty now fails loudly".
+
 **Rollback.** Every phase is a revertible commit. Phase 3 is the only one that
 changes behavior; reverting it restores `plugins/anthropic.ts`, `ai/translate.ts`
 and the old test helpers together, since they were deleted together for exactly
@@ -897,7 +930,7 @@ this reason.
 | `RequestedLanguages` | Value object — owns alignment |
 | `PersistableRendering` | Projection replacing `index.ts:396-408`'s reach-in |
 | `toWire()` / `TranslateResponseBody` | The wire contract, produced rather than inherited |
-| `billableCharacters()` | Spend meter for the pivot's budget requirement |
+| `producedCharacters()` | Volume meter — renamed from `billableCharacters()` post-review, since that name matches no provider's invoice. Half of the pivot's budget requirement; the submitted-character half belongs in the adapter |
 | `TranslatorUnavailableError`, `MalformedDraftError`, `DegenerateDraftError` | Error taxonomy carrying no provider type |
 | `createAnthropicTranslator` | Adapter factory — the only exported function constructing a provider client |
 | `backend/src/adapters/` | Directory forming the enforced grep boundary |
@@ -951,7 +984,7 @@ this reason.
 
 - [x] 3.1 Backend suite passes: `cd backend && npm test` — 9980860
 - [x] 3.2 Type check passes: `cd backend && npm run build:ts` — 9980860
-- [x] 3.3 `grep -rl "@anthropic-ai/sdk" backend/src backend/test` returns exactly the adapter and its test — 9980860
+- [x] 3.3 `grep -rl "@anthropic-ai/sdk" backend/src backend/test | grep -v "test/architecture/"` returns exactly the adapter and its test — 9980860
 - [x] 3.4 `grep -rn "anthropicClient\|TranslationResult\|toolUse\|tool_use" backend/src/routes backend/src/plugins` returns nothing — 9980860
 - [x] 3.5 `grep -rn "claude-haiku\|return_translation" backend/src backend/test | grep -v "adapters/"` returns nothing — 9980860
 - [x] 3.6 `backend/src/ai/` no longer exists — 9980860

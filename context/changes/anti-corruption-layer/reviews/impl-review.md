@@ -4,7 +4,7 @@
 - **Plan**: `context/changes/anti-corruption-layer/plan.md`
 - **Scope**: Phases 0–6 of 6 (all automated criteria complete; manual pending)
 - **Date**: 2026-08-24
-- **Verdict**: NEEDS ATTENTION
+- **Verdict**: NEEDS ATTENTION → all 7 findings resolved 2026-08-24
 - **Findings**: 0 critical, 2 warnings, 5 observations
 
 ## Verdicts
@@ -61,7 +61,7 @@ consecutive runs and the extension suite is 35/35.
   - Confidence: MEDIUM — depends on whether anything downstream wants a
     produced-text metric at all.
   - Blind spot: None significant.
-- **Decision**: PENDING
+- **Decision**: FIXED via a revised Fix A — the review's original "delete it" recommendation was **withdrawn**: `03-anti-corruption-layer.md:1131` names `billableCharacters()` as the pivot's character counter, so deleting it would remove a depended-on artifact. Renamed to `producedCharacters()`, semantics documented, and the missing adapter-side half recorded as a follow-up in change.md.
 
 ### F2 — Every translator failure logs twice, and the provider-detail line has no correlation id
 
@@ -97,7 +97,7 @@ consecutive runs and the extension suite is 35/35.
     `draft()` call, widening the port the change exists to narrow.
   - Confidence: MEDIUM.
   - Blind spot: None significant.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — adapter's `log.error` and the `log` option removed. Confidence upgraded MEDIUM→HIGH after empirically confirming pino serializes the `cause` chain, so the route's single correlated line loses nothing.
 
 ### F3 — The 502's blast radius is wider than the plan describes
 
@@ -118,7 +118,7 @@ consecutive runs and the extension suite is 35/35.
 - **Fix**: Add a line to the plan's Migration Notes recording that a
   wholly-unusable response also collapses to 502, so the next reader does not
   re-derive it from the code.
-- **Decision**: PENDING
+- **Decision**: FIXED — recorded in the plan's Migration Notes.
 
 ### F4 — Unplanned test-infrastructure changes
 
@@ -135,7 +135,7 @@ consecutive runs and the extension suite is 35/35.
   backward compatible: every existing `build(t)` call is untouched.
 - **Fix**: Note both files in the plan's Phase 3 "Changes Required" as discovered
   scope, so the plan stays usable as ground truth for later reviews.
-- **Decision**: PENDING
+- **Decision**: FIXED — recorded in the plan as Phase 3 § 7b, discovered scope.
 
 ### F5 — Two unplanned production additions, both defensible
 
@@ -151,7 +151,7 @@ consecutive runs and the extension suite is 35/35.
   any `Translator` rather than for one adapter — the port's type cannot express
   non-degenerate. Both are additive and covered by tests.
 - **Fix**: Record both in the plan as discovered scope; no code change.
-- **Decision**: PENDING
+- **Decision**: FIXED — recorded in the plan as Phase 3 § 7b, discovered scope.
 
 ### F6 — Success criterion 3.3's literal grep returns three files, not two
 
@@ -167,7 +167,7 @@ consecutive runs and the extension suite is 35/35.
   an SDK import to a route. Only the criterion's literal wording is wrong.
 - **Fix**: Amend criterion 3.3 to exclude `test/architecture/`, matching what the
   boundary test actually enforces.
-- **Decision**: PENDING
+- **Decision**: FIXED — criterion 3.3 amended in both the phase block and the Progress row.
 
 ### F7 — `lessons.md`'s forcing-import entry now cites a deleted property
 
@@ -186,7 +186,7 @@ consecutive runs and the extension suite is 35/35.
 - **Fix**: Update the entry to cite `fastify.translator`, and add the ordering
   mechanism: any file reading an augmented property needs its own forcing import,
   because relying on another plugin's is a dependency on that plugin's filename.
-- **Decision**: PENDING
+- **Decision**: FIXED — lessons.md now cites `fastify.translator`, records the third occurrence, and captures the autoload-ordering mechanism.
 
 ## Verification performed during this review
 
