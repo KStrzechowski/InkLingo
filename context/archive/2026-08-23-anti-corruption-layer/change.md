@@ -1,10 +1,10 @@
 ---
 change_id: anti-corruption-layer
 title: Seal the model provider behind a translator port
-status: impl_reviewed
+status: archived
 created: 2026-08-23
-updated: 2026-08-24
-archived_at: null
+updated: 2026-08-25
+archived_at: 2026-08-25T17:45:21Z
 ---
 
 ## Notes
