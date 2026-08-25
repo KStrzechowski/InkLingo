@@ -31,6 +31,58 @@ export const translateBodySchema = Type.Object({
 })
 export type TranslateBody = Static<typeof translateBodySchema>
 
+// The translate response contract, declared once and owned by us. Before this
+// existed the body *was* the model's tool-call object, redeclared by hand in
+// `extension/src/types.ts:14-36` and checked by nothing at either end.
+//
+// Two consumers read from here and must not drift: Fastify serializes
+// `POST /:id/translate` against it, and `TranslationDraft.toWire()` is typed by
+// it, so a field the domain stops emitting becomes a compile error rather than
+// a property Fastify silently strips.
+//
+// The wire key is `variants`, not the domain's `senses`. The extension is
+// side-loaded and updated by hand (`extension/README.md`), so an older popup
+// must keep parsing this shape byte for byte; the rename belongs to `toWire()`
+// on the day the clients are ready for it.
+export const translateResponseSchema = Type.Object({
+  normalizedNativeText: Type.String(),
+  languages: Type.Array(Type.Object({
+    languageCode: Type.String(),
+    variants: Type.Array(Type.Object({
+      meaningText: Type.String(),
+      phoneticTranscription: Type.Union([Type.String(), Type.Null()]),
+      sentences: Type.Array(Type.Object({
+        targetText: Type.String(),
+        nativeGlossText: Type.String()
+      }))
+    }))
+  }))
+})
+export type TranslateResponseBody = Static<typeof translateResponseSchema>
+
+// FR-018's backfill response. Declared for the same reason as above and with
+// the same hazard: Fastify **strips** any property a response schema does not
+// declare, so a field missing here vanishes from the body silently rather than
+// erroring. Both routes are covered by a full-body deep-equal assertion, which
+// is the only shape of test that catches a stripped field.
+export const addEntryTranslationResponseSchema = Type.Object({
+  entryId: Type.String(),
+  translation: Type.Object({
+    id: Type.String(),
+    languageCode: Type.String(),
+    meaningText: Type.String(),
+    phoneticTranscription: Type.Union([Type.String(), Type.Null()])
+  }),
+  sentence: Type.Object({
+    id: Type.String(),
+    languageCode: Type.String(),
+    sentenceText: Type.String(),
+    nativeGlossText: Type.String(),
+    createdAt: Type.String()
+  })
+})
+export type AddEntryTranslationResponseBody = Static<typeof addEntryTranslationResponseSchema>
+
 // FR-018: backfill one already-saved entry with a language added to the
 // collection after that entry was created. One language per call — this is
 // the deliberate opposite of a bulk re-translate.

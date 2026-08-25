@@ -1,9 +1,9 @@
 ---
 change_id: translation-pivot
 title: Re-architect translation around English-pivot concepts with sense-level reuse
-status: new
+status: preparing
 created: 2026-08-02
-updated: 2026-08-02
+updated: 2026-08-20
 archived_at: null
 ---
 
@@ -113,6 +113,9 @@ increasing order of robustness and cost:
    non-determinism by pairing on meaning text, never position
    (`extension/src/popup/App.tsx:35-37`).
 3. **Open English WordNet synsets as the backbone** — stable synset IDs,
+   [**corrected 2026-08-21: synset IDs are *not* stable across editions; the
+   ILI is. See `research.md` §1.2. The national-wordnet claim below also does
+   not hold for `de`/`ru`/`uk` — see §1.3.**]
    CC-BY, comprehensive for English, with national wordnets (plWordNet,
    Russian) cross-linked via the Interlingual Index. Turns "have we seen this
    sense?" from a fuzzy string comparison into a key lookup. Cost: a mapping
@@ -136,9 +139,11 @@ Option 3 is the one to investigate first.
   phrases bypass the concept model and go straight to generation.
 - **Sparse spokes.** Some concepts have no single-word equivalent in a given
   language, so `concept_translations.lemma` will sometimes hold a phrase.
-- **DeepL Free is 500k chars/month.** At ~3 sentences × 6 languages × ~70
+- ~~**DeepL Free is 500k chars/month.** At ~3 sentences × 6 languages × ~70
   chars ≈ 1,260 chars per new concept, that is roughly 400 new concepts per
-  month before hitting the cap. Fine at current scale; a real ceiling later.
+  month before hitting the cap. Fine at current scale; a real ceiling later.~~
+  **Superseded 2026-08-21 — see Decisions below. There is no recurring free
+  allowance: the Developer plan grants 1,000,000 characters *once*.**
 - **That cap rules DeepL out as the seeding path.** Seeding 10k concepts is
   ~12.6M chars ≈ 25 months of DeepL Free. The `$4 seed` line in the cost table
   is the *AI* half (English senses + sentences via Batch API); the outward
@@ -150,6 +155,64 @@ Option 3 is the one to investigate first.
 - **CC-BY-SA (Wiktionary) and CC-BY (WordNet)** — attribution obligations,
   and share-alike on Wiktionary-derived content, need a deliberate decision
   before shipping. Unresolved legal gate carried over from `translation-cache`.
+
+### Decisions taken 2026-08-21
+
+Following `research.md` (this folder). Full reasoning and arithmetic are in its
+`## Follow-up Research — 2026-08-21` section; these are the conclusions.
+
+- **DeepL's free tier is 1,000,000 characters *in total*, one-time** (the
+  "Developer" plan). API Free / API Pro were withdrawn from new signups in
+  July 2026. There is no recurring free allowance, so the bullet above is
+  struck. At ~1,050 chars per worst-case lazy first-capture, the grant covers
+  roughly 950 of them — against `change.md`'s own ~500-capture estimate for all
+  remaining development, that is ~52% of the grant. **The ceiling is a
+  launch-time problem, not a now problem.**
+- **Azure AI Translator is the default provider**, for the request path and
+  the seed. F0 is 2,000,000 chars/month **recurring**, then $10/M — against
+  DeepL's 1M once, then ~$25/M. DeepL's reputed edge on European-language
+  idiom is **asserted, not measured**, and it comes from general prose
+  benchmarks; whether it holds for short pedagogical example sentences in
+  these eight languages is unknown. Economics decide unless a measurement
+  overturns them.
+- **DeepL's grant is capital, not income.** One-time and non-renewing, so it
+  is reserved for the bake-off below and as a per-language fallback — never
+  spent on a recurring cost. The inverse also holds and is easy to get wrong:
+  **unused Azure/Google allowance does not roll over**, so frugality with
+  those two is strictly wasteful.
+- **Bake-off before the seed.** 30 English sentences × 7 target languages ×
+  3 providers ≈ 15k chars each — ~1.5% of the DeepL grant, free on the other
+  two. Eyeball across `pl de fr es it uk`. This is what picks the seed
+  provider, and it discharges the "eyeball ~20 before committing" note above
+  properly rather than by dribble.
+- **Small eager seed (~1,000 concepts), lazy long tail.** 1,000 × ~1,470 chars
+  ≈ 1.47M chars — **74% of a single free Azure month**, with Google's 500k and
+  all of DeepL's 1M untouched. The seed is a **quality instrument and a demo
+  asset, not a latency optimization**: a ~300ms MT call is noise against the
+  4.7–10s Anthropic call already on that path. What it buys is a reviewable
+  corpus and a smaller render-then-return surface. Everything past the seed
+  renders lazily on first demand.
+- **One provider per corpus.** Do **not** split the seed across providers by
+  concept — the sentences *are* the artifact, and mixed provenance means a
+  learner comparing two entries sees inconsistent register. Splitting by
+  *language* is permitted only after the bake-off shows where the differences
+  actually are.
+- **IL-38's Wiktionary bulk ingest is unaffected and still happens.** Lemma
+  spokes and IPA come from a downloaded extract — no character cap, no
+  per-call billing. Only *sentence renderings* are governed by the seed/lazy
+  split above.
+- **IL-38 needs an input it does not currently have: a ranked English
+  wordlist.** "Which 1,000 words" is unspecified. Candidates: a frequency list
+  (SUBTLEX, wordfreq) or top-N by Wiktionary translation-table richness. The
+  AI half of a 1k seed is ~$0.40 via the Batch API — negligible; the ranking
+  is the real work.
+- **The translator is a provider-agnostic seam**, mirroring
+  `generateWithTimeout`. This is what makes every provider decision above a
+  config change rather than a re-plan.
+- **Concept identity: Open English WordNet, keyed on the ILI — not the synset
+  ID.** OEWN synset IDs change between editions; ILIs (`i77784`) are permanent
+  by design. Two-tier: ILI where the model maps cleanly, model-minted local
+  concept otherwise. See `research.md` §1.7.
 
 ### Why this is parked (2026-08-02)
 
@@ -194,8 +257,10 @@ Re-verify before planning (each is cheap, and each could have moved):
   design depends on this.
 - **Does `translateBodySchema` still accept only `text`?** If a field was
   added for another reason, the set-cursor problem may already be solved.
-- **Neon free-tier limits** (0.5 GB storage / 100 CU-hours as of 2026-08-01)
-  and **DeepL Free's 500k chars/month** — both are vendor terms that move.
+- ~~**Neon free-tier limits** (0.5 GB storage / 100 CU-hours as of 2026-08-01)
+  and **DeepL Free's 500k chars/month** — both are vendor terms that move.~~
+  **Done 2026-08-21.** Neon unchanged (0.5 GB / 100 CU-hours; Launch is
+  usage-based, no minimum, $0.35/GB-month). DeepL moved — see Decisions above.
 - **Whether S-04/S-05 changed the saved-entry schema** in a way that affects
   the concept tables.
 

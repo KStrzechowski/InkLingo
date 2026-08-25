@@ -1,10 +1,10 @@
 ---
 change_id: observability-coverage-gaps
 title: Close the failure surfaces the evidence layer cannot see
-status: implemented
+status: archived
 created: 2026-08-14
-updated: 2026-08-14
-archived_at: null
+updated: 2026-08-23
+archived_at: 2026-08-23T21:25:43Z
 ---
 
 ## Notes

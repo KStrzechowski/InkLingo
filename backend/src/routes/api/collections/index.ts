@@ -9,10 +9,21 @@ import {
   entryParamsSchema,
   translateBodySchema,
   createEntryBodySchema,
-  addEntryTranslationBodySchema
+  addEntryTranslationBodySchema,
+  translateResponseSchema,
+  addEntryTranslationResponseSchema
 } from './schemas.ts'
-import { generateTranslation, type GenerateTranslationParams, type TranslationResult } from '../../../ai/translate.ts'
+import { RequestedLanguages, type TranslationDraft } from '../../../domain/translationDraft.ts'
 import { fetchOwnedCollection, fetchOwnedEntry } from './ownership.ts'
+// Type-only import, erased at runtime. Forces ts-node/esm to load
+// fastify.d.ts's ambient FastifyInstance augmentation before checking this
+// file (context/foundation/lessons.md — the trap this repo has now hit three
+// times). This file got away without one until now only by luck of ordering:
+// plugins/anthropic.ts carried the import and sorted *first* in
+// @fastify/autoload's alphabetical order. Renaming it to plugins/translator.ts
+// moved it to *last*, and this file started failing 9 of 127 tests
+// non-deterministically depending on which test's import graph ran first.
+import type { AuthUser as _AuthUser } from '../../../fastify.d.ts'
 
 const UNIQUE_VIOLATION = '23505'
 // One call now covers every target language, so it generates more than the
@@ -38,27 +49,37 @@ function hasDuplicates (codes: string[]): boolean {
   return new Set(codes).size !== codes.length
 }
 
-// Wraps the Anthropic call in the request timeout and turns any failure into
-// null, so callers reply with a clean error instead of leaking an SDK
-// exception. Shared by the capture route and FR-018's per-entry backfill.
+// Wraps the translator call in the request timeout and turns any failure into
+// null, so callers reply with a clean error instead of leaking an exception.
+// Shared by the capture route and FR-018's per-entry backfill.
+//
+// The AbortController stays here rather than moving behind the port: 20s is an
+// *application* deadline derived from API Gateway's 29s ceiling
+// (infra/lib/constructs/api-construct.ts:75), not a provider setting. The
+// adapter's own 15s per-request timeout sits below it.
+//
 // Takes the *request's* logger, not fastify.log. This is the line carrying the
-// actual cause — a timeout, a 529, a malformed tool_use block — while the 502
-// the caller returns carries only the generic "could not generate a
-// translation". Logged through the root logger it had no reqId and no
-// correlationId, so the id the user could quote pointed at the useless half of
-// the pair and the informative half was unfindable.
-async function generateWithTimeout (
+// correlationId a user can quote, joining "a user says it broke" to the
+// adapter's provider-level line; the 502 the caller returns carries only the
+// generic "could not generate a translation". Logged through the root logger it
+// had no reqId and no correlationId, so the id the user could quote pointed at
+// the useless half of the pair and the informative half was unfindable.
+//
+// Both a provider failure and an all-empty draft arrive here as an exception,
+// so both collapse to null and to the same 502. That is deliberate: a draft
+// with nothing in it is not an answer.
+async function draftWithTimeout (
   fastify: FastifyInstance,
   log: FastifyBaseLogger,
   correlationId: string,
-  params: Omit<GenerateTranslationParams, 'signal'>
-): Promise<TranslationResult | null> {
+  params: { text: string, languages: RequestedLanguages }
+): Promise<TranslationDraft | null> {
   const controller = new AbortController()
   const timeout = setTimeout(() => { controller.abort() }, TRANSLATE_TIMEOUT_MS)
   try {
-    return await generateTranslation(fastify.anthropicClient, { ...params, signal: controller.signal })
+    return await fastify.translator.draft({ ...params, signal: controller.signal })
   } catch (err) {
-    log.error({ err, requestId: correlationId }, 'anthropic translate call failed')
+    log.error({ err, requestId: correlationId }, 'translator draft failed')
     return null
   } finally {
     clearTimeout(timeout)
@@ -218,7 +239,11 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
   fastify.post('/:id/translate', {
     schema: {
       params: collectionParamsSchema,
-      body: translateBodySchema
+      body: translateBodySchema,
+      // Fastify serializes against this rather than against whatever object
+      // the handler returns — impossible while the body *was* the model's
+      // tool-call object, cheap now that one function produces it.
+      response: { 200: translateResponseSchema }
     },
     config: translateRateLimit
   }, async (request, reply) => {
@@ -238,15 +263,33 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
     // One call covers every target language: the response is all-or-nothing,
     // so a failure blanks the whole capture rather than one language's
     // section. Decided during Phase 5 implementation — see change.md.
-    const result = await generateWithTimeout(fastify, request.log, request.correlationId, {
+    const draft = await draftWithTimeout(fastify, request.log, request.correlationId, {
       text,
-      nativeLanguageCode: collection.native_language_code,
-      targetLanguageCodes
+      languages: RequestedLanguages.of(collection.native_language_code, targetLanguageCodes)
     })
-    if (result === null) {
+    // The Anthropic adapter already raises DegenerateDraftError rather than
+    // returning an all-empty draft, so this is belt-and-braces — but the port's
+    // type cannot express "non-degenerate", and the guarantee should hold for
+    // whatever implements it, not just for today's one. This is the deliberate
+    // behavior change: an all-empty response used to be a 200 rendering five
+    // "nothing came back" sections.
+    if (draft === null || draft.isDegenerate()) {
       return reply.badGateway('could not generate a translation — try again')
     }
-    return result
+
+    // A partial answer is still worth showing, but it is worth counting too.
+    // This used to be counted client-side, which only ever saw the popups that
+    // stayed open long enough to report; here it covers every user.
+    const degradedLanguageCodes = draft.degenerateLanguageCodes()
+    if (degradedLanguageCodes.length > 0) {
+      request.log.warn({
+        requestId: request.correlationId,
+        degradedLanguageCodes,
+        languageCount: draft.languages.length
+      }, 'translator returned no senses for some languages')
+    }
+
+    return draft.toWire()
   })
 
   fastify.post('/:id/entries', {
@@ -358,7 +401,8 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
   fastify.post('/:id/entries/:entryId/translations', {
     schema: {
       params: entryParamsSchema,
-      body: addEntryTranslationBodySchema
+      body: addEntryTranslationBodySchema,
+      response: { 201: addEntryTranslationResponseSchema }
     },
     config: translateRateLimit
   }, async (request, reply) => {
@@ -388,29 +432,28 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       return reply.conflict('this entry already has a translation in that language')
     }
 
-    const result = await generateWithTimeout(fastify, request.log, request.correlationId, {
+    const draft = await draftWithTimeout(fastify, request.log, request.correlationId, {
       text: entry.word_or_phrase,
-      nativeLanguageCode: collection.native_language_code,
-      targetLanguageCodes: [languageCode]
+      languages: RequestedLanguages.of(collection.native_language_code, [languageCode])
     })
     // Unlike the capture flow there's no user picking a variant here, so take
-    // the model's first one and its first sentence.
-    const variant = result?.languages[0]?.variants[0]
-    const sentence = variant?.sentences[0]
-    if (variant === undefined || sentence === undefined) {
+    // the draft's first sense and its first sentence. The value object owns
+    // that choice, and the trimming and blank-to-null this route used to do
+    // inline against the model's object.
+    const rendering = draft?.renderingFor(languageCode) ?? null
+    if (rendering === null) {
       return reply.badGateway('could not generate a translation — try again')
     }
 
-    const phoneticTranscription = variant.phoneticTranscription?.trim()
     const [translationRows, sentenceRows] = await fastify.sql.transaction([
       fastify.sql`
         INSERT INTO entry_translations (entry_id, language_code, meaning_text, phonetic_transcription)
-        VALUES (${entry.id}, ${languageCode}, ${variant.meaningText.trim()}, ${phoneticTranscription === undefined || phoneticTranscription.length === 0 ? null : phoneticTranscription})
+        VALUES (${entry.id}, ${languageCode}, ${rendering.meaningText}, ${rendering.phoneticTranscription})
         RETURNING id, language_code, meaning_text, phonetic_transcription
       `,
       fastify.sql`
         INSERT INTO entry_sentences (entry_id, language_code, sentence_text, native_gloss_text)
-        VALUES (${entry.id}, ${languageCode}, ${sentence.targetText.trim()}, ${sentence.nativeGlossText.trim()})
+        VALUES (${entry.id}, ${languageCode}, ${rendering.sentenceText}, ${rendering.nativeGlossText})
         RETURNING id, language_code, sentence_text, native_gloss_text, created_at
       `
     ])

@@ -1,11 +1,10 @@
 import { test } from 'node:test'
 import * as assert from 'node:assert'
 import { randomUUID } from 'node:crypto'
-import type { Anthropic } from '@anthropic-ai/sdk'
 import { build } from '../../helper.js'
 import { jwks, signToken } from '../../helpers/jwks.js'
 import { createUserRow, createCollectionRow, createEntryRow } from '../../helpers/fixtures.js'
-import { TRANSLATION_TOOL_NAME } from '../../../src/ai/translate.js'
+import { stubTranslator } from '../../helpers/fakeTranslator.js'
 
 type App = Awaited<ReturnType<typeof build>>
 
@@ -15,14 +14,11 @@ interface AddedTranslation {
   sentence: { id: string, languageCode: string, sentenceText: string, nativeGlossText: string, createdAt: string }
 }
 
-function stubAnthropic (app: App, input: unknown): void {
-  app.anthropicClient = {
-    messages: {
-      create: async () => ({
-        content: [{ type: 'tool_use', name: TRANSLATION_TOOL_NAME, input }]
-      })
-    }
-  } as unknown as Anthropic
+// The private SDK envelope this file used to build is gone: it now assigns a
+// fake implementing the port, which cannot drift from the real contract
+// without a compile error.
+function stubDraft (app: App, payload: unknown): void {
+  stubTranslator(app, payload, 'pl', ['de'])
 }
 
 function germanResult (): unknown {
@@ -62,7 +58,7 @@ async function backfillFixture (
 test('POST /:id/entries/:entryId/translations adds exactly one language to one entry', async (t) => {
   const app = await build(t)
   const { collectionId, entryId, token } = await backfillFixture(app, t, 'Backfill test')
-  stubAnthropic(app, germanResult())
+  stubDraft(app, germanResult())
 
   const res = await app.inject({
     url: `/api/collections/${collectionId}/entries/${entryId}/translations`,
@@ -91,7 +87,7 @@ test('POST /:id/entries/:entryId/translations does not touch sibling entries', a
   const app = await build(t)
   const { collectionId, entryId, token } = await backfillFixture(app, t, 'Sibling isolation test')
   const otherEntryId = await createEntryRow(app, collectionId, 'kot')
-  stubAnthropic(app, germanResult())
+  stubDraft(app, germanResult())
 
   const res = await app.inject({
     url: `/api/collections/${collectionId}/entries/${entryId}/translations`,
@@ -111,7 +107,7 @@ test('POST /:id/entries/:entryId/translations does not touch sibling entries', a
 test('POST /:id/entries/:entryId/translations returns 409 when the entry already has that language', async (t) => {
   const app = await build(t)
   const { collectionId, entryId, token } = await backfillFixture(app, t, 'Already translated test')
-  stubAnthropic(app, germanResult())
+  stubDraft(app, germanResult())
 
   const res = await app.inject({
     url: `/api/collections/${collectionId}/entries/${entryId}/translations`,
@@ -126,7 +122,7 @@ test('POST /:id/entries/:entryId/translations returns 409 when the entry already
 test('POST /:id/entries/:entryId/translations returns 400 for a language the collection does not target', async (t) => {
   const app = await build(t)
   const { collectionId, entryId, token } = await backfillFixture(app, t, 'Untargeted language test')
-  stubAnthropic(app, germanResult())
+  stubDraft(app, germanResult())
 
   const res = await app.inject({
     url: `/api/collections/${collectionId}/entries/${entryId}/translations`,
@@ -144,7 +140,7 @@ test('POST /:id/entries/:entryId/translations returns 404 for an entry in a diff
   const sub = randomUUID()
   const otherUserId = await createUserRow(app, t, sub)
   const otherCollectionId = await createCollectionRow(app, otherUserId, 'Other collection', 'pl', ['de'])
-  stubAnthropic(app, germanResult())
+  stubDraft(app, germanResult())
 
   const res = await app.inject({
     url: `/api/collections/${otherCollectionId}/entries/${entryId}/translations`,
@@ -160,7 +156,7 @@ test('POST /:id/entries/:entryId/translations returns 404 for an entry in a diff
 test('POST /:id/entries/:entryId/translations returns 502 when the model returns no variants', async (t) => {
   const app = await build(t)
   const { collectionId, entryId, token } = await backfillFixture(app, t, 'Empty generation test')
-  stubAnthropic(app, { normalizedNativeText: 'pies', languages: [{ languageCode: 'de', variants: [] }] })
+  stubDraft(app, { normalizedNativeText: 'pies', languages: [{ languageCode: 'de', variants: [] }] })
 
   const res = await app.inject({
     url: `/api/collections/${collectionId}/entries/${entryId}/translations`,
@@ -176,4 +172,45 @@ test('POST /:id/entries/:entryId/translations returns 502 when the model returns
     [entryId]
   ) as Array<{ language_code: string }>
   assert.deepStrictEqual(rows.map((row) => row.language_code), ['en'])
+})
+
+// Fastify strips any property the response schema does not declare, so a
+// missing declaration drops a field silently rather than erroring. The ids and
+// timestamp are generated, so they are asserted by shape and then substituted
+// in — everything else is compared exactly.
+test('POST /:id/entries/:entryId/translations serializes the full body, stripping nothing', async (t) => {
+  const app = await build(t)
+  const { collectionId, entryId, token } = await backfillFixture(app, t, 'Backfill serialization')
+  stubDraft(app, germanResult())
+
+  const res = await app.inject({
+    url: `/api/collections/${collectionId}/entries/${entryId}/translations`,
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: { languageCode: 'de' }
+  })
+
+  assert.equal(res.statusCode, 201)
+  const body = JSON.parse(res.payload) as AddedTranslation
+
+  assert.equal(typeof body.translation.id, 'string')
+  assert.equal(typeof body.sentence.id, 'string')
+  assert.equal(typeof body.sentence.createdAt, 'string')
+
+  assert.deepStrictEqual(body, {
+    entryId,
+    translation: {
+      id: body.translation.id,
+      languageCode: 'de',
+      meaningText: 'Hund',
+      phoneticTranscription: '/hʊnt/'
+    },
+    sentence: {
+      id: body.sentence.id,
+      languageCode: 'de',
+      sentenceText: 'Der Hund rennt.',
+      nativeGlossText: 'Pies biegnie.',
+      createdAt: body.sentence.createdAt
+    }
+  })
 })
