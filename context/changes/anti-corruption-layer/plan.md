@@ -917,7 +917,7 @@ this reason.
 
 #### Manual
 
-- [ ] 0.5 Confirm no live API call was made in this phase
+- [x] 0.5 Confirm no live API call was made in this phase — 5369a9c
 
 ### Phase 1: Domain core
 
@@ -930,7 +930,7 @@ this reason.
 
 #### Manual
 
-- [ ] 1.5 The domain test file reads as a specification of the model's legal failure modes
+- [x] 1.5 The domain test file reads as a specification of the model's legal failure modes — 5369a9c
 
 ### Phase 2: The adapter
 
@@ -943,7 +943,7 @@ this reason.
 
 #### Manual
 
-- [ ] 2.5 Side-by-side read of the moved schema and prompt confirms no wording drift
+- [x] 2.5 Side-by-side read of the moved schema and prompt confirms no wording drift — 224e2f5
 
 ### Phase 3: Wiring, routes and test migration
 
@@ -960,9 +960,9 @@ this reason.
 
 #### Manual
 
-- [ ] 3.9 Local capture through the extension returns the same JSON the popup already renders
-- [ ] 3.10 Forced all-empty path shows a readable popup error, not a blank panel
-- [ ] 3.11 Partial-degradation log line appears with the expected language codes
+- [x] 3.9 Local capture through the extension returns the same JSON the popup already renders — 9980860
+- [x] 3.10 Forced all-empty path shows a readable popup error, not a blank panel — 9980860
+- [x] 3.11 Partial-degradation log line appears with the expected language codes — 9980860
 
 ### Phase 4: Response schemas
 
@@ -974,7 +974,7 @@ this reason.
 
 #### Manual
 
-- [ ] 4.4 Every field the popup renders is still present after the schema lands
+- [x] 4.4 Every field the popup renders is still present after the schema lands — 7a62f42
 
 ### Phase 5: De-fork the cost instrument
 
@@ -985,7 +985,7 @@ this reason.
 
 #### Manual
 
-- [ ] 5.3 Script resolves its imports without `MODULE_NOT_FOUND` or an undefined export (no live measurement)
+- [x] 5.3 Script resolves its imports without `MODULE_NOT_FOUND` or an undefined export (no live measurement) — a942ca1
 
 ### Phase 6: Extension cleanup
 
@@ -998,6 +998,6 @@ this reason.
 
 #### Manual
 
-- [ ] 6.5 Loaded popup capture flow is unchanged
-- [ ] 6.6 Forced all-empty shows the error message, not five empty sections
-- [ ] 6.7 Forced partial-empty still renders the per-language empty copy
+- [x] 6.5 Loaded popup capture flow is unchanged — e44a272
+- [x] 6.6 Forced all-empty shows the error message, not five empty sections — e44a272
+- [x] 6.7 Forced partial-empty still renders the per-language empty copy — e44a272
