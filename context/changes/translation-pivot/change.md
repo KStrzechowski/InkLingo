@@ -3,7 +3,7 @@ change_id: translation-pivot
 title: Re-architect translation around English-pivot concepts with sense-level reuse
 status: preparing
 created: 2026-08-02
-updated: 2026-08-20
+updated: 2026-08-25
 archived_at: null
 ---
 

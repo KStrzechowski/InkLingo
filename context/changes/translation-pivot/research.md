@@ -1018,18 +1018,34 @@ These hold for the lazy tail and are unchanged by the seed:
 ### The seam
 
 Wire one narrow interface rather than calling a provider SDK from the route.
-The precedent already exists: `generateWithTimeout`
-(`backend/src/routes/api/collections/index.ts:50-66`) is exactly this shape for
-the Anthropic call — one function, shared by both AI routes, owning the timeout
-and the failure-collapse. The translator seam mirrors it, and should be shared
-by the request path and the Wiktionary-gap path for the same reason:
-intercepting inside covers both.
 
-**Plugin shape.** If exposed as a decorated property (`fastify.translator`), it
-follows `backend/src/plugins/anthropic.ts:1-20` — `fp<Options>(async (fastify)
-=> {...}, { name, dependencies })`, the decorator declared **only** in
-`backend/src/fastify.d.ts:25-30`, and the defensive type-only import that
-`lessons.md` requires. That trap has now been hit twice in this codebase.
+> **Corrected 2026-08-25 (anti-corruption-layer).** This section originally read
+> "the precedent already exists: `generateWithTimeout`
+> (`backend/src/routes/api/collections/index.ts:50-66`) is exactly this shape."
+> It was not. `generateWithTimeout` isolated a timeout and an exception while the
+> provider's data shape, model id, retry policy and failure vocabulary all passed
+> straight through it — a passthrough, not a seam. Anyone planning off the
+> original sentence would have inherited the premise that the seam already
+> existed and only needed a second implementation.
+>
+> **The seam exists now**, built by `context/archive/2026-08-23-anti-corruption-layer/`:
+> `Translator` (`backend/src/domain/translator.ts`) is the one-method port,
+> `TranslationDraft.fromProviderPayload` is the single crossing point from
+> provider data into the domain, and
+> `backend/src/adapters/anthropicTranslator.ts` is the only file under
+> `backend/src` allowed to import a provider SDK — enforced by
+> `backend/test/architecture/providerBoundary.test.ts`. A second provider is a
+> new file in `adapters/` plus one line in `plugins/translator.ts`.
+
+The translator seam should be shared by the request path and the Wiktionary-gap
+path for the same reason: intercepting inside covers both.
+
+**Plugin shape.** Already built as `backend/src/plugins/translator.ts` —
+`fp<Options>(async (fastify) => {...}, { name, dependencies })`, the decorator
+declared **only** in `backend/src/fastify.d.ts`, and the defensive type-only
+import that `lessons.md` requires. That trap has now been hit three times; the
+third was caused by renaming `plugins/anthropic.ts` to `plugins/translator.ts`,
+which moved the forcing import from first to last in autoload order.
 
 ### Azure is the default, not DeepL
 
