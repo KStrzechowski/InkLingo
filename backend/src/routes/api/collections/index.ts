@@ -285,8 +285,9 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       request.log.warn({
         requestId: request.correlationId,
         degradedLanguageCodes,
-        languageCount: draft.languages.length
-      }, 'translator returned no senses for some languages')
+        senseCount: draft.senses.length,
+        languageCount: targetLanguageCodes.length
+      }, 'translator returned no translations for some languages')
     }
 
     return draft.toWire()

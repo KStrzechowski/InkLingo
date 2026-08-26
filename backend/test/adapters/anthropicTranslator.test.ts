@@ -5,7 +5,8 @@ import {
   anthropicTranslatorOver,
   TRANSLATION_TOOL_NAME,
   ANTHROPIC_MODEL,
-  MAX_TOKENS_PER_LANGUAGE,
+  MAX_TOKENS_PER_SENSE_LANGUAGE,
+  MAX_BUDGETED_SENSES,
   systemPrompt
 } from '../../src/adapters/anthropicTranslator.js'
 import { RequestedLanguages } from '../../src/domain/translationDraft.js'
@@ -22,35 +23,39 @@ import {
 
 const requested = RequestedLanguages.of('pl', ['en', 'de'])
 
-function sense (meaningText: string): unknown {
+function translation (languageCode: string, meaningText: string): unknown {
   return {
+    languageCode,
     meaningText,
     phoneticTranscription: `/${meaningText}/`,
     sentences: [{ targetText: `A sentence with ${meaningText}.`, nativeGlossText: 'Zdanie po polsku.' }]
   }
 }
 
+// Meaning-first, as of this change. `zamek` replaces `pies` as the fixture
+// word for a reason: the envelope now has to be able to carry two meanings, and
+// a word with only one cannot exercise the shape the inversion exists for.
 const POPULATED = {
-  normalizedNativeText: 'pies',
-  languages: [
-    { languageCode: 'en', variants: [sense('dog')] },
-    { languageCode: 'de', variants: [sense('Hund')] }
+  normalizedNativeText: 'zamek',
+  senses: [
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle'), translation('de', 'Burg')] },
+    { glossText: 'urzadzenie do zamykania', translations: [translation('en', 'lock'), translation('de', 'Schloss')] }
   ]
 }
 
+// What the retry exists for: structurally valid, and carrying nothing.
 const ALL_EMPTY = {
-  normalizedNativeText: 'pies',
-  languages: [
-    { languageCode: 'en', variants: [] },
-    { languageCode: 'de', variants: [] }
-  ]
+  normalizedNativeText: 'zamek',
+  senses: []
 }
 
+// A sparse spoke is NOT this — a language missing from one meaning is legal and
+// invisible here. This is `de` absent from every meaning, which is what
+// `degenerateLanguageCodes()` reports and what the route warns on.
 const PARTIALLY_EMPTY = {
-  normalizedNativeText: 'pies',
-  languages: [
-    { languageCode: 'en', variants: [sense('dog')] },
-    { languageCode: 'de', variants: [] }
+  normalizedNativeText: 'zamek',
+  senses: [
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle')] }
   ]
 }
 
@@ -84,7 +89,7 @@ function failingClient (err: Error): Pick<Anthropic, 'messages'> {
 }
 
 function request (): { text: string, languages: RequestedLanguages, signal: AbortSignal } {
-  return { text: 'pies', languages: requested, signal: new AbortController().signal }
+  return { text: 'zamek', languages: requested, signal: new AbortController().signal }
 }
 
 test('a populated response becomes a domain draft with no provider shape left on it', async () => {
@@ -96,7 +101,7 @@ test('a populated response becomes a domain draft with no provider shape left on
   assert.equal(recorder.calls(), 1)
   assert.equal(draft.isDegenerate(), false)
   assert.deepStrictEqual(draft.degenerateLanguageCodes(), [])
-  assert.equal(draft.renderingFor('de')?.meaningText, 'Hund')
+  assert.equal(draft.renderingFor('de')?.meaningText, 'Burg')
 })
 
 test('the request carries the moved model id, token formula and system prompt', async () => {
@@ -106,7 +111,8 @@ test('the request carries the moved model id, token formula and system prompt', 
 
   const [body] = recorder.params()
   assert.equal(body.model, ANTHROPIC_MODEL)
-  assert.equal(body.max_tokens, MAX_TOKENS_PER_LANGUAGE * 2)
+  // Budgeted on senses x languages now, not languages alone.
+  assert.equal(body.max_tokens, MAX_TOKENS_PER_SENSE_LANGUAGE * MAX_BUDGETED_SENSES * 2)
   assert.equal(body.system, systemPrompt(requested))
   assert.deepStrictEqual(body.tool_choice, { type: 'tool', name: TRANSLATION_TOOL_NAME })
 })
@@ -119,7 +125,7 @@ test('an all-empty draft is re-asked exactly once, and the second answer is kept
 
   assert.equal(recorder.calls(), 2)
   assert.equal(draft.isDegenerate(), false)
-  assert.equal(draft.renderingFor('en')?.meaningText, 'dog')
+  assert.equal(draft.renderingFor('en')?.meaningText, 'castle')
 })
 
 // translate.test.ts:151 moving down — and where its 200-vs-502 question is

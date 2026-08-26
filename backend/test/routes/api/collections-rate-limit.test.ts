@@ -8,9 +8,10 @@ import { stubTranslator } from '../../helpers/fakeTranslator.js'
 
 const STUB_PAYLOAD = {
   normalizedNativeText: 'pies',
-  languages: [{
-    languageCode: 'en',
-    variants: [{
+  senses: [{
+    glossText: 'zwierze domowe',
+    translations: [{
+      languageCode: 'en',
       meaningText: 'dog',
       phoneticTranscription: '/dog/',
       sentences: [{ targetText: 'A sentence with dog.', nativeGlossText: 'Zdanie po polsku.' }]

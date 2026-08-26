@@ -15,26 +15,32 @@ import type { TranslateResponseBody } from '../../../src/routes/api/collections/
 // can be asserted directly instead of inferred through HTTP.
 type TranslationResult = TranslateResponseBody
 
-function variant (meaningText: string): unknown {
+function translation (languageCode: string, meaningText: string): unknown {
   return {
+    languageCode,
     meaningText,
     phoneticTranscription: `/${meaningText}/`,
     sentences: [{ targetText: `A sentence with ${meaningText}.`, nativeGlossText: 'Zdanie po polsku.' }]
   }
 }
 
-test('POST /api/collections/:id/translate returns one block per target language', async (t) => {
+test('POST /api/collections/:id/translate returns each meaning with its per-language words', async (t) => {
   const app = await build(t)
   const sub = randomUUID()
   const userId = await createUserRow(app, t, sub)
   const collectionId = await createCollectionRow(app, userId, 'Multi language translate', 'pl', ['en', 'de', 'fr'])
 
   stubTranslator(app, {
-    normalizedNativeText: 'pies',
-    languages: [
-      { languageCode: 'en', variants: [variant('dog')] },
-      { languageCode: 'de', variants: [variant('Hund')] },
-      { languageCode: 'fr', variants: [variant('chien')] }
+    normalizedNativeText: 'zamek',
+    senses: [
+      {
+        glossText: 'budowla obronna',
+        translations: [translation('en', 'castle'), translation('de', 'Burg'), translation('fr', 'chateau')]
+      },
+      {
+        glossText: 'urzadzenie do zamykania',
+        translations: [translation('en', 'lock'), translation('de', 'Schloss'), translation('fr', 'serrure')]
+      }
     ]
   }, 'pl', ['en', 'de', 'fr'])
 
@@ -45,14 +51,21 @@ test('POST /api/collections/:id/translate returns one block per target language'
     url: `/api/collections/${collectionId}/translate`,
     method: 'POST',
     headers: { authorization: `Bearer ${token}` },
-    payload: { text: 'pies' }
+    payload: { text: 'zamek' }
   })
 
   assert.equal(res.statusCode, 200)
   const body = JSON.parse(res.payload) as TranslationResult
-  assert.equal(body.normalizedNativeText, 'pies')
-  assert.deepStrictEqual(body.languages.map((language) => language.languageCode), ['en', 'de', 'fr'])
-  assert.equal(body.languages[1].variants[0].meaningText, 'Hund')
+  assert.equal(body.normalizedNativeText, 'zamek')
+  // Both meanings survive the round trip. Under the language-first shape this
+  // response could not distinguish them at all: `castle` and `lock` were two
+  // entries in one English list with nothing tying either to its German twin.
+  assert.deepStrictEqual(body.senses.map((sense) => sense.glossText), ['budowla obronna', 'urzadzenie do zamykania'])
+  assert.deepStrictEqual(
+    body.senses.map((sense) => sense.translations.map((entry) => entry.languageCode)),
+    [['en', 'de', 'fr'], ['en', 'de', 'fr']]
+  )
+  assert.equal(body.senses[1].translations[1].meaningText, 'Schloss')
 })
 
 test('POST /api/collections/:id/translate still works for a single-target collection', async (t) => {
@@ -63,7 +76,7 @@ test('POST /api/collections/:id/translate still works for a single-target collec
 
   stubTranslator(app, {
     normalizedNativeText: 'pies',
-    languages: [{ languageCode: 'en', variants: [variant('dog')] }]
+    senses: [{ glossText: 'zwierze domowe', translations: [translation('en', 'dog')] }]
   }, 'pl', ['en'])
 
   app.jwtVerifier.cacheJwks(jwks)
@@ -78,25 +91,27 @@ test('POST /api/collections/:id/translate still works for a single-target collec
 
   assert.equal(res.statusCode, 200)
   const body = JSON.parse(res.payload) as TranslationResult
-  assert.equal(body.languages.length, 1)
-  assert.equal(body.languages[0].variants[0].meaningText, 'dog')
+  assert.equal(body.senses.length, 1)
+  assert.equal(body.senses[0].translations[0].meaningText, 'dog')
 })
 
-// The model picks the order and can drop a language entirely; the route
-// rebuilds the list against what was requested so the client always gets a
-// predictable array.
-test('POST /api/collections/:id/translate reorders and backfills what the model returns', async (t) => {
+// The model picks the order and can drop a language from a meaning; the route
+// re-keys each meaning's translations against what was requested, so the client
+// always gets them in a predictable order. A language the model left out of one
+// meaning is a sparse spoke and stays absent rather than being materialized
+// empty - that is the semantic the inversion changed.
+test('POST /api/collections/:id/translate reorders each meaning against the requested languages', async (t) => {
   const app = await build(t)
   const sub = randomUUID()
   const userId = await createUserRow(app, t, sub)
   const collectionId = await createCollectionRow(app, userId, 'Reordered translate', 'pl', ['en', 'de', 'fr'])
 
   stubTranslator(app, {
-    normalizedNativeText: 'pies',
-    languages: [
-      { languageCode: 'fr', variants: [variant('chien')] },
-      { languageCode: 'en', variants: [variant('dog')] }
-    ]
+    normalizedNativeText: 'zamek',
+    senses: [{
+      glossText: 'budowla obronna',
+      translations: [translation('fr', 'chateau'), translation('en', 'castle')]
+    }]
   }, 'pl', ['en', 'de', 'fr'])
 
   app.jwtVerifier.cacheJwks(jwks)
@@ -106,15 +121,15 @@ test('POST /api/collections/:id/translate reorders and backfills what the model 
     url: `/api/collections/${collectionId}/translate`,
     method: 'POST',
     headers: { authorization: `Bearer ${token}` },
-    payload: { text: 'pies' }
+    payload: { text: 'zamek' }
   })
 
   assert.equal(res.statusCode, 200)
   const body = JSON.parse(res.payload) as TranslationResult
-  assert.deepStrictEqual(body.languages.map((language) => language.languageCode), ['en', 'de', 'fr'])
-  assert.equal(body.languages[0].variants[0].meaningText, 'dog')
-  assert.deepStrictEqual(body.languages[1].variants, [])
-  assert.equal(body.languages[2].variants[0].meaningText, 'chien')
+  const [sense] = body.senses
+  assert.deepStrictEqual(sense.translations.map((entry) => entry.languageCode), ['en', 'fr'])
+  assert.equal(sense.translations[0].meaningText, 'castle')
+  assert.equal(sense.translations[1].meaningText, 'chateau')
 })
 
 // The empty-draft retry itself now lives in the adapter, where it can be
@@ -122,7 +137,7 @@ test('POST /api/collections/:id/translate reorders and backfills what the model 
 // route owns is what an all-empty draft *means*, and the answer changed: it
 // used to be a 200 that rendered five "Nothing came back for this language"
 // sections, which is a failure the user can see but no other layer can.
-test('POST /api/collections/:id/translate returns 502 when every language comes back empty', async (t) => {
+test('POST /api/collections/:id/translate returns 502 when no meaning comes back at all', async (t) => {
   const app = await build(t)
   const sub = randomUUID()
   const userId = await createUserRow(app, t, sub)
@@ -130,7 +145,7 @@ test('POST /api/collections/:id/translate returns 502 when every language comes 
 
   stubTranslator(app, {
     normalizedNativeText: 'pies',
-    languages: [{ languageCode: 'en', variants: [] }]
+    senses: []
   }, 'pl', ['en'])
 
   app.jwtVerifier.cacheJwks(jwks)
@@ -158,9 +173,11 @@ test('POST /api/collections/:id/translate serves a partial draft and logs the de
   const userId = await createUserRow(app, t, sub)
   const collectionId = await createCollectionRow(app, userId, 'Partially populated', 'pl', ['en', 'de'])
 
+  // `de` is absent from every meaning, which is the gap worth counting - not a
+  // sparse spoke, which is absent from one meaning and legal.
   const translator = fakeTranslator([draftFrom({
     normalizedNativeText: 'pies',
-    languages: [{ languageCode: 'en', variants: [variant('dog')] }, { languageCode: 'de', variants: [] }]
+    senses: [{ glossText: 'zwierze domowe', translations: [translation('en', 'dog')] }]
   }, 'pl', ['en', 'de'])])
   app.translator = translator
 
@@ -177,12 +194,13 @@ test('POST /api/collections/:id/translate serves a partial draft and logs the de
   assert.equal(res.statusCode, 200)
   assert.equal(translator.calls(), 1)
   const body = JSON.parse(res.payload) as TranslationResult
-  assert.equal(body.languages[0].variants[0].meaningText, 'dog')
-  assert.deepStrictEqual(body.languages[1].variants, [])
+  assert.equal(body.senses[0].translations.length, 1)
+  assert.equal(body.senses[0].translations[0].meaningText, 'dog')
 
-  const line = logs.find('translator returned no senses for some languages')
+  const line = logs.find('translator returned no translations for some languages')
   assert.ok(line !== undefined, 'the partial-degradation line was not emitted')
   assert.deepStrictEqual(line.degradedLanguageCodes, ['de'])
+  assert.equal(line.senseCount, 1)
   assert.equal(line.languageCount, 2)
 })
 
@@ -255,17 +273,18 @@ test('POST /api/collections/:id/translate serializes the full body, stripping no
 
   stubTranslator(app, {
     normalizedNativeText: 'pies',
-    languages: [
-      { languageCode: 'en', variants: [variant('dog')] },
-      {
-        languageCode: 'de',
-        variants: [{
+    senses: [{
+      glossText: 'zwierze domowe',
+      translations: [
+        translation('en', 'dog'),
+        {
+          languageCode: 'de',
           meaningText: 'Hund',
           phoneticTranscription: null,
           sentences: [{ targetText: 'Der Hund rennt.', nativeGlossText: 'Pies biegnie.' }]
-        }]
-      }
-    ]
+        }
+      ]
+    }]
   }, 'pl', ['en', 'de'])
 
   app.jwtVerifier.cacheJwks(jwks)
@@ -281,24 +300,23 @@ test('POST /api/collections/:id/translate serializes the full body, stripping no
   assert.equal(res.statusCode, 200)
   assert.deepStrictEqual(JSON.parse(res.payload), {
     normalizedNativeText: 'pies',
-    languages: [
-      {
-        languageCode: 'en',
-        variants: [{
+    senses: [{
+      glossText: 'zwierze domowe',
+      translations: [
+        {
+          languageCode: 'en',
           meaningText: 'dog',
           phoneticTranscription: '/dog/',
           sentences: [{ targetText: 'A sentence with dog.', nativeGlossText: 'Zdanie po polsku.' }]
-        }]
-      },
-      {
-        languageCode: 'de',
-        variants: [{
+        },
+        {
+          languageCode: 'de',
           meaningText: 'Hund',
           // A null phonetic must survive serialization as null, not vanish.
           phoneticTranscription: null,
           sentences: [{ targetText: 'Der Hund rennt.', nativeGlossText: 'Pies biegnie.' }]
-        }]
-      }
-    ]
+        }
+      ]
+    }]
   })
 })

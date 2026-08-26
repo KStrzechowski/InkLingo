@@ -47,10 +47,16 @@ export class MalformedDraftError extends Error {
   }
 }
 
-// The provider answered with a well-formed draft that is useless: every
-// requested language came back with no sense. `lessons.md:33-39` measured this
-// at roughly 3 in 34 live calls. Raising rather than returning it is deliberate
-// — a 200 that is useless to the user is invisible to every other layer.
+// The provider answered with a well-formed draft that is useless: it carried
+// no meaning at all, so no requested language got a word. Raising rather than
+// returning it is deliberate — a 200 that is useless to the user is invisible
+// to every other layer.
+//
+// `lessons.md:33-39` measured this at roughly 3 in 34 live calls, but **that
+// was against the language-first tool schema** this change replaced. A
+// different schema is a different prompt and therefore a different failure
+// distribution; the old rate says nothing about the new one. Phase 7
+// re-measures it against the real API.
 export class DegenerateDraftError extends Error {
   readonly languageCodes: readonly string[]
 

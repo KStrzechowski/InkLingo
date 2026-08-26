@@ -40,15 +40,22 @@ export type TranslateBody = Static<typeof translateBodySchema>
 // it, so a field the domain stops emitting becomes a compile error rather than
 // a property Fastify silently strips.
 //
-// The wire key is `variants`, not the domain's `senses`. The extension is
-// side-loaded and updated by hand (`extension/README.md`), so an older popup
-// must keep parsing this shape byte for byte; the rename belongs to `toWire()`
-// on the day the clients are ready for it.
+// This shape was previously language-first, and the comment here explained
+// that the wire key for a meaning stayed the provider's own because the
+// extension is side-loaded and updated by hand (`extension/README.md`), so an
+// older popup had to keep parsing it byte for byte. Decision A3 overrides that: no
+// version-skew shims. The installed popup stops being able to render this
+// response at the end of Phase 2 and works again at Phase 5, and in between
+// this route is verified by tests and direct API calls only.
+//
+// Meanings are now the top level. A language absent from a meaning is a sparse
+// spoke and is simply not listed — hence no `minItems` on `translations`.
 export const translateResponseSchema = Type.Object({
   normalizedNativeText: Type.String(),
-  languages: Type.Array(Type.Object({
-    languageCode: Type.String(),
-    variants: Type.Array(Type.Object({
+  senses: Type.Array(Type.Object({
+    glossText: Type.String(),
+    translations: Type.Array(Type.Object({
+      languageCode: Type.String(),
       meaningText: Type.String(),
       phoneticTranscription: Type.Union([Type.String(), Type.Null()]),
       sentences: Type.Array(Type.Object({

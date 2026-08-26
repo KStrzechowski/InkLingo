@@ -24,9 +24,10 @@ function stubDraft (app: App, payload: unknown): void {
 function germanResult (): unknown {
   return {
     normalizedNativeText: 'pies',
-    languages: [{
-      languageCode: 'de',
-      variants: [{
+    senses: [{
+      glossText: 'zwierze domowe',
+      translations: [{
+        languageCode: 'de',
         meaningText: 'Hund',
         phoneticTranscription: '/hʊnt/',
         sentences: [{ targetText: 'Der Hund rennt.', nativeGlossText: 'Pies biegnie.' }]
@@ -153,10 +154,10 @@ test('POST /:id/entries/:entryId/translations returns 404 for an entry in a diff
   assert.equal(res.statusCode, 404)
 })
 
-test('POST /:id/entries/:entryId/translations returns 502 when the model returns no variants', async (t) => {
+test('POST /:id/entries/:entryId/translations returns 502 when the model returns no meaning', async (t) => {
   const app = await build(t)
   const { collectionId, entryId, token } = await backfillFixture(app, t, 'Empty generation test')
-  stubDraft(app, { normalizedNativeText: 'pies', languages: [{ languageCode: 'de', variants: [] }] })
+  stubDraft(app, { normalizedNativeText: 'pies', senses: [] })
 
   const res = await app.inject({
     url: `/api/collections/${collectionId}/entries/${entryId}/translations`,

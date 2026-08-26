@@ -4,31 +4,38 @@ import { TranslationDraft, RequestedLanguages } from '../../src/domain/translati
 import { MalformedDraftError } from '../../src/domain/translator.js'
 
 // This file is the specification of what the model may legally do to us.
-// Every payload below is either observed or permitted by the tool schema: the
-// `variants` array carries no enforced `minItems`, and nothing below
-// `languageCode` is type-checked by the provider at all. Before this value
-// object existed, `ai/translate.ts:148` cast every one of these shapes to
-// `TranslationResult` unchecked and handed it straight to the extension's
-// React state.
+// Every payload below is either observed or permitted by the tool schema:
+// `minItems` is advisory on a tool schema rather than enforced, and nothing
+// below `glossText` is type-checked by the provider at all. Before this value
+// object existed, `ai/translate.ts:148` cast every one of these shapes to a
+// provider type unchecked and handed it straight to the extension's React
+// state.
+//
+// The shape inverted in this change: the model is now asked for meanings
+// containing per-language translations, not languages containing meanings.
+// Two payload-level consequences get their own tests below — a language absent
+// from ONE meaning is a legal sparse spoke, while a language absent from EVERY
+// meaning is the gap `degenerateLanguageCodes()` reports.
 
 const requested = RequestedLanguages.of('pl', ['en', 'de'])
 
-function sense (meaningText: string): unknown {
+function translation (languageCode: string, meaningText: string): unknown {
   return {
+    languageCode,
     meaningText,
     phoneticTranscription: `/${meaningText}/`,
     sentences: [{ targetText: `A sentence with ${meaningText}.`, nativeGlossText: 'Zdanie po polsku.' }]
   }
 }
 
-function payload (languages: unknown): unknown {
-  return { normalizedNativeText: 'pies', languages }
+function payload (senses: unknown): unknown {
+  return { normalizedNativeText: 'zamek', senses }
 }
 
 // --- totality: the only two ways out are a valid draft or MalformedDraftError ---
 
 test('a non-object payload raises MalformedDraftError', () => {
-  for (const bad of [null, undefined, 'pies', 42, ['pies'], true]) {
+  for (const bad of [null, undefined, 'zamek', 42, ['zamek'], true]) {
     assert.throws(
       () => TranslationDraft.fromProviderPayload(bad, requested),
       MalformedDraftError,
@@ -40,59 +47,80 @@ test('a non-object payload raises MalformedDraftError', () => {
 test('a missing, non-string or blank normalizedNativeText raises MalformedDraftError', () => {
   for (const bad of [undefined, null, 42, '', '   ']) {
     assert.throws(
-      () => TranslationDraft.fromProviderPayload({ normalizedNativeText: bad, languages: [] }, requested),
+      () => TranslationDraft.fromProviderPayload({ normalizedNativeText: bad, senses: [] }, requested),
       MalformedDraftError,
       `expected ${String(bad)} to be rejected`
     )
   }
 })
 
-// --- alignment: alignToRequested's behaviour, moved down from translate.test.ts:80 ---
+// --- the grouping the inversion buys ---
 
-test('a missing languages key yields one empty language per requested code', () => {
-  const draft = TranslationDraft.fromProviderPayload({ normalizedNativeText: 'pies' }, requested)
-
-  assert.deepStrictEqual(draft.toWire().languages, [
-    { languageCode: 'en', variants: [] },
-    { languageCode: 'de', variants: [] }
-  ])
-})
-
-test('a non-array languages value is treated as no languages at all', () => {
-  const draft = TranslationDraft.fromProviderPayload(payload({ en: 'dog' }), requested)
-
-  assert.deepStrictEqual(draft.degenerateLanguageCodes(), ['en', 'de'])
-})
-
-test('a reordered language list is re-keyed against what was requested', () => {
+test('meanings are the top level, each carrying its own per-language words', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 'de', variants: [sense('Hund')] },
-    { languageCode: 'en', variants: [sense('dog')] }
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle'), translation('de', 'Burg')] },
+    { glossText: 'urządzenie do zamykania', translations: [translation('en', 'lock'), translation('de', 'Schloss')] }
   ]), requested)
 
-  const wire = draft.toWire()
-  assert.deepStrictEqual(wire.languages.map((language) => language.languageCode), ['en', 'de'])
-  assert.equal(wire.languages[0].variants[0].meaningText, 'dog')
-  assert.equal(wire.languages[1].variants[0].meaningText, 'Hund')
+  assert.deepStrictEqual(draft.senses.map((sense) => sense.glossText), ['budowla obronna', 'urządzenie do zamykania'])
+  assert.deepStrictEqual(
+    draft.senses.map((sense) => sense.translations.map((t) => t.meaningText)),
+    [['castle', 'Burg'], ['lock', 'Schloss']]
+  )
+})
+
+test('a missing or non-array senses value yields no senses at all', () => {
+  for (const bad of [undefined, 'senses', 42, { en: 'castle' }]) {
+    const draft = TranslationDraft.fromProviderPayload(
+      { normalizedNativeText: 'zamek', senses: bad }, requested
+    )
+
+    assert.deepStrictEqual(draft.senses, [], `expected ${String(bad)} to yield no senses`)
+    assert.equal(draft.isDegenerate(), true)
+  }
+})
+
+// --- alignment, one level down (design test 22) ---
+
+test('a reordered translation list is re-keyed against what was requested', () => {
+  const draft = TranslationDraft.fromProviderPayload(payload([
+    { glossText: 'budowla obronna', translations: [translation('de', 'Burg'), translation('en', 'castle')] }
+  ]), requested)
+
+  const [sense] = draft.toWire().senses
+  assert.deepStrictEqual(sense.translations.map((t) => t.languageCode), ['en', 'de'])
+  assert.equal(sense.translations[0].meaningText, 'castle')
+  assert.equal(sense.translations[1].meaningText, 'Burg')
 })
 
 test('a language code the model was not asked for is dropped', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 'en', variants: [sense('dog')] },
-    { languageCode: 'fr', variants: [sense('chien')] }
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle'), translation('fr', 'château')] }
   ]), requested)
 
-  assert.deepStrictEqual(draft.toWire().languages.map((language) => language.languageCode), ['en', 'de'])
+  assert.deepStrictEqual(
+    draft.toWire().senses[0].translations.map((t) => t.languageCode),
+    ['en']
+  )
 })
 
-test('a language the model skipped comes back empty rather than absent', () => {
+// Design test 22, and the semantic change alignment carries: the old
+// language-first version materialized a skipped language as an empty block,
+// because a language was the top level and had to exist. A language missing
+// from one meaning is now a sparse spoke — `suwak` has no single German word —
+// so it is left absent rather than fabricated empty.
+test('a language missing from one meaning is left absent, not fabricated', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 'en', variants: [sense('dog')] }
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle'), translation('de', 'Burg')] },
+    { glossText: 'suwak', translations: [translation('en', 'zipper')] }
   ]), requested)
 
-  const wire = draft.toWire()
-  assert.equal(wire.languages.length, 2)
-  assert.deepStrictEqual(wire.languages[1], { languageCode: 'de', variants: [] })
+  assert.deepStrictEqual(
+    draft.toWire().senses.map((sense) => sense.translations.map((t) => t.languageCode)),
+    [['en', 'de'], ['en']]
+  )
+  // A sparse spoke is not a degraded answer, so it is not reported as one.
+  assert.deepStrictEqual(draft.degenerateLanguageCodes(), [])
 })
 
 // Matching is lenient; emitting is not. The draft always carries the code that
@@ -100,183 +128,260 @@ test('a language the model skipped comes back empty rather than absent', () => {
 // what the client renders against and what the backfill route inserts.
 test('language codes are matched leniently but always emitted as requested', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: ' EN ', variants: [sense('dog')] },
-    { languageCode: 'De', variants: [sense('Hund')] }
+    { glossText: 'budowla obronna', translations: [translation(' EN ', 'castle'), translation('De', 'Burg')] }
   ]), requested)
 
   assert.deepStrictEqual(draft.degenerateLanguageCodes(), [])
-  assert.deepStrictEqual(draft.toWire().languages.map((language) => language.languageCode), ['en', 'de'])
+  assert.deepStrictEqual(
+    draft.toWire().senses[0].translations.map((t) => t.languageCode),
+    ['en', 'de']
+  )
   assert.equal(draft.renderingFor('en')?.languageCode, 'en')
 })
 
 test('a languageCode that is not a string is skipped instead of throwing', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 42, variants: [sense('dog')] },
-    'not a language block at all'
+    { glossText: 'budowla obronna', translations: [translation(42 as unknown as string, 'castle'), 'not a translation'] }
   ]), requested)
 
+  assert.deepStrictEqual(draft.senses, [])
   assert.deepStrictEqual(draft.degenerateLanguageCodes(), ['en', 'de'])
+})
+
+test('a non-array translations value yields no sense rather than throwing', () => {
+  const draft = TranslationDraft.fromProviderPayload(payload([
+    { glossText: 'budowla obronna', translations: 'castle' },
+    { glossText: 'suwak' }
+  ]), requested)
+
+  assert.deepStrictEqual(draft.senses, [])
 })
 
 // --- sense-level hygiene ---
 
-test('a sense whose meaningText is not a non-blank string is dropped', () => {
-  for (const bad of [42, null, undefined, '', '   ', { text: 'dog' }]) {
+test('a sense whose glossText is not a non-blank string is dropped', () => {
+  for (const bad of [42, null, undefined, '', '   ', { text: 'budowla' }]) {
     const draft = TranslationDraft.fromProviderPayload(payload([
-      { languageCode: 'en', variants: [{ ...(sense('dog') as object), meaningText: bad }] }
+      { glossText: bad, translations: [translation('en', 'castle')] }
     ]), requested)
 
-    assert.deepStrictEqual(draft.toWire().languages[0].variants, [], `expected ${String(bad)} to be dropped`)
+    assert.deepStrictEqual(draft.senses, [], `expected ${String(bad)} to be dropped`)
   }
 })
 
-test('a sense with an empty sentences array is dropped — a sense with no example teaches nothing', () => {
+test('a sense whose translations all fail hygiene is dropped entirely', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 'en', variants: [{ meaningText: 'dog', phoneticTranscription: '/dog/', sentences: [] }] }
+    { glossText: 'budowla obronna', translations: [] },
+    { glossText: 'suwak', translations: [translation('en', 'zipper')] }
   ]), requested)
 
-  assert.deepStrictEqual(draft.toWire().languages[0].variants, [])
+  assert.deepStrictEqual(draft.senses.map((sense) => sense.glossText), ['suwak'])
 })
 
-test('a sense keeps only the sentences carrying both halves of the pair', () => {
+// --- translation-level hygiene ---
+
+test('a translation whose meaningText is not a non-blank string is dropped', () => {
+  for (const bad of [42, null, undefined, '', '   ', { text: 'castle' }]) {
+    const draft = TranslationDraft.fromProviderPayload(payload([
+      {
+        glossText: 'budowla obronna',
+        translations: [{ ...(translation('en', 'castle') as object), meaningText: bad }, translation('de', 'Burg')]
+      }
+    ]), requested)
+
+    assert.deepStrictEqual(
+      draft.toWire().senses[0].translations.map((t) => t.languageCode),
+      ['de'],
+      `expected ${String(bad)} to be dropped`
+    )
+  }
+})
+
+test('a translation with an empty sentences array is dropped — a word with no example teaches nothing', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
     {
-      languageCode: 'en',
-      variants: [{
-        meaningText: 'dog',
-        phoneticTranscription: '/dog/',
+      glossText: 'budowla obronna',
+      translations: [
+        { languageCode: 'en', meaningText: 'castle', phoneticTranscription: '/castle/', sentences: [] },
+        translation('de', 'Burg')
+      ]
+    }
+  ]), requested)
+
+  assert.deepStrictEqual(
+    draft.toWire().senses[0].translations.map((t) => t.languageCode),
+    ['de']
+  )
+})
+
+test('a translation keeps only the sentences carrying both halves of the pair', () => {
+  const draft = TranslationDraft.fromProviderPayload(payload([
+    {
+      glossText: 'budowla obronna',
+      translations: [{
+        languageCode: 'en',
+        meaningText: 'castle',
+        phoneticTranscription: '/castle/',
         sentences: [
-          { targetText: 'The dog barks.', nativeGlossText: 'Pies szczeka.' },
-          { targetText: 'A dog runs.', nativeGlossText: '' },
-          { targetText: 42, nativeGlossText: 'Pies biegnie.' },
+          { targetText: 'The castle stands.', nativeGlossText: 'Zamek stoi.' },
+          { targetText: 'A castle falls.', nativeGlossText: '' },
+          { targetText: 42, nativeGlossText: 'Zamek upada.' },
           'not a sentence at all'
         ]
       }]
     }
   ]), requested)
 
-  assert.deepStrictEqual(draft.toWire().languages[0].variants[0].sentences, [
-    { targetText: 'The dog barks.', nativeGlossText: 'Pies szczeka.' }
+  assert.deepStrictEqual(draft.toWire().senses[0].translations[0].sentences, [
+    { targetText: 'The castle stands.', nativeGlossText: 'Zamek stoi.' }
   ])
 })
 
 test('a blank or non-string phoneticTranscription normalizes to null', () => {
-  for (const bad of ['', '   ', 42, undefined, { ipa: '/dog/' }]) {
+  for (const bad of ['', '   ', 42, undefined, { ipa: '/castle/' }]) {
     const draft = TranslationDraft.fromProviderPayload(payload([
-      { languageCode: 'en', variants: [{ ...(sense('dog') as object), phoneticTranscription: bad }] }
+      {
+        glossText: 'budowla obronna',
+        translations: [{ ...(translation('en', 'castle') as object), phoneticTranscription: bad }]
+      }
     ]), requested)
 
     assert.equal(
-      draft.toWire().languages[0].variants[0].phoneticTranscription,
+      draft.toWire().senses[0].translations[0].phoneticTranscription,
       null,
       `expected ${String(bad)} to normalize to null`
     )
   }
 })
 
-test('a non-array variants value yields no senses rather than throwing', () => {
-  const draft = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 'en', variants: 'dog' },
-    { languageCode: 'de' }
-  ]), requested)
-
-  assert.deepStrictEqual(draft.degenerateLanguageCodes(), ['en', 'de'])
-})
-
 // --- usability ---
 
-test('isDegenerate is true only when every requested language came back empty', () => {
-  const allEmpty = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 'en', variants: [] },
-    { languageCode: 'de', variants: [] }
-  ]), requested)
-  const partial = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 'en', variants: [sense('dog')] },
-    { languageCode: 'de', variants: [] }
+// The question `isDegenerate` asks changed with the level. It used to be
+// "did every requested language come back empty?"; now that meanings are the
+// top level, a draft with no meanings is exactly a draft with nothing under
+// any language, and it is the one the adapter's retry fires on.
+test('isDegenerate is true only when no meaning came back at all', () => {
+  const noSenses = TranslationDraft.fromProviderPayload(payload([]), requested)
+  const oneLanguageOnly = TranslationDraft.fromProviderPayload(payload([
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle')] }
   ]), requested)
   const populated = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 'en', variants: [sense('dog')] },
-    { languageCode: 'de', variants: [sense('Hund')] }
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle'), translation('de', 'Burg')] }
   ]), requested)
 
-  assert.equal(allEmpty.isDegenerate(), true)
-  assert.equal(partial.isDegenerate(), false)
+  assert.equal(noSenses.isDegenerate(), true)
+  assert.equal(oneLanguageOnly.isDegenerate(), false)
   assert.equal(populated.isDegenerate(), false)
+})
 
-  assert.deepStrictEqual(allEmpty.degenerateLanguageCodes(), ['en', 'de'])
-  assert.deepStrictEqual(partial.degenerateLanguageCodes(), ['de'])
+test('degenerateLanguageCodes names the languages absent from every meaning', () => {
+  const noSenses = TranslationDraft.fromProviderPayload(payload([]), requested)
+  // `de` appears under no meaning at all — a gap the user will see, unlike the
+  // sparse spoke above where it appears under one meaning and not another.
+  const englishOnly = TranslationDraft.fromProviderPayload(payload([
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle')] },
+    { glossText: 'suwak', translations: [translation('en', 'zipper')] }
+  ]), requested)
+  const populated = TranslationDraft.fromProviderPayload(payload([
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle'), translation('de', 'Burg')] }
+  ]), requested)
+
+  assert.deepStrictEqual(noSenses.degenerateLanguageCodes(), ['en', 'de'])
+  assert.deepStrictEqual(englishOnly.degenerateLanguageCodes(), ['de'])
   assert.deepStrictEqual(populated.degenerateLanguageCodes(), [])
 })
 
 // --- projections ---
 
-test('renderingFor returns the first sense and sentence, trimmed and normalized', () => {
+test('renderingFor returns the first meaning that has this language, trimmed and normalized', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
+    // A sparse spoke first: the German rendering must skip past it rather than
+    // returning null, which is the case the old language-first lookup could
+    // not encounter.
+    { glossText: 'suwak', translations: [translation('en', 'zipper')] },
     {
-      languageCode: 'en',
-      variants: [{
-        meaningText: '  dog  ',
+      glossText: 'budowla obronna',
+      translations: [{
+        languageCode: 'de',
+        meaningText: '  Burg  ',
         phoneticTranscription: '   ',
-        sentences: [{ targetText: '  The dog barks.  ', nativeGlossText: '  Pies szczeka.  ' }]
-      }, sense('hound')]
+        sentences: [{ targetText: '  Die Burg steht.  ', nativeGlossText: '  Zamek stoi.  ' }]
+      }]
     }
   ]), requested)
 
-  assert.deepStrictEqual(draft.renderingFor('en'), {
-    languageCode: 'en',
-    meaningText: 'dog',
+  assert.deepStrictEqual(draft.renderingFor('de'), {
+    languageCode: 'de',
+    meaningText: 'Burg',
     phoneticTranscription: null,
-    sentenceText: 'The dog barks.',
-    nativeGlossText: 'Pies szczeka.'
+    sentenceText: 'Die Burg steht.',
+    nativeGlossText: 'Zamek stoi.'
   })
 })
 
-test('renderingFor returns null for a language with no usable sense, and for one never requested', () => {
+test('renderingFor returns null for a language no meaning covers, and for one never requested', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 'en', variants: [sense('dog')] }
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle')] }
   ]), requested)
 
   assert.equal(draft.renderingFor('de'), null)
   assert.equal(draft.renderingFor('fr'), null)
 })
 
-test('toWire emits the wire key `variants` with the shape the popup already parses', () => {
+test('toWire emits the nested meaning-first shape the response schema declares', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
-    { languageCode: 'en', variants: [sense('dog')] },
-    { languageCode: 'de', variants: [] }
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle'), translation('de', 'Burg')] },
+    { glossText: 'suwak', translations: [translation('en', 'zipper')] }
   ]), requested)
 
   assert.deepStrictEqual(draft.toWire(), {
-    normalizedNativeText: 'pies',
-    languages: [
+    normalizedNativeText: 'zamek',
+    senses: [
       {
-        languageCode: 'en',
-        variants: [{
-          meaningText: 'dog',
-          phoneticTranscription: '/dog/',
-          sentences: [{ targetText: 'A sentence with dog.', nativeGlossText: 'Zdanie po polsku.' }]
-        }]
+        glossText: 'budowla obronna',
+        translations: [
+          {
+            languageCode: 'en',
+            meaningText: 'castle',
+            phoneticTranscription: '/castle/',
+            sentences: [{ targetText: 'A sentence with castle.', nativeGlossText: 'Zdanie po polsku.' }]
+          },
+          {
+            languageCode: 'de',
+            meaningText: 'Burg',
+            phoneticTranscription: '/Burg/',
+            sentences: [{ targetText: 'A sentence with Burg.', nativeGlossText: 'Zdanie po polsku.' }]
+          }
+        ]
       },
-      { languageCode: 'de', variants: [] }
+      {
+        glossText: 'suwak',
+        translations: [{
+          languageCode: 'en',
+          meaningText: 'zipper',
+          phoneticTranscription: '/zipper/',
+          sentences: [{ targetText: 'A sentence with zipper.', nativeGlossText: 'Zdanie po polsku.' }]
+        }]
+      }
     ]
   })
 })
 
-test('producedCharacters counts every character of translated text the draft carries', () => {
+test('producedCharacters counts every character of text the draft carries, gloss included', () => {
   const draft = TranslationDraft.fromProviderPayload(payload([
     {
-      languageCode: 'en',
-      variants: [{
-        meaningText: 'dog',
-        phoneticTranscription: '/dog/',
-        sentences: [{ targetText: 'Woof.', nativeGlossText: 'Hau.' }]
+      glossText: 'budowla',
+      translations: [{
+        languageCode: 'en',
+        meaningText: 'castle',
+        phoneticTranscription: '/kas/',
+        sentences: [{ targetText: 'Stone.', nativeGlossText: 'Kamien.' }]
       }]
-    },
-    { languageCode: 'de', variants: [] }
+    }
   ]), requested)
 
-  // 3 (dog) + 5 (/dog/) + 5 (Woof.) + 4 (Hau.) — the empty language costs nothing.
-  assert.equal(draft.producedCharacters(), 17)
+  // 7 (budowla) + 6 (castle) + 5 (/kas/) + 6 (Stone.) + 7 (Kamien.)
+  assert.equal(draft.producedCharacters(), 31)
 })
 
 // The native code is interpolated verbatim into the system prompt, so

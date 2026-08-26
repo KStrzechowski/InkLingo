@@ -1114,10 +1114,10 @@ home.
 
 #### Automated
 
-- [x] 1.1 Backend suite passes (`cd backend && npm test`)
-- [x] 1.2 Type check passes (`cd backend && npm run build:ts`)
-- [x] 1.3 `providerBoundary.test.ts` still green
-- [x] 1.4 Forcing type-only imports verified for any domain file reading an augmented property
+- [x] 1.1 Backend suite passes (`cd backend && npm test`) — 2683a9c
+- [x] 1.2 Type check passes (`cd backend && npm run build:ts`) — 2683a9c
+- [x] 1.3 `providerBoundary.test.ts` still green — 2683a9c
+- [x] 1.4 Forcing type-only imports verified for any domain file reading an augmented property — 2683a9c
 
 #### Manual
 
@@ -1127,10 +1127,10 @@ home.
 
 #### Automated
 
-- [ ] 2.1 Backend suite passes
-- [ ] 2.2 `providerBoundary.test.ts` green (no `src/ai`, no provider needle in routes/plugins)
-- [ ] 2.3 No `variants` remains under `backend/src/`
-- [ ] 2.4 Type check passes
+- [x] 2.1 Backend suite passes
+- [x] 2.2 `providerBoundary.test.ts` green (no `src/ai`, no provider needle in routes/plugins)
+- [x] 2.3 No `variants` remains under `backend/src/`
+- [x] 2.4 Type check passes
 
 #### Manual
 
