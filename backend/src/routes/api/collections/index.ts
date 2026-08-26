@@ -14,6 +14,7 @@ import {
   addEntryTranslationResponseSchema
 } from './schemas.ts'
 import { RequestedLanguages, type TranslationDraft } from '../../../domain/translationDraft.ts'
+import { senseKey } from '../../../domain/senseKey.ts'
 import { fetchOwnedCollection, fetchOwnedEntry } from './ownership.ts'
 // Type-only import, erased at runtime. Forces ts-node/esm to load
 // fastify.d.ts's ambient FastifyInstance augmentation before checking this
@@ -347,12 +348,30 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       return reply.badRequest('language code is not one of the collection\'s target languages')
     }
 
+    // BRIDGE (Phase 3 → Phase 4). The wire body is still flat, but the schema
+    // now demands `entry_translations.sense_id` and
+    // `entry_sentences.translation_id`. Until Phase 4 replaces this whole
+    // handler with the repository, synthesize the single meaning the flat shape
+    // can express — gloss = the native word, exactly what the migration's
+    // backfill assumed for every pre-existing entry — and pair each sentence to
+    // the translation in its own language.
+    const senseId = randomUUID()
+    const translationIdsByLanguage = new Map(
+      translations.map((translation) => [translation.languageCode, randomUUID()])
+    )
+    // Previously a sentence in a language with no translation just landed as an
+    // orphan row; that is what produced the one orphan Phase 0 found. It is now
+    // unrepresentable, so it has to be a 400 rather than a NOT NULL violation.
+    if (sentences.some((sentence) => !translationIdsByLanguage.has(sentence.languageCode))) {
+      return reply.badRequest('every sentence must have a translation in the same language')
+    }
+
     // The entry id is generated here rather than by the column default so
     // all the inserts can be built upfront and submitted as one
     // non-interactive transaction — the Neon HTTP driver can't feed a
     // RETURNING value from one statement into the next.
     const entryId = randomUUID()
-    const [entryRows, ...rest] = await fastify.sql.transaction([
+    const [entryRows, , ...rest] = await fastify.sql.transaction([
       // source_language_code is always the parent collection's native
       // language, never taken from the request body.
       fastify.sql`
@@ -360,14 +379,18 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
         VALUES (${entryId}, ${collection.id}, ${wordOrPhrase}, ${collection.native_language_code})
         RETURNING id, word_or_phrase, source_language_code, created_at
       `,
+      fastify.sql`
+        INSERT INTO entry_senses (id, entry_id, gloss_text, sense_key)
+        VALUES (${senseId}, ${entryId}, ${wordOrPhrase}, ${senseKey(wordOrPhrase)})
+      `,
       ...translations.map((translation) => fastify.sql`
-        INSERT INTO entry_translations (entry_id, language_code, meaning_text, phonetic_transcription)
-        VALUES (${entryId}, ${translation.languageCode}, ${translation.meaningText}, ${translation.phoneticTranscription.length === 0 ? null : translation.phoneticTranscription})
+        INSERT INTO entry_translations (id, entry_id, sense_id, language_code, meaning_text, phonetic_transcription)
+        VALUES (${translationIdsByLanguage.get(translation.languageCode) as string}, ${entryId}, ${senseId}, ${translation.languageCode}, ${translation.meaningText}, ${translation.phoneticTranscription.length === 0 ? null : translation.phoneticTranscription})
         RETURNING id, language_code, meaning_text, phonetic_transcription
       `),
       ...sentences.map((sentence) => fastify.sql`
-        INSERT INTO entry_sentences (entry_id, language_code, sentence_text, native_gloss_text)
-        VALUES (${entryId}, ${sentence.languageCode}, ${sentence.sentenceText}, ${sentence.nativeGlossText})
+        INSERT INTO entry_sentences (entry_id, translation_id, language_code, sentence_text, native_gloss_text)
+        VALUES (${entryId}, ${translationIdsByLanguage.get(sentence.languageCode) as string}, ${sentence.languageCode}, ${sentence.sentenceText}, ${sentence.nativeGlossText})
         RETURNING id, language_code, sentence_text, native_gloss_text, created_at
       `)
     ])
@@ -446,15 +469,32 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       return reply.badGateway('could not generate a translation — try again')
     }
 
+    // BRIDGE (Phase 3 → Phase 4), the read half. This route still adds one
+    // language to one meaning; Phase 4's §6 makes it translate every meaning the
+    // entry has. Until then, hang the new word off the entry's existing sense —
+    // there is exactly one, guaranteed by the migration's backfill for legacy
+    // entries and by the capture route's bridge for new ones.
+    const senseRows = await fastify.sql`
+      SELECT id FROM entry_senses WHERE entry_id = ${entry.id} ORDER BY created_at LIMIT 1
+    `
+    const senseId = senseRows[0]?.id as string | undefined
+    if (senseId === undefined) {
+      return reply.badGateway('this entry has no meaning to translate')
+    }
+
+    // Generated app-side for the same reason `entryId` is in the capture route:
+    // the sentence needs its translation's id, and the Neon HTTP driver cannot
+    // feed a RETURNING value from one statement into the next.
+    const translationId = randomUUID()
     const [translationRows, sentenceRows] = await fastify.sql.transaction([
       fastify.sql`
-        INSERT INTO entry_translations (entry_id, language_code, meaning_text, phonetic_transcription)
-        VALUES (${entry.id}, ${languageCode}, ${rendering.meaningText}, ${rendering.phoneticTranscription})
+        INSERT INTO entry_translations (id, entry_id, sense_id, language_code, meaning_text, phonetic_transcription)
+        VALUES (${translationId}, ${entry.id}, ${senseId}, ${languageCode}, ${rendering.meaningText}, ${rendering.phoneticTranscription})
         RETURNING id, language_code, meaning_text, phonetic_transcription
       `,
       fastify.sql`
-        INSERT INTO entry_sentences (entry_id, language_code, sentence_text, native_gloss_text)
-        VALUES (${entry.id}, ${languageCode}, ${rendering.sentenceText}, ${rendering.nativeGlossText})
+        INSERT INTO entry_sentences (entry_id, translation_id, language_code, sentence_text, native_gloss_text)
+        VALUES (${entry.id}, ${translationId}, ${languageCode}, ${rendering.sentenceText}, ${rendering.nativeGlossText})
         RETURNING id, language_code, sentence_text, native_gloss_text, created_at
       `
     ])

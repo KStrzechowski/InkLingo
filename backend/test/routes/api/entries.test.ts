@@ -195,6 +195,28 @@ test('POST /api/collections/:id/entries persists one translation+sentence pair p
   assert.equal(created.sourceLanguageCode, 'pl')
 })
 
+// Before add-entry-senses a sentence whose language had no translation just
+// landed as an orphan row — the exact shape Phase 0 found once in the live data.
+// `entry_sentences.translation_id` makes it unrepresentable, so it has to be
+// caught as a 400 rather than surfacing as a NOT NULL violation.
+test('POST /api/collections/:id/entries rejects a sentence with no translation in its language with 400', async (t) => {
+  const app = await build(t)
+  const { collectionId, token } = await collectionFor(app, t, 'Unpaired sentence test', ['en', 'de'])
+
+  const res = await app.inject({
+    url: `/api/collections/${collectionId}/entries`,
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      wordOrPhrase: 'pies',
+      translations: [{ languageCode: 'en', meaningText: 'dog', phoneticTranscription: '/dɒɡ/' }],
+      sentences: [{ languageCode: 'de', sentenceText: 'Der Hund rennt.', nativeGlossText: 'Pies biegnie.' }]
+    }
+  })
+
+  assert.equal(res.statusCode, 400)
+})
+
 test('POST /api/collections/:id/entries rejects more than five translations with 400', async (t) => {
   const app = await build(t)
   const { collectionId, token } = await collectionFor(app, t, 'Over the language ceiling test')
@@ -245,6 +267,7 @@ test('a failing follow-up insert rolls the entries row back', async (t) => {
   const userId = await createUserRow(app, t)
   const collectionId = await createCollectionRow(app, userId, 'Atomic save test')
   const entryId = randomUUID()
+  const senseId = randomUUID()
 
   await assert.rejects(
     app.sql.transaction([
@@ -253,8 +276,15 @@ test('a failing follow-up insert rolls the entries row back', async (t) => {
         VALUES (${entryId}, ${collectionId}, 'pies', 'pl')
       `,
       app.sql`
-        INSERT INTO entry_translations (entry_id, language_code, meaning_text)
-        VALUES (${entryId}, 'en', ${null})
+        INSERT INTO entry_senses (id, entry_id, gloss_text, sense_key)
+        VALUES (${senseId}, ${entryId}, 'pies', 'pies')
+      `,
+      // The deliberate failure is the null meaning_text, not a missing
+      // sense_id — the sense above exists so this still fails for the reason
+      // the test is about.
+      app.sql`
+        INSERT INTO entry_translations (entry_id, sense_id, language_code, meaning_text)
+        VALUES (${entryId}, ${senseId}, 'en', ${null})
       `
     ])
   )

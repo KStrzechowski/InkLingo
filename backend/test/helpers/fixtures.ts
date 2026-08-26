@@ -47,3 +47,54 @@ export async function createEntryRow (
   ) as Array<{ id: string }>
   return rows[0].id
 }
+
+// The three helpers below exist because `entry_translations.sense_id` and
+// `entry_sentences.translation_id` are NOT NULL from
+// `add-entry-senses` onward: no test can hand-write those INSERTs any more
+// without repeating the id wiring. Cleanup rides the `users` cascade, same as
+// `createEntryRow`.
+
+export async function createSenseRow (
+  app: Awaited<ReturnType<typeof build>>,
+  entryId: string,
+  glossText: string
+): Promise<string> {
+  const rows = await app.sql.query(
+    'INSERT INTO entry_senses (entry_id, gloss_text, sense_key) VALUES ($1, $2, $3) RETURNING id',
+    [entryId, glossText, glossText.trim().toLowerCase()]
+  ) as Array<{ id: string }>
+  return rows[0].id
+}
+
+export async function createTranslationRow (
+  app: Awaited<ReturnType<typeof build>>,
+  entryId: string,
+  senseId: string,
+  languageCode: string,
+  meaningText: string
+): Promise<string> {
+  const rows = await app.sql.query(
+    'INSERT INTO entry_translations (entry_id, sense_id, language_code, meaning_text) VALUES ($1, $2, $3, $4) RETURNING id',
+    [entryId, senseId, languageCode, meaningText]
+  ) as Array<{ id: string }>
+  return rows[0].id
+}
+
+// `language_code` is not a parameter: it is read off the parent translation, so
+// a fixture cannot produce the cross-wired sentence INV-12 exists to catch.
+// The column is dead weight from here on and Phase 7 drops it.
+export async function createSentenceRow (
+  app: Awaited<ReturnType<typeof build>>,
+  entryId: string,
+  translationId: string,
+  sentenceText: string,
+  nativeGlossText: string | null = null
+): Promise<string> {
+  const rows = await app.sql.query(
+    `INSERT INTO entry_sentences (entry_id, translation_id, language_code, sentence_text, native_gloss_text)
+     SELECT $1, $2, t.language_code, $3, $4 FROM entry_translations t WHERE t.id = $2
+     RETURNING id`,
+    [entryId, translationId, sentenceText, nativeGlossText]
+  ) as Array<{ id: string }>
+  return rows[0].id
+}

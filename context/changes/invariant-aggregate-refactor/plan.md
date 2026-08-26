@@ -1127,10 +1127,10 @@ home.
 
 #### Automated
 
-- [x] 2.1 Backend suite passes
-- [x] 2.2 `providerBoundary.test.ts` green (no `src/ai`, no provider needle in routes/plugins)
-- [x] 2.3 No `variants` remains under `backend/src/`
-- [x] 2.4 Type check passes
+- [x] 2.1 Backend suite passes — 6805187
+- [x] 2.2 `providerBoundary.test.ts` green (no `src/ai`, no provider needle in routes/plugins) — 6805187
+- [x] 2.3 No `variants` remains under `backend/src/` — 6805187
+- [x] 2.4 Type check passes — 6805187
 
 #### Manual
 
@@ -1141,16 +1141,16 @@ home.
 
 #### Automated
 
-- [ ] 3.1 Migration applies cleanly (`npm run migrate:up`)
-- [ ] 3.2 Backend suite passes
-- [ ] 3.3 Type check passes
-- [ ] 3.4 No `sense_id IS NULL` / `translation_id IS NULL` rows remain after `up()`
+- [x] 3.1 Migration applies cleanly (`npm run migrate:up`)
+- [x] 3.2 Backend suite passes
+- [x] 3.3 Type check passes
+- [x] 3.4 No `sense_id IS NULL` / `translation_id IS NULL` rows remain after `up()`
 
 #### Manual
 
-- [ ] 3.5 Rollback rehearsal: one step down against pre-refactor data, then up again
-- [ ] 3.6 `seed-demo.mjs` produces the multi-meaning / long-word / long-sentence / sparse-spoke collection
-- [ ] 3.7 Repair `DELETE`s report the counts Phase 0 predicted
+- [x] 3.5 Rollback rehearsal: one step down against pre-refactor data, then up again
+- [x] 3.6 `seed-demo.mjs` produces the multi-meaning / long-word / long-sentence / sparse-spoke collection
+- [x] 3.7 Repair `DELETE`s report the counts Phase 0 predicted
 
 ### Phase 4: Repository, error mapping, and both routes
 

@@ -3,7 +3,14 @@ import * as assert from 'node:assert'
 import { randomUUID } from 'node:crypto'
 import { build } from '../../helper.js'
 import { jwks, signToken } from '../../helpers/jwks.js'
-import { createUserRow, createCollectionRow, createEntryRow } from '../../helpers/fixtures.js'
+import {
+  createUserRow,
+  createCollectionRow,
+  createEntryRow,
+  createSenseRow,
+  createTranslationRow,
+  createSentenceRow
+} from '../../helpers/fixtures.js'
 
 async function authedUser (app: Awaited<ReturnType<typeof build>>, t: Parameters<typeof build>[0]): Promise<{ sub: string, token: string }> {
   app.jwtVerifier.cacheJwks(jwks)
@@ -236,22 +243,14 @@ test('GET /api/collections/:id returns correctly nested translations/sentences f
   const collectionId = await createCollectionRow(app, userId, 'Nested contents test')
   const entryId = await createEntryRow(app, collectionId, 'jedzenie')
 
-  await app.sql.query(
-    'INSERT INTO entry_translations (entry_id, language_code, meaning_text) VALUES ($1, $2, $3)',
-    [entryId, 'en', 'food']
-  )
-  await app.sql.query(
-    'INSERT INTO entry_translations (entry_id, language_code, meaning_text) VALUES ($1, $2, $3)',
-    [entryId, 'ru', 'eda']
-  )
-  await app.sql.query(
-    'INSERT INTO entry_sentences (entry_id, language_code, sentence_text) VALUES ($1, $2, $3)',
-    [entryId, 'en', 'I like this food.']
-  )
-  await app.sql.query(
-    'INSERT INTO entry_sentences (entry_id, language_code, sentence_text) VALUES ($1, $2, $3)',
-    [entryId, 'pl', 'Lubię to jedzenie.']
-  )
+  const senseId = await createSenseRow(app, entryId, 'jedzenie')
+  const enId = await createTranslationRow(app, entryId, senseId, 'en', 'food')
+  const ruId = await createTranslationRow(app, entryId, senseId, 'ru', 'eda')
+  // The `pl` sentence this fixture used to carry was a sentence in the
+  // collection's own native language with no translation to hang off — the
+  // exact orphan Phase 0 found in the live data, and now unrepresentable.
+  await createSentenceRow(app, entryId, enId, 'I like this food.')
+  await createSentenceRow(app, entryId, ruId, 'Мне нравится эта еда.')
 
   app.jwtVerifier.cacheJwks(jwks)
   const token = await signToken({ sub })
@@ -280,6 +279,6 @@ test('GET /api/collections/:id returns correctly nested translations/sentences f
   )
   assert.deepStrictEqual(
     entry.sentences.map((s) => s.languageCode).sort(),
-    ['en', 'pl']
+    ['en', 'ru']
   )
 })

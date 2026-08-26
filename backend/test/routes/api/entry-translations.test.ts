@@ -3,7 +3,14 @@ import * as assert from 'node:assert'
 import { randomUUID } from 'node:crypto'
 import { build } from '../../helper.js'
 import { jwks, signToken } from '../../helpers/jwks.js'
-import { createUserRow, createCollectionRow, createEntryRow } from '../../helpers/fixtures.js'
+import {
+  createUserRow,
+  createCollectionRow,
+  createEntryRow,
+  createSenseRow,
+  createTranslationRow,
+  createSentenceRow
+} from '../../helpers/fixtures.js'
 import { stubTranslator } from '../../helpers/fakeTranslator.js'
 
 type App = Awaited<ReturnType<typeof build>>
@@ -47,10 +54,9 @@ async function backfillFixture (
   const userId = await createUserRow(app, t, sub)
   const collectionId = await createCollectionRow(app, userId, name, 'pl', ['en', 'de'])
   const entryId = await createEntryRow(app, collectionId, 'pies')
-  await app.sql.query(
-    'INSERT INTO entry_translations (entry_id, language_code, meaning_text) VALUES ($1, $2, $3)',
-    [entryId, 'en', 'dog']
-  )
+  const senseId = await createSenseRow(app, entryId, 'pies')
+  const translationId = await createTranslationRow(app, entryId, senseId, 'en', 'dog')
+  await createSentenceRow(app, entryId, translationId, 'The dog runs.', 'Pies biegnie.')
   app.jwtVerifier.cacheJwks(jwks)
   const token = await signToken({ sub })
   return { collectionId, entryId, token }
