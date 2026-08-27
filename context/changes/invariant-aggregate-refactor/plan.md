@@ -1141,27 +1141,27 @@ home.
 
 #### Automated
 
-- [x] 3.1 Migration applies cleanly (`npm run migrate:up`)
-- [x] 3.2 Backend suite passes
-- [x] 3.3 Type check passes
-- [x] 3.4 No `sense_id IS NULL` / `translation_id IS NULL` rows remain after `up()`
+- [x] 3.1 Migration applies cleanly (`npm run migrate:up`) — 3f8590b
+- [x] 3.2 Backend suite passes — 3f8590b
+- [x] 3.3 Type check passes — 3f8590b
+- [x] 3.4 No `sense_id IS NULL` / `translation_id IS NULL` rows remain after `up()` — 3f8590b
 
 #### Manual
 
-- [x] 3.5 Rollback rehearsal: one step down against pre-refactor data, then up again
-- [x] 3.6 `seed-demo.mjs` produces the multi-meaning / long-word / long-sentence / sparse-spoke collection
-- [x] 3.7 Repair `DELETE`s report the counts Phase 0 predicted
+- [x] 3.5 Rollback rehearsal: one step down against pre-refactor data, then up again — 3f8590b
+- [x] 3.6 `seed-demo.mjs` produces the multi-meaning / long-word / long-sentence / sparse-spoke collection — 3f8590b
+- [x] 3.7 Repair `DELETE`s report the counts Phase 0 predicted — 3f8590b
 
 ### Phase 4: Repository, error mapping, and both routes
 
 #### Automated
 
-- [ ] 4.1 Backend suite passes
-- [ ] 4.2 Type check passes
-- [ ] 4.3 `route-ownership.test.ts` green (lexical check finds its literals in each route slice)
-- [ ] 4.4 `route-reachability.test.ts` green with no `api-construct.ts` change
-- [ ] 4.5 `providerBoundary.test.ts` green with the second tool schema inside the adapter
-- [ ] 4.6 `entryRepository.ts` carries its own forcing type-only import
+- [x] 4.1 Backend suite passes
+- [x] 4.2 Type check passes
+- [x] 4.3 `route-ownership.test.ts` green (lexical check finds its literals in each route slice)
+- [x] 4.4 `route-reachability.test.ts` green with no `api-construct.ts` change
+- [x] 4.5 `providerBoundary.test.ts` green with the second tool schema inside the adapter
+- [x] 4.6 `entryRepository.ts` carries its own forcing type-only import
 
 #### Manual
 

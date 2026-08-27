@@ -173,7 +173,7 @@ test('entry_translations.phonetic_transcription and entry_sentences.native_gloss
   const senseId = await createSenseRow(app, entryId, 'jedzenie')
   const translationId = await createTranslationRow(app, entryId, senseId, 'en', 'food')
 
-  await createSentenceRow(app, entryId, translationId, 'I like this food.')
+  await createSentenceRow(app, entryId, translationId, 'I like this food.', null)
 
   const translationRows = await app.sql.query(
     'SELECT phonetic_transcription FROM entry_translations WHERE entry_id = $1',

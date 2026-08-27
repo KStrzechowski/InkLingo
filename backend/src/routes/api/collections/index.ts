@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { type FastifyInstance, type FastifyBaseLogger } from 'fastify'
 import { type FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { NeonDbError } from '@neondatabase/serverless'
@@ -11,10 +10,26 @@ import {
   createEntryBodySchema,
   addEntryTranslationBodySchema,
   translateResponseSchema,
-  addEntryTranslationResponseSchema
+  entryResponseSchema,
+  collectionDetailResponseSchema,
+  type CreateEntryBody
 } from './schemas.ts'
-import { RequestedLanguages, type TranslationDraft } from '../../../domain/translationDraft.ts'
-import { senseKey } from '../../../domain/senseKey.ts'
+import {
+  RequestedLanguages,
+  type TranslationDraft,
+  type DraftSenseTranslation
+} from '../../../domain/translationDraft.ts'
+import { Entry, type EntryDraft } from '../../../domain/entry.ts'
+import { LanguageAlreadyPresentError, LanguageNotTaughtError } from '../../../domain/errors.ts'
+import {
+  appendLanguage,
+  contractFor,
+  insertEntry,
+  loadContract,
+  loadEntries,
+  loadEntry
+} from '../../../repositories/entryRepository.ts'
+import { mapDomainError } from './mapDomainError.ts'
 import { fetchOwnedCollection, fetchOwnedEntry } from './ownership.ts'
 // Type-only import, erased at runtime. Forces ts-node/esm to load
 // fastify.d.ts's ambient FastifyInstance augmentation before checking this
@@ -84,6 +99,55 @@ async function draftWithTimeout (
     return null
   } finally {
     clearTimeout(timeout)
+  }
+}
+
+// D-2's per-meaning call, wrapped in the same deadline and the same
+// failure-to-null collapse as `draftWithTimeout`. One of these runs per meaning
+// the entry is missing this language for, and they run concurrently: three
+// meanings sequentially at up to 20s each would blow API Gateway's 29s ceiling,
+// while three in parallel cost one call's latency.
+//
+// A single meaning failing is not fatal — the caller keeps whatever came back
+// and adds the language to those meanings only, leaving the rest as sparse
+// spokes, which are legal. Only *all* of them failing is a 502.
+async function senseTranslationWithTimeout (
+  fastify: FastifyInstance,
+  log: FastifyBaseLogger,
+  correlationId: string,
+  params: { text: string, glossText: string, languages: RequestedLanguages }
+): Promise<DraftSenseTranslation | null> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => { controller.abort() }, TRANSLATE_TIMEOUT_MS)
+  try {
+    return await fastify.translator.translateSense({ ...params, signal: controller.signal })
+  } catch (err) {
+    log.error({ err, requestId: correlationId, glossText: params.glossText }, 'translator sense translation failed')
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+// The wire body, renamed into the aggregate's vocabulary. The only rename is
+// `sentenceText` → `targetText`: the wire inherited the column's name and the
+// domain calls a sentence in the target language what it is. Nothing else here
+// validates — every guard belongs to `Entry.capture`, which is the point.
+function toDraft (body: CreateEntryBody): EntryDraft {
+  return {
+    wordOrPhrase: body.wordOrPhrase,
+    senses: body.senses.map((sense) => ({
+      glossText: sense.glossText,
+      translations: sense.translations.map((translation) => ({
+        languageCode: translation.languageCode,
+        meaningText: translation.meaningText,
+        phoneticTranscription: translation.phoneticTranscription,
+        sentences: translation.sentences.map((sentence) => ({
+          targetText: sentence.sentenceText,
+          nativeGlossText: sentence.nativeGlossText
+        }))
+      }))
+    }))
   }
 }
 
@@ -176,7 +240,13 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
 
   fastify.get('/:id', {
     schema: {
-      params: collectionParamsSchema
+      params: collectionParamsSchema,
+      // Newly declared, and a new hazard with it: this route hand-built its
+      // payload with no schema until now, so nothing was stripped and nothing
+      // could be. From here a field missing from the schema vanishes from the
+      // body **silently**. `collections.test.ts` asserts the whole body with a
+      // deep-equal, which is the only shape of test that catches that.
+      response: { 200: collectionDetailResponseSchema }
     }
   }, async (request, reply) => {
     const collection = await fetchOwnedCollection(fastify, request.params.id, request.authUser.id)
@@ -185,55 +255,22 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
     }
 
     const targetLanguages = await targetLanguagesByCollectionId(fastify, [collection.id])
+    const targetLanguageCodes = targetLanguages.map((target) => target.language_code)
 
-    const entries = await fastify.sql`
-      SELECT id, word_or_phrase, source_language_code, created_at
-      FROM entries
-      WHERE collection_id = ${request.params.id}
-      ORDER BY created_at DESC
-    `
-    const entryIds = entries.map((entry) => entry.id)
-
-    const translations = await fastify.sql`
-      SELECT id, entry_id, language_code, meaning_text, phonetic_transcription
-      FROM entry_translations
-      WHERE entry_id = ANY(${entryIds})
-    `
-    const sentences = await fastify.sql`
-      SELECT id, entry_id, language_code, sentence_text, native_gloss_text, created_at
-      FROM entry_sentences
-      WHERE entry_id = ANY(${entryIds})
-    `
+    // Decision A1: the read runs through the same strict `Entry.capture` path
+    // as the write, so the nesting a client sees is the nesting the aggregate
+    // vouches for rather than a second, looser projection of the same rows.
+    const entries = await loadEntries(fastify.sql, contractFor(collection, targetLanguageCodes))
 
     return {
       id: collection.id,
       name: collection.name,
       nativeLanguageCode: collection.native_language_code,
-      targetLanguageCodes: targetLanguages.map((target) => target.language_code),
+      // As stored, not as the contract normalizes them: legacy rows hold codes
+      // like 'EN', and what a read reports is not this change's business.
+      targetLanguageCodes,
       createdAt: collection.created_at,
-      entries: entries.map((entry) => ({
-        id: entry.id,
-        wordOrPhrase: entry.word_or_phrase,
-        sourceLanguageCode: entry.source_language_code,
-        createdAt: entry.created_at,
-        translations: translations
-          .filter((translation) => translation.entry_id === entry.id)
-          .map((translation) => ({
-            id: translation.id,
-            languageCode: translation.language_code,
-            meaningText: translation.meaning_text,
-            phoneticTranscription: translation.phonetic_transcription
-          })),
-        sentences: sentences
-          .filter((sentence) => sentence.entry_id === entry.id)
-          .map((sentence) => ({
-            id: sentence.id,
-            languageCode: sentence.language_code,
-            sentenceText: sentence.sentence_text,
-            nativeGlossText: sentence.native_gloss_text,
-            createdAt: sentence.created_at
-          }))
-      }))
+      entries: entries.map((entry) => entry.toResponse())
     }
   })
 
@@ -297,136 +334,45 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
   fastify.post('/:id/entries', {
     schema: {
       params: collectionParamsSchema,
-      body: createEntryBodySchema
+      body: createEntryBodySchema,
+      // See the note on GET /:id — newly declared, so newly able to strip.
+      response: { 201: entryResponseSchema }
     }
   }, async (request, reply) => {
-    const wordOrPhrase = request.body.wordOrPhrase.trim()
-    if (wordOrPhrase.length === 0) {
-      return reply.badRequest('wordOrPhrase must not be blank')
-    }
-
-    const translations = request.body.translations.map((translation) => ({
-      languageCode: translation.languageCode.trim().toLowerCase(),
-      meaningText: translation.meaningText.trim(),
-      phoneticTranscription: translation.phoneticTranscription?.trim() ?? ''
-    }))
-    const sentences = request.body.sentences.map((sentence) => ({
-      languageCode: sentence.languageCode.trim().toLowerCase(),
-      sentenceText: sentence.sentenceText.trim(),
-      nativeGlossText: sentence.nativeGlossText.trim()
-    }))
-    if (
-      translations.some((translation) => translation.meaningText.length === 0) ||
-      sentences.some((sentence) => sentence.sentenceText.length === 0 || sentence.nativeGlossText.length === 0)
-    ) {
-      return reply.badRequest('translation and sentence texts must not be blank')
-    }
-    // At most one of each per language. Without this the duplicate hits
-    // UNIQUE(entry_id, language_code) mid-transaction and surfaces as a 500.
-    if (
-      hasDuplicates(translations.map((translation) => translation.languageCode)) ||
-      hasDuplicates(sentences.map((sentence) => sentence.languageCode))
-    ) {
-      return reply.badRequest('only one translation and one sentence per language')
-    }
-
     const collection = await fetchOwnedCollection(fastify, request.params.id, request.authUser.id)
     if (collection === undefined) {
       return reply.notFound()
     }
 
-    // A saved translation/sentence only makes sense in a language the
-    // collection is actually configured to teach. Compared case-insensitively:
-    // POST / lowercases on write, but rows created before that normalization
-    // landed still hold codes like 'EN'.
-    const targetLanguages = await targetLanguagesByCollectionId(fastify, [collection.id])
-    const targetLanguageCodes = targetLanguages.map((target) => target.language_code.toLowerCase())
-    if (
-      translations.some((translation) => !targetLanguageCodes.includes(translation.languageCode)) ||
-      sentences.some((sentence) => !targetLanguageCodes.includes(sentence.languageCode))
-    ) {
-      return reply.badRequest('language code is not one of the collection\'s target languages')
+    // Everything this handler used to do between here and the INSERTs — the
+    // blank guards, the per-language duplicate guard, the membership check, the
+    // id generation, the sentence-to-translation pairing — is now one call. The
+    // route fetches ownership, loads the contract, and hands the body over.
+    const contract = await loadContract(fastify.sql, collection)
+    try {
+      const entry = Entry.capture(contract, toDraft(request.body))
+      await insertEntry(fastify.sql, entry)
+      return await reply.code(201).send(entry.toResponse())
+    } catch (err) {
+      return mapDomainError(err, reply)
     }
-
-    // BRIDGE (Phase 3 → Phase 4). The wire body is still flat, but the schema
-    // now demands `entry_translations.sense_id` and
-    // `entry_sentences.translation_id`. Until Phase 4 replaces this whole
-    // handler with the repository, synthesize the single meaning the flat shape
-    // can express — gloss = the native word, exactly what the migration's
-    // backfill assumed for every pre-existing entry — and pair each sentence to
-    // the translation in its own language.
-    const senseId = randomUUID()
-    const translationIdsByLanguage = new Map(
-      translations.map((translation) => [translation.languageCode, randomUUID()])
-    )
-    // Previously a sentence in a language with no translation just landed as an
-    // orphan row; that is what produced the one orphan Phase 0 found. It is now
-    // unrepresentable, so it has to be a 400 rather than a NOT NULL violation.
-    if (sentences.some((sentence) => !translationIdsByLanguage.has(sentence.languageCode))) {
-      return reply.badRequest('every sentence must have a translation in the same language')
-    }
-
-    // The entry id is generated here rather than by the column default so
-    // all the inserts can be built upfront and submitted as one
-    // non-interactive transaction — the Neon HTTP driver can't feed a
-    // RETURNING value from one statement into the next.
-    const entryId = randomUUID()
-    const [entryRows, , ...rest] = await fastify.sql.transaction([
-      // source_language_code is always the parent collection's native
-      // language, never taken from the request body.
-      fastify.sql`
-        INSERT INTO entries (id, collection_id, word_or_phrase, source_language_code)
-        VALUES (${entryId}, ${collection.id}, ${wordOrPhrase}, ${collection.native_language_code})
-        RETURNING id, word_or_phrase, source_language_code, created_at
-      `,
-      fastify.sql`
-        INSERT INTO entry_senses (id, entry_id, gloss_text, sense_key)
-        VALUES (${senseId}, ${entryId}, ${wordOrPhrase}, ${senseKey(wordOrPhrase)})
-      `,
-      ...translations.map((translation) => fastify.sql`
-        INSERT INTO entry_translations (id, entry_id, sense_id, language_code, meaning_text, phonetic_transcription)
-        VALUES (${translationIdsByLanguage.get(translation.languageCode) as string}, ${entryId}, ${senseId}, ${translation.languageCode}, ${translation.meaningText}, ${translation.phoneticTranscription.length === 0 ? null : translation.phoneticTranscription})
-        RETURNING id, language_code, meaning_text, phonetic_transcription
-      `),
-      ...sentences.map((sentence) => fastify.sql`
-        INSERT INTO entry_sentences (entry_id, translation_id, language_code, sentence_text, native_gloss_text)
-        VALUES (${entryId}, ${translationIdsByLanguage.get(sentence.languageCode) as string}, ${sentence.languageCode}, ${sentence.sentenceText}, ${sentence.nativeGlossText})
-        RETURNING id, language_code, sentence_text, native_gloss_text, created_at
-      `)
-    ])
-    const [entry] = entryRows
-    const translationRows = rest.slice(0, translations.length).map(([row]) => row)
-    const sentenceRows = rest.slice(translations.length).map(([row]) => row)
-
-    return await reply.code(201).send({
-      id: entry.id,
-      wordOrPhrase: entry.word_or_phrase,
-      sourceLanguageCode: entry.source_language_code,
-      createdAt: entry.created_at,
-      translations: translationRows.map((row) => ({
-        id: row.id,
-        languageCode: row.language_code,
-        meaningText: row.meaning_text,
-        phoneticTranscription: row.phonetic_transcription
-      })),
-      sentences: sentenceRows.map((row) => ({
-        id: row.id,
-        languageCode: row.language_code,
-        sentenceText: row.sentence_text,
-        nativeGlossText: row.native_gloss_text,
-        createdAt: row.created_at
-      }))
-    })
   })
 
   // FR-018: backfill one already-saved entry with a language the collection
   // gained after that entry was created. Deliberately per-entry and
   // user-triggered — the PRD's Non-Goals rule out an automatic bulk pass.
+  //
+  // Under decision D-2 this adds the language to **every** meaning the entry
+  // holds, one model call per meaning, which is what makes this path and the
+  // capture path answer "how many meanings does an entry keep?" the same way.
   fastify.post('/:id/entries/:entryId/translations', {
     schema: {
       params: entryParamsSchema,
       body: addEntryTranslationBodySchema,
-      response: { 201: addEntryTranslationResponseSchema }
+      // Decision A9: the whole updated entry, not a partial shape the client
+      // merges by hand. With N meanings there is no single "the translation"
+      // left to return.
+      response: { 201: entryResponseSchema }
     },
     config: translateRateLimit
   }, async (request, reply) => {
@@ -437,86 +383,68 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
       return reply.notFound()
     }
 
-    const entry = await fetchOwnedEntry(fastify, request.params.entryId, collection.id)
+    const owned = await fetchOwnedEntry(fastify, request.params.entryId, collection.id)
+    if (owned === undefined) {
+      return reply.notFound()
+    }
+
+    const contract = await loadContract(fastify.sql, collection)
+    const entry = await loadEntry(fastify.sql, contract, owned.id)
     if (entry === undefined) {
       return reply.notFound()
     }
 
-    const targetLanguages = await targetLanguagesByCollectionId(fastify, [collection.id])
-    const targetLanguageCodes = targetLanguages.map((target) => target.language_code.toLowerCase())
-    if (!targetLanguageCodes.includes(languageCode)) {
-      return reply.badRequest('language code is not one of the collection\'s target languages')
+    let missing
+    try {
+      // `addLanguageToAllSenses` enforces both of these too, and is still the
+      // authority — but it does so *after* the model calls. Asking the same two
+      // questions here is what keeps a 400 or a 409 from costing a generation.
+      if (!contract.teaches(languageCode)) {
+        throw new LanguageNotTaughtError(languageCode)
+      }
+      missing = entry.sensesMissing(languageCode)
+      if (missing.length === 0) {
+        throw new LanguageAlreadyPresentError(languageCode)
+      }
+    } catch (err) {
+      return mapDomainError(err, reply)
     }
 
-    const existing = await fastify.sql`
-      SELECT id FROM entry_translations
-      WHERE entry_id = ${entry.id} AND lower(language_code) = ${languageCode}
-    `
-    if (existing.length > 0) {
-      return reply.conflict('this entry already has a translation in that language')
-    }
+    const languages = RequestedLanguages.of(collection.native_language_code, [languageCode])
+    const drafted = await Promise.all(missing.map(async (sense) => ({
+      sense,
+      translation: await senseTranslationWithTimeout(fastify, request.log, request.correlationId, {
+        text: entry.wordOrPhrase,
+        glossText: sense.glossText,
+        languages
+      })
+    })))
 
-    const draft = await draftWithTimeout(fastify, request.log, request.correlationId, {
-      text: entry.word_or_phrase,
-      languages: RequestedLanguages.of(collection.native_language_code, [languageCode])
-    })
-    // Unlike the capture flow there's no user picking a variant here, so take
-    // the draft's first sense and its first sentence. The value object owns
-    // that choice, and the trimming and blank-to-null this route used to do
-    // inline against the model's object.
-    const rendering = draft?.renderingFor(languageCode) ?? null
-    if (rendering === null) {
+    const perSense = new Map(
+      drafted
+        .filter((result) => result.translation !== null)
+        .map((result) => [result.sense.id, {
+          meaningText: (result.translation as DraftSenseTranslation).meaningText,
+          phoneticTranscription: (result.translation as DraftSenseTranslation).phoneticTranscription,
+          sentences: (result.translation as DraftSenseTranslation).sentences.map((sentence) => ({
+            targetText: sentence.targetText,
+            nativeGlossText: sentence.nativeGlossText
+          }))
+        }])
+    )
+    // Some meanings failing leaves the rest as sparse spokes, which are legal.
+    // All of them failing is not an answer.
+    if (perSense.size === 0) {
       return reply.badGateway('could not generate a translation — try again')
     }
 
-    // BRIDGE (Phase 3 → Phase 4), the read half. This route still adds one
-    // language to one meaning; Phase 4's §6 makes it translate every meaning the
-    // entry has. Until then, hang the new word off the entry's existing sense —
-    // there is exactly one, guaranteed by the migration's backfill for legacy
-    // entries and by the capture route's bridge for new ones.
-    const senseRows = await fastify.sql`
-      SELECT id FROM entry_senses WHERE entry_id = ${entry.id} ORDER BY created_at LIMIT 1
-    `
-    const senseId = senseRows[0]?.id as string | undefined
-    if (senseId === undefined) {
-      return reply.badGateway('this entry has no meaning to translate')
+    try {
+      entry.addLanguageToAllSenses(contract, languageCode, perSense)
+      await appendLanguage(fastify.sql, entry, languageCode, new Set(perSense.keys()))
+      return await reply.code(201).send(entry.toResponse())
+    } catch (err) {
+      return mapDomainError(err, reply)
     }
-
-    // Generated app-side for the same reason `entryId` is in the capture route:
-    // the sentence needs its translation's id, and the Neon HTTP driver cannot
-    // feed a RETURNING value from one statement into the next.
-    const translationId = randomUUID()
-    const [translationRows, sentenceRows] = await fastify.sql.transaction([
-      fastify.sql`
-        INSERT INTO entry_translations (id, entry_id, sense_id, language_code, meaning_text, phonetic_transcription)
-        VALUES (${translationId}, ${entry.id}, ${senseId}, ${languageCode}, ${rendering.meaningText}, ${rendering.phoneticTranscription})
-        RETURNING id, language_code, meaning_text, phonetic_transcription
-      `,
-      fastify.sql`
-        INSERT INTO entry_sentences (entry_id, translation_id, language_code, sentence_text, native_gloss_text)
-        VALUES (${entry.id}, ${translationId}, ${languageCode}, ${rendering.sentenceText}, ${rendering.nativeGlossText})
-        RETURNING id, language_code, sentence_text, native_gloss_text, created_at
-      `
-    ])
-    const [translationRow] = translationRows
-    const [sentenceRow] = sentenceRows
-
-    return await reply.code(201).send({
-      entryId: entry.id,
-      translation: {
-        id: translationRow.id,
-        languageCode: translationRow.language_code,
-        meaningText: translationRow.meaning_text,
-        phoneticTranscription: translationRow.phonetic_transcription
-      },
-      sentence: {
-        id: sentenceRow.id,
-        languageCode: sentenceRow.language_code,
-        sentenceText: sentenceRow.sentence_text,
-        nativeGlossText: sentenceRow.native_gloss_text,
-        createdAt: sentenceRow.created_at
-      }
-    })
   })
 }
 

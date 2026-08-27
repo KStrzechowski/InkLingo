@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import * as assert from 'node:assert'
-import { TranslationDraft, RequestedLanguages } from '../../src/domain/translationDraft.js'
-import { MalformedDraftError } from '../../src/domain/translator.js'
+import { TranslationDraft, RequestedLanguages, senseTranslationFromProviderPayload } from '../../src/domain/translationDraft.js'
+import { DegenerateDraftError, MalformedDraftError } from '../../src/domain/translator.js'
 
 // This file is the specification of what the model may legally do to us.
 // Every payload below is either observed or permitted by the tool schema:
@@ -136,7 +136,6 @@ test('language codes are matched leniently but always emitted as requested', () 
     draft.toWire().senses[0].translations.map((t) => t.languageCode),
     ['en', 'de']
   )
-  assert.equal(draft.renderingFor('en')?.languageCode, 'en')
 })
 
 test('a languageCode that is not a string is skipped instead of throwing', () => {
@@ -293,39 +292,55 @@ test('degenerateLanguageCodes names the languages absent from every meaning', ()
 
 // --- projections ---
 
-test('renderingFor returns the first meaning that has this language, trimmed and normalized', () => {
-  const draft = TranslationDraft.fromProviderPayload(payload([
-    // A sparse spoke first: the German rendering must skip past it rather than
-    // returning null, which is the case the old language-first lookup could
-    // not encounter.
-    { glossText: 'suwak', translations: [translation('en', 'zipper')] },
-    {
-      glossText: 'budowla obronna',
-      translations: [{
-        languageCode: 'de',
-        meaningText: '  Burg  ',
-        phoneticTranscription: '   ',
-        sentences: [{ targetText: '  Die Burg steht.  ', nativeGlossText: '  Zamek stoi.  ' }]
-      }]
-    }
-  ]), requested)
+// `renderingFor` — "take the first meaning that has this language and its first
+// sentence" — is gone. It was the backfill's way of guessing which meaning a
+// new language belonged to, and guessing is what decision D-2 removes: the
+// meaning is now an input, so there is one parser per known meaning instead.
+test('senseTranslationFromProviderPayload stamps the requested code, ignoring the payload\'s', () => {
+  const translation = senseTranslationFromProviderPayload({
+    languageCode: 'ZZ',
+    meaningText: '  Burg  ',
+    phoneticTranscription: '   ',
+    sentences: [{ targetText: '  Die Burg steht.  ', nativeGlossText: '  Zamek stoi.  ' }]
+  }, 'de')
 
-  assert.deepStrictEqual(draft.renderingFor('de'), {
-    languageCode: 'de',
-    meaningText: 'Burg',
-    phoneticTranscription: null,
-    sentenceText: 'Die Burg steht.',
-    nativeGlossText: 'Zamek stoi.'
-  })
+  assert.equal(translation.languageCode, 'de')
+  assert.equal(translation.meaningText, 'Burg')
+  // A blank phonetic is a missing one, not an empty string.
+  assert.equal(translation.phoneticTranscription, null)
+  // Sentence text stays as the model produced it, exactly as on the capture
+  // path — `Entry.capture` is what trims on the way to the database.
+  assert.deepStrictEqual(translation.sentences, [
+    { targetText: '  Die Burg steht.  ', nativeGlossText: '  Zamek stoi.  ' }
+  ])
 })
 
-test('renderingFor returns null for a language no meaning covers, and for one never requested', () => {
-  const draft = TranslationDraft.fromProviderPayload(payload([
-    { glossText: 'budowla obronna', translations: [translation('en', 'castle')] }
-  ]), requested)
-
-  assert.equal(draft.renderingFor('de'), null)
-  assert.equal(draft.renderingFor('fr'), null)
+test('senseTranslationFromProviderPayload raises rather than returning something unusable', () => {
+  assert.throws(
+    () => senseTranslationFromProviderPayload('not an object', 'de'),
+    MalformedDraftError
+  )
+  // A word with no example teaches nothing, so it is not a translation — the
+  // same rule alignSenseTranslations applies on the capture path.
+  assert.throws(
+    () => senseTranslationFromProviderPayload({ meaningText: 'Burg', sentences: [] }, 'de'),
+    DegenerateDraftError
+  )
+  assert.throws(
+    () => senseTranslationFromProviderPayload({
+      meaningText: '   ',
+      sentences: [{ targetText: 'Die Burg steht.', nativeGlossText: 'Zamek stoi.' }]
+    }, 'de'),
+    DegenerateDraftError
+  )
+  // A sentence missing either half is skipped, which can empty the list.
+  assert.throws(
+    () => senseTranslationFromProviderPayload({
+      meaningText: 'Burg',
+      sentences: [{ targetText: 'Die Burg steht.' }]
+    }, 'de'),
+    DegenerateDraftError
+  )
 })
 
 test('toWire emits the nested meaning-first shape the response schema declares', () => {

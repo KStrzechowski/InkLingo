@@ -1,8 +1,14 @@
 import { Anthropic } from '@anthropic-ai/sdk'
-import { TranslationDraft, type RequestedLanguages } from '../domain/translationDraft.ts'
+import {
+  TranslationDraft,
+  senseTranslationFromProviderPayload,
+  type DraftSenseTranslation,
+  type RequestedLanguages
+} from '../domain/translationDraft.ts'
 import {
   type Translator,
   type TranslationRequest,
+  type SenseTranslationRequest,
   DegenerateDraftError,
   MalformedDraftError,
   TranslatorUnavailableError
@@ -143,6 +149,53 @@ export const translationTool: Anthropic.Tool = {
   }
 }
 
+// D-2's second tool: one already-known meaning, one language, one word.
+//
+// It lives here rather than beside the route that uses it because
+// `providerBoundary.test.ts` is not a style rule — `@anthropic-ai/sdk` is
+// importable from exactly two files (`:64-72`), and the string
+// `return_translation` may appear in this one and nowhere else (`:77-80`).
+// Reusing `TRANSLATION_TOOL_NAME` rather than typing a second name is what
+// keeps that assertion true; two tools never travel in the same request, so
+// sharing a name costs nothing.
+//
+// Note the shape: no `senses`, no `translations`, no `languageCode`. The
+// meaning is named in the prompt and the language is the one the caller asked
+// for, so neither is something the model gets to decide — the parser
+// (`senseTranslationFromProviderPayload`) stamps the requested code rather than
+// reading one back.
+export const senseTranslationTool: Anthropic.Tool = {
+  name: TRANSLATION_TOOL_NAME,
+  description: 'Return one target-language word for a single, already-identified meaning of a word, with IPA phonetics and bilingual example sentences.',
+  input_schema: {
+    type: 'object',
+    required: ['meaningText', 'phoneticTranscription', 'sentences'],
+    properties: {
+      meaningText: {
+        type: 'string',
+        description: 'The target-language word or phrase for THIS meaning, and only this meaning.'
+      },
+      phoneticTranscription: {
+        type: ['string', 'null'],
+        description: 'IPA phonetic transcription of the target-language translation, or null if one cannot be produced.'
+      },
+      sentences: {
+        type: 'array',
+        minItems: 1,
+        description: 'Example sentences using this meaning in the target language. Never empty.',
+        items: {
+          type: 'object',
+          required: ['targetText', 'nativeGlossText'],
+          properties: {
+            targetText: { type: 'string', description: 'An example sentence in the target language using this meaning.' },
+            nativeGlossText: { type: 'string', description: 'That same sentence translated into the native language.' }
+          }
+        }
+      }
+    }
+  }
+}
+
 // Rewritten with the tool schema it accompanies: a prompt still asking for one
 // block per language would contradict the shape the model is being handed.
 // Exported so translation-pivot's measure-cost.mjs can stop carrying a second
@@ -157,6 +210,21 @@ Group by MEANING first, never by language. Decide how many distinct meanings the
 Within each meaning, give one entry in "translations" for each of the target languages listed above that has a word for THAT meaning, using the exact codes listed, each with an IPA phonetic transcription of that language's form and a few example sentences, each paired with a native-language gloss. If a target language has no word for one of the meanings, omit that language from that meaning rather than inventing one.
 
 Every translation must carry at least one example sentence, and "senses" is never empty — if the word is unfamiliar or you are unsure of it, still give your best single meaning rather than returning nothing.`
+}
+
+// D-2's prompt. The meaning is stated, not asked for — the whole point is that
+// the caller already knows which of the entry's meanings this call is about, so
+// the model's only job is to name it in one language. Telling it *not* to
+// answer for the word's other meanings is the instruction that makes a
+// per-meaning backfill differ from N copies of the same generic translation.
+export function senseSystemPrompt (languages: RequestedLanguages, glossText: string): string {
+  const [targetLanguageCode] = languages.targetLanguageCodes
+
+  return `You are a translation assistant inside a language-learning app. The active collection's native language is "${languages.nativeLanguageCode}". The user will give you a word or phrase in that native language.
+
+That word has several distinct meanings. You are translating exactly ONE of them, described in the native language "${languages.nativeLanguageCode}" as: "${glossText}".
+
+Translate ONLY that meaning into "${targetLanguageCode}", and respond only via the provided tool call. Do not return a word for any of the word's other meanings — if the target language's usual translation of the word does not carry this meaning, give the word that does. Include an IPA phonetic transcription of the target-language form and at least one example sentence using this meaning, each paired with a native-language gloss.`
 }
 
 export interface AnthropicTranslatorOptions {
@@ -210,6 +278,31 @@ export function anthropicTranslatorOver (client: Pick<Anthropic, 'messages'>): T
     return TranslationDraft.fromProviderPayload(toolUse.input, languages)
   }
 
+  async function attemptSense (request: SenseTranslationRequest): Promise<DraftSenseTranslation> {
+    const { text, glossText, languages, signal } = request
+    const [targetLanguageCode] = languages.targetLanguageCodes
+
+    const message = await client.messages.create({
+      model: ANTHROPIC_MODEL,
+      // One meaning, one language — the single cell of the senses × languages
+      // grid `MAX_TOKENS_PER_SENSE_LANGUAGE` is named for.
+      max_tokens: MAX_TOKENS_PER_SENSE_LANGUAGE,
+      system: senseSystemPrompt(languages, glossText),
+      messages: [{ role: 'user', content: text }],
+      tools: [senseTranslationTool],
+      tool_choice: { type: 'tool', name: TRANSLATION_TOOL_NAME }
+    }, { signal })
+
+    const block = message.content.find(
+      (candidate): candidate is Anthropic.ToolUseBlock => candidate.type === 'tool_use' && candidate.name === TRANSLATION_TOOL_NAME
+    )
+    if (block === undefined) {
+      throw new TranslatorUnavailableError('provider response did not include the expected tool_use block')
+    }
+
+    return senseTranslationFromProviderPayload(block.input, targetLanguageCode)
+  }
+
   return {
     async draft (request: TranslationRequest): Promise<TranslationDraft> {
       let draft: TranslationDraft
@@ -239,6 +332,28 @@ export function anthropicTranslatorOver (client: Pick<Anthropic, 'messages'>): T
         throw new DegenerateDraftError(draft.degenerateLanguageCodes())
       }
       return draft
+    },
+
+    // Same retry reasoning as `draft`, one level down: an answer carrying no
+    // word or no example is a bad roll rather than a statement that this
+    // meaning has no translation, and the empty answer is the cheap fast one.
+    // `senseTranslationFromProviderPayload` raises `DegenerateDraftError` for
+    // that case rather than returning something empty, so the retry hangs off
+    // the catch instead of a predicate.
+    async translateSense (request: SenseTranslationRequest): Promise<DraftSenseTranslation> {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await attemptSense(request)
+        } catch (err) {
+          if (err instanceof DegenerateDraftError && attempt < EMPTY_DRAFT_RETRIES) continue
+          if (
+            err instanceof TranslatorUnavailableError ||
+            err instanceof MalformedDraftError ||
+            err instanceof DegenerateDraftError
+          ) throw err
+          throw new TranslatorUnavailableError('the translator provider call failed', { cause: err })
+        }
+      }
     }
   }
 }

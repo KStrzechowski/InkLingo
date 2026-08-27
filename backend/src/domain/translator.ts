@@ -1,4 +1,4 @@
-import type { TranslationDraft, RequestedLanguages } from './translationDraft.ts'
+import type { TranslationDraft, DraftSenseTranslation, RequestedLanguages } from './translationDraft.ts'
 
 // The narrowest interface that still lets a route do its job.
 //
@@ -18,8 +18,23 @@ export interface TranslationRequest {
   signal: AbortSignal
 }
 
+// D-2's backfill request. The meaning is an input, not something the provider
+// decides: `glossText` comes off a sense the entry already holds, and
+// `languages` names exactly one target. That is the whole difference between
+// this and `draft` — one asks "what does this word mean?", the other asks "what
+// is *this* meaning called in *this* language?", and only the second can add a
+// language to a multi-meaning entry without guessing which meaning it belongs
+// to.
+export interface SenseTranslationRequest {
+  text: string
+  glossText: string
+  languages: RequestedLanguages
+  signal: AbortSignal
+}
+
 export interface Translator {
   draft: (request: TranslationRequest) => Promise<TranslationDraft>
+  translateSense: (request: SenseTranslationRequest) => Promise<DraftSenseTranslation>
 }
 
 // The error taxonomy. Each of these carries a reason a caller can act on and

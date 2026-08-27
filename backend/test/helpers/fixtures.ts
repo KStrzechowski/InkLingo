@@ -83,12 +83,19 @@ export async function createTranslationRow (
 // `language_code` is not a parameter: it is read off the parent translation, so
 // a fixture cannot produce the cross-wired sentence INV-12 exists to catch.
 // The column is dead weight from here on and Phase 7 drops it.
+//
+// `nativeGlossText` lost its `= null` default in Phase 4 without losing the
+// null: the column is still nullable and `core-schema.test.ts` still proves it,
+// but now that `GET` reconstructs through `Entry.capture` (decision A1) a null
+// gloss is a `BlankTextError` and a fixture that picked one up by accident
+// produces a 500 on read rather than the row it meant to set up. Passing it
+// explicitly is the difference between choosing null and defaulting into it.
 export async function createSentenceRow (
   app: Awaited<ReturnType<typeof build>>,
   entryId: string,
   translationId: string,
   sentenceText: string,
-  nativeGlossText: string | null = null
+  nativeGlossText: string | null
 ): Promise<string> {
   const rows = await app.sql.query(
     `INSERT INTO entry_sentences (entry_id, translation_id, language_code, sentence_text, native_gloss_text)

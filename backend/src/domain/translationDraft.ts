@@ -1,4 +1,4 @@
-import { MalformedDraftError } from './translator.ts'
+import { DegenerateDraftError, MalformedDraftError } from './translator.ts'
 import type { TranslateResponseBody } from '../routes/api/collections/schemas.ts'
 
 // A type-only import, erased at runtime. The domain gains a compile-time
@@ -34,22 +34,6 @@ export interface DraftSenseTranslation {
 export interface DraftSense {
   glossText: string
   translations: readonly DraftSenseTranslation[]
-}
-
-// The projection the backfill route persists: one language's first usable
-// word and its first example, already trimmed and blank-to-nulled.
-//
-// SUPERSEDED IN PHASE 4 by decision D-2, which gives the backfill its own
-// gloss-plus-language tool schema and translates *every* meaning the entry
-// already holds instead of guessing at one. Kept here only so
-// `POST /:id/entries/:entryId/translations` keeps compiling until then;
-// delete it with that route's rewrite.
-export interface PersistableRendering {
-  languageCode: string
-  meaningText: string
-  phoneticTranscription: string | null
-  sentenceText: string
-  nativeGlossText: string
 }
 
 // What was asked for, which is what a draft is aligned against. The native code
@@ -164,6 +148,47 @@ function parseSenses (raw: unknown, requested: RequestedLanguages): DraftSense[]
   return senses
 }
 
+// D-2's crossing point, the backfill's counterpart to
+// `TranslationDraft.fromProviderPayload`. The meaning is already known — the
+// caller supplies the `glossText` off a sense the entry already holds — so the
+// provider is asked for exactly one word in exactly one language, and there is
+// nothing here to align or group.
+//
+// Total, in the same sense the capture parser is: every payload either becomes
+// one usable translation or raises. `MalformedDraftError` covers "that was not
+// a translation attempt"; `DegenerateDraftError` covers "it was, and it carried
+// nothing usable" — a word with no example teaches nothing, which is the rule
+// `alignSenseTranslations` applies to the capture path and `INV-12` applies to
+// the database.
+//
+// The language code is **not** read from the payload. It is the one the caller
+// asked for, so a model that echoes the wrong code cannot mislabel a row.
+export function senseTranslationFromProviderPayload (
+  payload: unknown,
+  languageCode: string
+): DraftSenseTranslation {
+  const record = asRecord(payload)
+  if (record === null) {
+    throw new MalformedDraftError('provider payload was not an object')
+  }
+
+  const meaningText = asNonBlankString(record.meaningText)
+  if (meaningText === null) {
+    throw new DegenerateDraftError([languageCode])
+  }
+  const sentences = parseSentences(record.sentences)
+  if (sentences.length === 0) {
+    throw new DegenerateDraftError([languageCode])
+  }
+
+  return {
+    languageCode,
+    meaningText,
+    phoneticTranscription: asNonBlankString(record.phoneticTranscription),
+    sentences
+  }
+}
+
 export class TranslationDraft {
   readonly normalizedNativeText: string
   readonly senses: readonly DraftSense[]
@@ -222,30 +247,6 @@ export class TranslationDraft {
       this.senses.flatMap((sense) => sense.translations.map((translation) => translation.languageCode))
     )
     return this.requestedLanguageCodes.filter((code) => !covered.has(code))
-  }
-
-  // The backfill flow has no user picking a meaning, so it takes the first
-  // sense that has a word in this language and that word's first example.
-  //
-  // SUPERSEDED IN PHASE 4 (decision D-2): "the model's first one" is precisely
-  // the behaviour this change exists to remove, and the rewritten backfill
-  // route asks for one word per meaning the entry already holds. Kept only so
-  // that route compiles until then.
-  renderingFor (languageCode: string): PersistableRendering | null {
-    for (const sense of this.senses) {
-      const translation = sense.translations.find((candidate) => candidate.languageCode === languageCode)
-      const sentence = translation?.sentences.at(0)
-      if (translation === undefined || sentence === undefined) continue
-
-      return {
-        languageCode: translation.languageCode,
-        meaningText: translation.meaningText,
-        phoneticTranscription: translation.phoneticTranscription,
-        sentenceText: sentence.targetText.trim(),
-        nativeGlossText: sentence.nativeGlossText.trim()
-      }
-    }
-    return null
   }
 
   // The wire projection, typed by the schema Fastify serializes against, so a

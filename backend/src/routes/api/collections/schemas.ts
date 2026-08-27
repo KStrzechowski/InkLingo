@@ -67,28 +67,59 @@ export const translateResponseSchema = Type.Object({
 })
 export type TranslateResponseBody = Static<typeof translateResponseSchema>
 
-// FR-018's backfill response. Declared for the same reason as above and with
-// the same hazard: Fastify **strips** any property a response schema does not
-// declare, so a field missing here vanishes from the body silently rather than
-// erroring. Both routes are covered by a full-body deep-equal assertion, which
-// is the only shape of test that catches a stripped field.
-export const addEntryTranslationResponseSchema = Type.Object({
-  entryId: Type.String(),
-  translation: Type.Object({
+// The saved entry, as both entry-shaped routes return it. Declared for the same
+// reason as above and with the same hazard, which is sharper here: `POST
+// /:id/entries` and `GET /:id` hand-built their payloads with **no** schema
+// until this change, so nothing was stripped and nothing could be. Declaring
+// one means a field missing from it now vanishes from the body silently rather
+// than erroring — hence the full-body deep-equal assertion on both routes,
+// which is the only shape of test that catches a stripped field.
+//
+// This replaces `addEntryTranslationResponseSchema`, which returned exactly one
+// translation and one sentence. Under decision D-2 a backfill adds a word to
+// *every* meaning the entry holds, so there is no longer a single one to name;
+// decision A9 has it return the whole updated entry instead of a partial shape
+// the client merges by hand.
+//
+// `sentences` carries no `languageCode`: it is the parent translation's, so a
+// cross-wired sentence is unrepresentable on the wire exactly as it is in the
+// domain. The old flat shape had to repeat it, which is what let the two drift.
+export const entryResponseSchema = Type.Object({
+  id: Type.String(),
+  wordOrPhrase: Type.String(),
+  sourceLanguageCode: Type.String(),
+  createdAt: Type.String(),
+  senses: Type.Array(Type.Object({
     id: Type.String(),
-    languageCode: Type.String(),
-    meaningText: Type.String(),
-    phoneticTranscription: Type.Union([Type.String(), Type.Null()])
-  }),
-  sentence: Type.Object({
-    id: Type.String(),
-    languageCode: Type.String(),
-    sentenceText: Type.String(),
-    nativeGlossText: Type.String(),
-    createdAt: Type.String()
-  })
+    glossText: Type.String(),
+    translations: Type.Array(Type.Object({
+      id: Type.String(),
+      languageCode: Type.String(),
+      meaningText: Type.String(),
+      phoneticTranscription: Type.Union([Type.String(), Type.Null()]),
+      sentences: Type.Array(Type.Object({
+        id: Type.String(),
+        sentenceText: Type.String(),
+        nativeGlossText: Type.String()
+      }))
+    }))
+  }))
 })
-export type AddEntryTranslationResponseBody = Static<typeof addEntryTranslationResponseSchema>
+export type EntryResponseBody = Static<typeof entryResponseSchema>
+
+// `GET /api/collections/:id`. `targetLanguageCodes` is returned exactly as
+// stored, not as `LanguageContract` normalizes it — collections created before
+// `POST /api/collections` lowercased on write still hold codes like 'EN', and
+// changing what a read reports is not this change's business.
+export const collectionDetailResponseSchema = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  nativeLanguageCode: Type.String(),
+  targetLanguageCodes: Type.Array(Type.String()),
+  createdAt: Type.String(),
+  entries: Type.Array(entryResponseSchema)
+})
+export type CollectionDetailResponseBody = Static<typeof collectionDetailResponseSchema>
 
 // FR-018: backfill one already-saved entry with a language added to the
 // collection after that entry was created. One language per call — this is
@@ -98,25 +129,47 @@ export const addEntryTranslationBodySchema = Type.Object({
 })
 export type AddEntryTranslationBody = Static<typeof addEntryTranslationBodySchema>
 
-// One translation + one sentence per target language, so both arrays share
-// the collection's ceiling.
+// Meanings first, matching the shape the model now returns and the shape the
+// database now records. `MAX_TARGET_LANGUAGES` bounds **a sense's**
+// translations rather than the entry's arrays: an entry with three meanings in
+// a five-language collection legitimately carries up to fifteen words.
+//
+// Note what is deliberately absent: `minItems`. The empty cases — an entry with
+// no meanings, a meaning with no words, a word with no sentence — are exactly
+// the rules `EmptyEntryError`, `SenseWithoutTranslationError` and
+// `TranslationWithoutSentenceError` exist to name, and a schema rejecting them
+// first would return the same 400 while making the aggregate's guards
+// unreachable and untestable. The aggregate is the authority; the schema only
+// bounds size and type.
+//
+// Blank-but-present text is the same story one level down: `minLength: 1`
+// admits "   ", which `Entry.capture` rejects as a `BlankTextError` naming the
+// field the client sent.
+export const MAX_SENSES_PER_ENTRY = 10
+export const MAX_SENTENCES_PER_TRANSLATION = 10
+
 export const createEntryBodySchema = Type.Object({
   wordOrPhrase: Type.String({ minLength: 1, maxLength: 200 }),
-  translations: Type.Array(
+  senses: Type.Array(
     Type.Object({
-      languageCode: Type.String({ minLength: 2, maxLength: 10 }),
-      meaningText: Type.String({ minLength: 1, maxLength: 500 }),
-      phoneticTranscription: Type.Union([Type.String({ maxLength: 200 }), Type.Null()])
+      glossText: Type.String({ minLength: 1, maxLength: 200 }),
+      translations: Type.Array(
+        Type.Object({
+          languageCode: Type.String({ minLength: 2, maxLength: 10 }),
+          meaningText: Type.String({ minLength: 1, maxLength: 500 }),
+          phoneticTranscription: Type.Union([Type.String({ maxLength: 200 }), Type.Null()]),
+          sentences: Type.Array(
+            Type.Object({
+              sentenceText: Type.String({ minLength: 1, maxLength: 1000 }),
+              nativeGlossText: Type.String({ minLength: 1, maxLength: 1000 })
+            }),
+            { maxItems: MAX_SENTENCES_PER_TRANSLATION }
+          )
+        }),
+        { maxItems: MAX_TARGET_LANGUAGES }
+      )
     }),
-    { minItems: 1, maxItems: MAX_TARGET_LANGUAGES }
-  ),
-  sentences: Type.Array(
-    Type.Object({
-      languageCode: Type.String({ minLength: 2, maxLength: 10 }),
-      sentenceText: Type.String({ minLength: 1, maxLength: 1000 }),
-      nativeGlossText: Type.String({ minLength: 1, maxLength: 1000 })
-    }),
-    { minItems: 1, maxItems: MAX_TARGET_LANGUAGES }
+    { maxItems: MAX_SENSES_PER_ENTRY }
   )
 })
 export type CreateEntryBody = Static<typeof createEntryBodySchema>
