@@ -11,7 +11,7 @@ import { languageLabel } from '../languages'
 
 export interface PrintLabels {
   word: string
-  language: string
+  meaning: string
   translation: string
   sentenceNative: string
   sentenceTarget: string
@@ -20,56 +20,56 @@ export interface PrintLabels {
 const LABELS: Record<string, PrintLabels> = {
   en: {
     word: 'Word',
-    language: 'Language',
+    meaning: 'Meaning',
     translation: 'Translation',
     sentenceNative: 'Sentence',
     sentenceTarget: 'Sentence (translated)'
   },
   pl: {
     word: 'Słowo',
-    language: 'Język',
+    meaning: 'Znaczenie',
     translation: 'Tłumaczenie',
     sentenceNative: 'Zdanie',
     sentenceTarget: 'Zdanie (tłumaczenie)'
   },
   ru: {
     word: 'Слово',
-    language: 'Язык',
+    meaning: 'Значение',
     translation: 'Перевод',
     sentenceNative: 'Предложение',
     sentenceTarget: 'Предложение (перевод)'
   },
   de: {
     word: 'Wort',
-    language: 'Sprache',
+    meaning: 'Bedeutung',
     translation: 'Übersetzung',
     sentenceNative: 'Satz',
     sentenceTarget: 'Satz (Übersetzung)'
   },
   fr: {
     word: 'Mot',
-    language: 'Langue',
+    meaning: 'Sens',
     translation: 'Traduction',
     sentenceNative: 'Phrase',
     sentenceTarget: 'Phrase (traduction)'
   },
   es: {
     word: 'Palabra',
-    language: 'Idioma',
+    meaning: 'Significado',
     translation: 'Traducción',
     sentenceNative: 'Frase',
     sentenceTarget: 'Frase (traducción)'
   },
   it: {
     word: 'Parola',
-    language: 'Lingua',
+    meaning: 'Significato',
     translation: 'Traduzione',
     sentenceNative: 'Frase',
     sentenceTarget: 'Frase (traduzione)'
   },
   uk: {
     word: 'Слово',
-    language: 'Мова',
+    meaning: 'Значення',
     translation: 'Переклад',
     sentenceNative: 'Речення',
     sentenceTarget: 'Речення (переклад)'
@@ -82,15 +82,19 @@ export function printLabels (nativeLanguageCode: string): PrintLabels {
   return LABELS[nativeLanguageCode.toLowerCase()] ?? LABELS.en
 }
 
-// The Language column and the header pair are furniture too, so they follow
-// the headings into the native language — a sheet headed 'Słowo · Język'
-// listing 'English, German' is half-translated. `Intl.DisplayNames` carries
-// all 8 × 8 combinations without a hand-written 64-entry table, and prints
-// each name in its own language's orthography (Polish 'angielski' is lower
-// case by rule, German 'Englisch' upper).
+// Still used for the document header's native → target summary line
+// (`PrintDocument.tsx`'s `<header>`). The per-row meaning column no longer
+// uses this: since D-1 replaced it with the row's own uppercase language code
+// (design mockup: 'EN castle'), a bounded set of names does not need to fit a
+// column any more — that pressure moved to the gloss column instead (see
+// print.css).
+//
+// `Intl.DisplayNames` carries all 8 × 8 combinations without a hand-written
+// 64-entry table, and prints each name in its own language's orthography
+// (Polish 'angielski' is lower case by rule, German 'Englisch' upper).
 //
 // Returns a resolver rather than a plain function so the one `DisplayNames`
-// instance is shared by every row of the sheet.
+// instance is shared by every caller.
 //
 // Falls back to the shared English `languageLabel` where `Intl` cannot help:
 // `.of()` throws `RangeError` on a malformed primary subtag, and the

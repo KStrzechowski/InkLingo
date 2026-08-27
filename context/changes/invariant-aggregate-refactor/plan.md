@@ -1173,10 +1173,10 @@ home.
 
 #### Automated
 
-- [x] 5.1 Extension tests pass
-- [x] 5.2 Lint passes
-- [x] 5.3 Build passes
-- [x] 5.4 No radio `name` or `SpeakButton` key is keyed by language alone
+- [x] 5.1 Extension tests pass — 71463b3
+- [x] 5.2 Lint passes — 71463b3
+- [x] 5.3 Build passes — 71463b3
+- [x] 5.4 No radio `name` or `SpeakButton` key is keyed by language alone — 71463b3
 
 #### Manual
 
@@ -1188,11 +1188,11 @@ home.
 
 #### Automated
 
-- [ ] 6.1 Frontend tests pass
-- [ ] 6.2 Lint passes
-- [ ] 6.3 Build passes
-- [ ] 6.4 `printCssGeometry.test.ts` green — five widths, sum 100%, columns 4+5 above 40%
-- [ ] 6.5 Browser tests pass on both engines
+- [x] 6.1 Frontend tests pass
+- [x] 6.2 Lint passes
+- [x] 6.3 Build passes
+- [x] 6.4 `printCssGeometry.test.ts` green — five widths, sum 100%, columns 4+5 above 40%
+- [x] 6.5 Browser tests pass on both engines
 
 #### Manual
 

@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { CollectionDetail } from '../api/collections'
 import { printLabels, printLanguageNamer } from './printLabels'
 import { measurePrintPages, packPrintPages } from './printPagination'
-import { buildBands } from './printRows'
+import { buildBands, senseRowSpans } from './printRows'
 import './print.css'
 
 // The printable document itself, given a collection that is already loaded.
@@ -131,36 +131,55 @@ function PrintDocument ({ collection }: { collection: CollectionDetail }) {
               <thead>
                 <tr>
                   <th scope="col">{labels.word}</th>
-                  <th scope="col">{labels.language}</th>
+                  <th scope="col">{labels.meaning}</th>
                   <th scope="col">{labels.translation}</th>
                   <th scope="col">{labels.sentenceNative}</th>
                   <th scope="col">{labels.sentenceTarget}</th>
                 </tr>
               </thead>
               {bandIndexes.map((bandIndex) => {
-                const { entry, rows } = bands[bandIndex]
+                const { entry, rows, senseRowCounts } = bands[bandIndex]
+                // One entry per row, aligned with `rows`: the rowSpan for a row
+                // that opens its meaning's group, or null for one covered by an
+                // earlier row's rowSpan.
+                const glossSpans = senseRowSpans(senseRowCounts)
+
                 return (
                   <tbody key={entry.id}>
                     {rows.length === 0 ? (
-                      // No renderable language at all — still print the word, so
+                      // No renderable meaning at all — still print the word, so
                       // nothing silently vanishes from the sheet.
                       <tr>
-                        <th scope="row" lang={entry.sourceLanguageCode}>{entry.wordOrPhrase}</th>
+                        <th scope="row" lang={entry.sourceLanguageCode} className="print-word">{entry.wordOrPhrase}</th>
                         <td colSpan={4} />
                       </tr>
                     ) : (
                       rows.map((row, index) => (
-                        <tr key={`${entry.id}:${row.languageCode}`}>
+                        <tr key={`${entry.id}:${row.glossText}:${row.languageCode}`}>
                           {index === 0 && (
                             // The captured word is not necessarily in the native
                             // language — an entry can be captured in one of the
                             // collection's target languages too.
-                            <th scope="row" rowSpan={rows.length} lang={entry.sourceLanguageCode}>
+                            <th scope="row" rowSpan={rows.length} lang={entry.sourceLanguageCode} className="print-word">
                               {entry.wordOrPhrase}
                             </th>
                           )}
-                          <td className="print-language">{languageName(row.languageCode)}</td>
+                          {glossSpans[index] !== null && (
+                            // A meaning's gloss, written in the native language
+                            // like the word cell beside it — this is the row-group
+                            // header D-1 exists to add, spanning only this
+                            // meaning's own rows rather than the whole band.
+                            <th scope="rowgroup" rowSpan={glossSpans[index]} lang={collection.nativeLanguageCode}>
+                              {row.glossText}
+                            </th>
+                          )}
                           <td lang={row.languageCode}>
+                            {/* The language code stands in for the old Language
+                                column: with meanings now the row-group and
+                                languages the rows beneath them, this is what
+                                tells the two apart at a glance (design mockup:
+                                'EN castle' / 'DE Schloss'). */}
+                            <span className="print-language-code">{row.languageCode.toUpperCase()}</span>
                             {row.meaningText}
                             {row.phoneticTranscription !== null && (
                               <>

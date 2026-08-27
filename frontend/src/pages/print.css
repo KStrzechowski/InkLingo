@@ -183,18 +183,30 @@ body.print-mode .print-document {
 /* The one edge the right/bottom pattern above leaves undrawn: the table's
    left side.
 
-   Deliberately NOT `:first-child`, which was tried and is wrong — it matches
-   the first cell of every *row*, and a band's continuation rows begin with
-   the language `<td>`, which sits in column 2. Those cells took a left border
-   that landed directly against the word column's right border, and under the
-   separate model the two do not merge: they stack into a 2px rule between
-   Word and Language on every row but the first of each band.
+   Deliberately NOT `:first-child`, which was tried and is wrong twice over —
+   once historically and once again under D-1's nesting:
 
-   Column 1 holds exactly two kinds of cell — the header row's first `<th>`,
-   and the `rowSpan`'d word `<th>` that opens each band. The word cell spans
-   its whole band, so its left border already closes the rows beneath it. */
+   1. It matches the first cell of every *row*. A band's continuation rows
+      used to begin with the language `<td>` in column 2; those cells took a
+      left border flush against the word column's right border, and under the
+      separate model the two do not merge — they stack into a doubled rule on
+      every row but the first of each band.
+   2. Since D-1, column 2 is ALSO sometimes a `<th>` (the gloss cell that
+      opens a meaning's row-group, `scope="rowgroup"`) — and a row whose
+      meaning-group does not start on the band's very first row has no
+      column-1 cell at all (the word `<th>` is spanned away), so its gloss
+      `<th>` genuinely IS `:first-child` there. A bare `:first-child` selector
+      would give it a left border too, doubling the rule a second way.
+
+   The fix for both is the same: target column 1 by what it *is*
+   (`.print-word`), not by position. Column 1 holds exactly two kinds of cell
+   — the header row's first `<th>`, and the `rowSpan`'d word `<th>` that opens
+   each band, carrying that class. The word cell spans its whole band, so its
+   left border already closes every row beneath it — column 2's gloss `<th>`
+   never needs one of its own, because its own left edge is column 1's
+   already-drawn right edge. */
 .print-table thead th:first-child,
-.print-table tbody th {
+.print-table tbody th.print-word {
   border-left: 1px solid #000;
 }
 
@@ -211,32 +223,27 @@ body.print-mode .print-document {
   letter-spacing: 0.04em;
 }
 
-/* Column order: Word | Language | Translation | Sentence | Sentence
-   (translated). The two sentence columns carry the bulk of the width and sit
-   side by side, so folding the sheet down the middle turns it into a
-   self-test.
+/* Column order: Word | Znaczenie | Translation | Sentence | Sentence
+   (translated) — decision A2 swaps the Language column for a meaning/gloss
+   column IN PLACE rather than adding a sixth: same position, same width
+   budget, a different thing sized against it. The two sentence columns still
+   carry the bulk of the width and sit side by side, so folding the sheet down
+   the middle turns it into a self-test.
 
-   Language is sized to fit its widest possible value whole. Measured
-   2026-08-03 by rendering all 8 native × 8 target names at this exact font
-   (11pt system-ui → Segoe UI): at the old 10% the column offered 50.9px of
-   text width and 43 of the 64 names overflowed it, along with the English
-   and German column headings — 'niemiecki' (62.6px) was one of many. The
-   binding case is Russian 'французский', 90.1px in Segoe UI.
-
-   Widened 17% → 19% on 2026-08-10. `system-ui` resolves to a different face
-   on every OS, and the 2026-08-03 measurement only ever saw one of them: on
-   a Linux runner the same name renders 104.9px, which overflowed the 17%
-   column's ~101px of text width. 19% offers ~113px, restoring against the
-   widest observed font the ~8px of headroom 17% had against the narrowest.
-   The numbers are re-derived on every run now rather than taken on trust —
-   browser-tests/languageColumn.spec.ts measures all 8 × 8 names in both
-   engines, which is what caught this.
-
-   The 9 points come out of the two sentence columns, costing each sentence
-   line roughly five characters. A per-native-language width would buy some
-   back on a Polish sheet (Polish needs only ~14%), which is still not worth
-   a hand-maintained table of eight numbers — and would now need one per
-   font as well. */
+   Column 2 held language names before this change and was sized to fit the
+   widest of the 8 x 8 native x target combinations whole (measured
+   2026-08-03, widened 17% -> 19% on 2026-08-10 — see git history on this
+   block for that derivation; browser-tests/languageColumn.spec.ts, which
+   measured it, is deleted with the column it existed for). That reasoning no
+   longer applies: this column now holds each meaning's native-language gloss
+   — prose of unbounded length, not a name from a closed set of 64 — so there
+   is nothing left to fit "whole". What research.md § 7 found is that a gloss
+   column needs 12-16pp and only ~6.7pp was otherwise free; keeping Language's
+   old 19% is what makes the swap free instead of a renegotiation — 19%
+   already clears the requirement with room to spare, and the identity that
+   used to live in this column (which language is this row?) moves into the
+   Translation column instead, as an 'EN'/'DE' prefix (see
+   `.print-language-code` below and the design mockup: 'EN castle'). */
 .print-table th:nth-child(1) { width: 16%; }
 .print-table th:nth-child(2) { width: 19%; }
 .print-table th:nth-child(3) { width: 20%; }
@@ -247,19 +254,24 @@ body.print-mode .print-document {
   font-weight: 600;
 }
 
-/* Overrides the table-wide `word-wrap: break-word`, which exists for the
-   sentence columns but has no business breaking a one-word label: a language
-   name is a scanning target, and 'niemieck/i' across two lines defeats that.
-   Belt and braces with the column width above — that width is what keeps the
-   name inside its cell; this is what guarantees the failure mode if a wider
-   name ever arrives is a name crossing its border, which is visibly a bug,
-   rather than a mid-word split, which just looks like bad typesetting.
+/* The language-code prefix inside the Translation cell — 'EN' above 'castle'
+   — is what replaced the old Language column's job of saying which language a
+   row is in.
 
-   A class, not `td:nth-child(2)`: the first row of each band carries the
-   rowSpan'd word `<th>`, so the language cell is the second child there and
-   the first child in every following row. */
-.print-language {
-  white-space: nowrap;
+   `display: block`, not inline as the mockup's ASCII art suggests: the
+   archived measurement behind columns.spec.ts's "keeps a meaning whole" test
+   is precise about the column's budget — 'independence' (94px) and its
+   transcription (106px) each fit the ~119px column alone but not together
+   (203.9px), so the meaning must stay on one line with the transcription
+   dropping below it. An inline 'EN ' prefix eats into that same line's
+   budget and was measured to push 'independence' itself over onto a second
+   line — regressing the exact bug this test exists to catch. Pushing the
+   code onto its own line costs a line of height instead, which the column
+   has never had to budget against, rather than a slice of width, which it
+   has down to the pixel. */
+.print-language-code {
+  display: block;
+  font-weight: 600;
 }
 
 .print-phonetic {
@@ -341,8 +353,11 @@ body.print-mode .print-document {
     -webkit-print-color-adjust: exact;
   }
 
+  /* See the screen rule's comment on why this targets `.print-word` rather
+     than `:first-child` or the bare tag — D-1's gloss `<th>` can land
+     first-child of a row too, and must not draw a second edge there. */
   .print-table thead th:first-child,
-  .print-table tbody th {
+  .print-table tbody th.print-word {
     border-left: 1px solid #000;
   }
 

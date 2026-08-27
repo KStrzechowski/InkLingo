@@ -34,20 +34,42 @@ function buildCollection (id: string, name: string) {
         wordOrPhrase: 'threshold',
         sourceLanguageCode: NATIVE_LANGUAGE,
         createdAt: '2026-08-12T10:01:00.000Z',
-        translations: [
-          { id: `${id}-t1`, languageCode: 'pl', meaningText: 'próg', phoneticTranscription: 'pruk' },
-          { id: `${id}-t2`, languageCode: 'de', meaningText: 'Schwelle', phoneticTranscription: null }
-        ],
-        sentences: [
+        senses: [
           {
-            id: `${id}-s1`,
-            languageCode: 'pl',
-            // Deliberately does not repeat the translation text: a sentence
-            // containing 'próg' makes the cell assertion below ambiguous, and
-            // loosening the locator to resolve that would weaken the test.
-            sentenceText: 'Weszliśmy do środka.',
-            nativeGlossText: 'We stepped inside.',
-            createdAt: '2026-08-12T10:01:00.000Z'
+            id: `${id}-sense-1`,
+            glossText: 'threshold',
+            translations: [
+              {
+                id: `${id}-t1`,
+                languageCode: 'pl',
+                meaningText: 'próg',
+                phoneticTranscription: 'pruk',
+                sentences: [
+                  {
+                    id: `${id}-s1`,
+                    // Deliberately does not repeat the translation text: a
+                    // sentence containing 'próg' makes the cell assertion
+                    // below ambiguous, and loosening the locator to resolve
+                    // that would weaken the test.
+                    sentenceText: 'Weszliśmy do środka.',
+                    nativeGlossText: 'We stepped inside.'
+                  }
+                ]
+              },
+              {
+                id: `${id}-t2`,
+                languageCode: 'de',
+                meaningText: 'Schwelle',
+                phoneticTranscription: null,
+                sentences: [
+                  {
+                    id: `${id}-s2`,
+                    sentenceText: 'Wir traten über die Schwelle.',
+                    nativeGlossText: 'We stepped over the threshold.'
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

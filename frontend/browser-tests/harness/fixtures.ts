@@ -9,6 +9,10 @@ import type { CollectionDetail, Entry } from '../../src/api/collections'
 
 let sequence = 0
 
+// A single-meaning entry — the shape every fixture here needs except
+// `multi-meaning` below, which builds its own senses by hand. The gloss
+// defaults to the word itself, matching what the Phase 3 migration backfilled
+// for every legacy single-meaning row.
 function entry (
   wordOrPhrase: string,
   sourceLanguageCode: string,
@@ -21,19 +25,21 @@ function entry (
     wordOrPhrase,
     sourceLanguageCode,
     createdAt: '2026-08-01T00:00:00.000Z',
-    translations: codes.map((code, index) => ({
-      id: `translation-${sequence}-${index}`,
-      languageCode: code,
-      meaningText: perLanguage[code].meaning,
-      phoneticTranscription: perLanguage[code].ipa ?? null
-    })),
-    sentences: codes.map((code, index) => ({
-      id: `sentence-${sequence}-${index}`,
-      languageCode: code,
-      sentenceText: perLanguage[code].sentence,
-      nativeGlossText: perLanguage[code].gloss,
-      createdAt: '2026-08-01T00:00:00.000Z'
-    }))
+    senses: [{
+      id: `sense-${sequence}`,
+      glossText: wordOrPhrase,
+      translations: codes.map((code, index) => ({
+        id: `translation-${sequence}-${index}`,
+        languageCode: code,
+        meaningText: perLanguage[code].meaning,
+        phoneticTranscription: perLanguage[code].ipa ?? null,
+        sentences: [{
+          id: `sentence-${sequence}-${index}`,
+          sentenceText: perLanguage[code].sentence,
+          nativeGlossText: perLanguage[code].gloss
+        }]
+      }))
+    }]
   }
 }
 
@@ -166,27 +172,65 @@ export const fixtures: Record<string, CollectionDetail> = {
     targetLanguageCodes: ['en'],
     createdAt: '2026-08-01T00:00:00.000Z',
     entries: []
-  }
-}
+  },
 
-// Built rather than hand-written: the Language column must fit every one of the
-// 8 x 8 native x target language names, and hand-maintaining 64 rows across 8
-// fixtures is exactly the table printLabels avoids by using Intl.DisplayNames.
-// One entry carrying every supported target puts all 8 names in the column at
-// once for a given native language.
-export function allLanguagesFixture (nativeLanguageCode: string, targetCodes: string[]): CollectionDetail {
-  return {
-    id: `fixture-all-languages-${nativeLanguageCode}`,
-    name: `Language column — ${nativeLanguageCode}`,
-    nativeLanguageCode,
-    targetLanguageCodes: targetCodes,
+  // D-1's own subject: a word with several meanings, so the nested rowSpan
+  // (word spans the whole band, each gloss spans only its own rows) has
+  // something real to exercise. None of the other fixtures can — every
+  // `entry()` above builds exactly one meaning, gloss defaulting to the word
+  // itself, so a band's inner grouping is always trivially one row.
+  'multi-meaning': {
+    id: 'fixture-multi-meaning',
+    name: 'Print test — multiple meanings',
+    nativeLanguageCode: 'pl',
+    targetLanguageCodes: ['en', 'de'],
     createdAt: '2026-08-01T00:00:00.000Z',
     entries: [
-      entry('test', nativeLanguageCode, Object.fromEntries(targetCodes.map((code) => [code, {
-        meaning: `meaning-${code}`,
-        sentence: `Sentence in ${code}.`,
-        gloss: 'Gloss.'
-      }])))
+      {
+        id: 'entry-zamek',
+        wordOrPhrase: 'zamek',
+        sourceLanguageCode: 'pl',
+        createdAt: '2026-08-01T00:00:00.000Z',
+        senses: [
+          {
+            id: 'sense-zamek-castle',
+            glossText: 'budowla obronna',
+            translations: [
+              {
+                id: 'translation-zamek-castle-en',
+                languageCode: 'en',
+                meaningText: 'castle',
+                phoneticTranscription: '/ˈkɑːsəl/',
+                sentences: [{ id: 'sentence-zamek-castle-en', sentenceText: 'The castle stood on a hill.', nativeGlossText: 'Zamek stał na wzgórzu.' }]
+              },
+              {
+                id: 'translation-zamek-castle-de',
+                languageCode: 'de',
+                meaningText: 'Schloss',
+                phoneticTranscription: '/ʃlɔs/',
+                sentences: [{ id: 'sentence-zamek-castle-de', sentenceText: 'Das Schloss ist alt.', nativeGlossText: 'Zamek jest stary.' }]
+              }
+            ]
+          },
+          {
+            id: 'sense-zamek-lock',
+            glossText: 'zamknięcie drzwi',
+            translations: [
+              {
+                id: 'translation-zamek-lock-en',
+                languageCode: 'en',
+                meaningText: 'lock',
+                phoneticTranscription: '/lɒk/',
+                sentences: [{ id: 'sentence-zamek-lock-en', sentenceText: 'The lock is broken.', nativeGlossText: 'Zamek jest zepsuty.' }]
+              }
+            ]
+          }
+        ]
+      },
+      entry('kot', 'pl', {
+        en: { meaning: 'cat', sentence: 'The cat sleeps.', gloss: 'Kot śpi.' },
+        de: { meaning: 'Katze', sentence: 'Die Katze schläft.', gloss: 'Kot śpi.' }
+      })
     ]
   }
 }

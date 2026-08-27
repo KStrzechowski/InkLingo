@@ -63,7 +63,10 @@ test.describe('the Translation column', () => {
 
       return [...document.querySelectorAll('.print-phonetic')].map((span) => {
         const cell = span.parentElement!
-        const meaningNode = cell.firstChild!
+        // Not `cell.firstChild`: since D-1 that is the language-code span
+        // ('EN'), not the meaning. The meaning is the text node right before
+        // the space that precedes this transcription span.
+        const meaningNode = span.previousSibling!.previousSibling!
         const style = getComputedStyle(cell)
         const available = cell.clientWidth -
           parseFloat(style.paddingLeft) -
@@ -125,9 +128,9 @@ test.describe('a single-target collection', () => {
       expect(band.rowSpan === null || band.rowSpan === '1').toBe(true)
     }
 
-    // The Language column still carries its value on every row rather than
-    // being collapsed away when there is only one target.
-    await expect(page.locator('.print-language')).toHaveCount(6)
+    // Every row still carries its language-code prefix rather than it being
+    // collapsed away when there is only one target.
+    await expect(page.locator('.print-language-code')).toHaveCount(6)
   })
 })
 
@@ -140,7 +143,7 @@ test.describe('a collection with a backfill gap', () => {
     const bands = await page.locator('.print-table tbody').evaluateAll(
       (bodies) => bodies.map((body) => ({
         word: body.querySelector('th[scope="row"]')?.textContent ?? '',
-        languages: [...body.querySelectorAll('.print-language')].map((c) => c.textContent ?? '')
+        languageCodes: [...body.querySelectorAll('.print-language-code')].map((c) => c.textContent ?? '')
       }))
     )
 
@@ -152,13 +155,13 @@ test.describe('a collection with a backfill gap', () => {
 
     // One row, for the one language it has — and matched despite the stored
     // code being uppercase 'EN' against the collection's lowercase 'en'.
-    expect(zamek!.languages).toHaveLength(1)
-    expect(woda!.languages).toHaveLength(2)
+    expect(zamek!.languageCodes).toHaveLength(1)
+    expect(woda!.languageCodes).toHaveLength(2)
 
-    // No cell in the table is an empty language name.
+    // No cell in the table is missing its language-code prefix.
     for (const band of bands) {
-      for (const language of band.languages) {
-        expect(language.trim(), `${band.word} has a blank language cell`).not.toBe('')
+      for (const languageCode of band.languageCodes) {
+        expect(languageCode.trim(), `${band.word} has a blank language-code cell`).not.toBe('')
       }
     }
   })

@@ -13,19 +13,13 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import PrintDocument from '../../src/pages/PrintDocument'
-import { allLanguagesFixture, fixtures } from './fixtures'
-import { SUPPORTED_LANGUAGES } from '../../src/languages'
+import { fixtures } from './fixtures'
 import '../../src/index.css'
 
 const params = new URLSearchParams(window.location.search)
 const requested = params.get('fixture') ?? 'five-languages'
 
-const collection = requested === 'all-languages'
-  ? allLanguagesFixture(
-      params.get('native') ?? 'pl',
-      SUPPORTED_LANGUAGES.map((language) => language.code)
-    )
-  : fixtures[requested]
+const collection = fixtures[requested]
 
 const container = document.getElementById('root')
 

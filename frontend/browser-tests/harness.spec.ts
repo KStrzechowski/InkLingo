@@ -23,7 +23,7 @@ test.describe('harness', () => {
     const sheet = page.locator('.print-page').first()
 
     await expect(sheet.getByRole('columnheader', { name: 'Słowo', exact: true })).toBeVisible()
-    await expect(sheet.getByRole('columnheader', { name: 'Język', exact: true })).toBeVisible()
+    await expect(sheet.getByRole('columnheader', { name: 'Znaczenie', exact: true })).toBeVisible()
     await expect(sheet.getByRole('columnheader', { name: 'Tłumaczenie', exact: true })).toBeVisible()
     await expect(sheet.getByRole('columnheader', { name: 'Zdanie', exact: true })).toBeVisible()
     await expect(sheet.getByRole('columnheader', { name: 'Zdanie (tłumaczenie)', exact: true })).toBeVisible()
@@ -88,14 +88,23 @@ test.describe('printed colour', () => {
     expect(widths.bottom).toBeGreaterThan(0)
   })
 
-  test('draws a single-weight rule between Word and Language on every row', async ({ page }) => {
-    // Regression guard for 0d7a203: the separate-border grid drew its left edge
-    // with th:first-child, td:first-child, which matches the first cell of every
-    // *row* — and a band's continuation rows begin with the language <td>, in
-    // column 2. Those took a left border flush against the word column's right
-    // border, and under the separate model the two do not merge: they stack
-    // into a doubled rule on every row but the first of each band.
-    await openPrintedSheet(page, 'five-languages')
+  test('draws a single-weight rule at the left of the table only, even with a nested rowSpan', async ({ page }) => {
+    // Regression guard for 0d7a203, extended for D-1's nesting. The original
+    // bug: the separate-border grid drew its left edge with
+    // th:first-child, td:first-child, which matches the first cell of every
+    // *row* — and a band's continuation rows began with the language <td> in
+    // column 2, which took a left border flush against the word column's
+    // right one, doubling the rule under the separate model.
+    //
+    // D-1 reintroduces the same shape one level down: column 2 is now
+    // SOMETIMES a <th> too (the gloss cell opening a meaning's row-group), and
+    // a row whose meaning-group does not start on the band's own first row has
+    // no column-1 cell at all — so that gloss <th> is genuinely first-child of
+    // its <tr>. A selector keyed on tag or position alone would draw a border
+    // there. Only the 'multi-meaning' fixture can exercise this: it is the
+    // only one with a band whose gloss row-groups do not all start where the
+    // band itself does.
+    await openPrintedSheet(page, 'multi-meaning')
 
     const firstCells = await page.locator('.print-table tbody tr').evaluateAll(
       (rows) => rows.map((row) => {
@@ -105,23 +114,27 @@ test.describe('printed colour', () => {
         }
         return {
           tag: first.tagName,
+          isWordCell: first.classList.contains('print-word'),
           borderLeftWidth: parseFloat(getComputedStyle(first).borderLeftWidth)
         }
       })
     )
 
-    // A continuation row is one whose first cell is the language <td>, sitting
-    // in column 2 because the rowSpan'd word <th> belongs to the band's first
-    // row only. Those cells must carry no left border at all — the word cell
-    // spans the band and has already closed them.
-    const continuationRows = firstCells.filter((cell) => cell?.tag === 'TD')
-    expect(continuationRows.length, 'fixture produced no continuation rows to check').toBeGreaterThan(0)
-    for (const cell of continuationRows) {
+    // Every row not opening a band — whether its first cell is a plain
+    // language <td>, or a mid-band gloss <th> that happens to land first —
+    // must carry no left border at all. The band's own opening word cell
+    // spans the whole band and has already closed them.
+    const nonOpeningRows = firstCells.filter((cell) => cell !== null && !cell.isWordCell)
+    expect(nonOpeningRows.length, 'fixture produced no non-opening rows to check').toBeGreaterThan(0)
+    for (const cell of nonOpeningRows) {
       expect(cell!.borderLeftWidth).toBe(0)
     }
+    // A mid-band gloss <th> landing first-child is exactly the case that would
+    // have been missed by a selector keyed on tag alone.
+    expect(nonOpeningRows.some((cell) => cell!.tag === 'TH')).toBe(true)
 
     // And the band-opening rows, which start with the word <th>, must have one.
-    const openingRows = firstCells.filter((cell) => cell?.tag === 'TH')
+    const openingRows = firstCells.filter((cell) => cell?.isWordCell === true)
     expect(openingRows.length).toBeGreaterThan(0)
     for (const cell of openingRows) {
       expect(cell!.borderLeftWidth).toBeGreaterThan(0)
