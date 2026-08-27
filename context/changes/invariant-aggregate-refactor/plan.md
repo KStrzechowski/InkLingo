@@ -1156,12 +1156,12 @@ home.
 
 #### Automated
 
-- [x] 4.1 Backend suite passes
-- [x] 4.2 Type check passes
-- [x] 4.3 `route-ownership.test.ts` green (lexical check finds its literals in each route slice)
-- [x] 4.4 `route-reachability.test.ts` green with no `api-construct.ts` change
-- [x] 4.5 `providerBoundary.test.ts` green with the second tool schema inside the adapter
-- [x] 4.6 `entryRepository.ts` carries its own forcing type-only import
+- [x] 4.1 Backend suite passes — 6a7f470
+- [x] 4.2 Type check passes — 6a7f470
+- [x] 4.3 `route-ownership.test.ts` green (lexical check finds its literals in each route slice) — 6a7f470
+- [x] 4.4 `route-reachability.test.ts` green with no `api-construct.ts` change — 6a7f470
+- [x] 4.5 `providerBoundary.test.ts` green with the second tool schema inside the adapter — 6a7f470
+- [x] 4.6 `entryRepository.ts` carries its own forcing type-only import — 6a7f470
 
 #### Manual
 
@@ -1173,10 +1173,10 @@ home.
 
 #### Automated
 
-- [ ] 5.1 Extension tests pass
-- [ ] 5.2 Lint passes
-- [ ] 5.3 Build passes
-- [ ] 5.4 No radio `name` or `SpeakButton` key is keyed by language alone
+- [x] 5.1 Extension tests pass
+- [x] 5.2 Lint passes
+- [x] 5.3 Build passes
+- [x] 5.4 No radio `name` or `SpeakButton` key is keyed by language alone
 
 #### Manual
 
