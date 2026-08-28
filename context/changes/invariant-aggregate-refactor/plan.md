@@ -1121,7 +1121,7 @@ home.
 
 #### Manual
 
-- [ ] 1.5 Each `entry.ts` precondition maps to one design §4.3 row and one named error
+- [x] 1.5 Each `entry.ts` precondition maps to one design §4.3 row and one named error
 
 ### Phase 2: Invert the AI contract to meaning-first
 
@@ -1134,8 +1134,8 @@ home.
 
 #### Manual
 
-- [ ] 2.5 `POST /:id/translate` returns the nested `senses[]` shape against `npm run dev`
-- [ ] 2.6 `max_tokens` comment states the new budget derivation and its ceiling
+- [x] 2.5 `POST /:id/translate` returns the nested `senses[]` shape against `npm run dev`
+- [x] 2.6 `max_tokens` comment states the new budget derivation and its ceiling
 
 ### Phase 3: Schema migration
 
@@ -1165,9 +1165,9 @@ home.
 
 #### Manual
 
-- [ ] 4.7 POST a two-meaning `zamek`, GET it back with both meanings intact
-- [ ] 4.8 Blank last sentence → 400 and no partial entry in the database
-- [ ] 4.9 Backfill `fr` onto a two-meaning entry writes two French translations
+- [x] 4.7 POST a two-meaning `zamek`, GET it back with both meanings intact
+- [x] 4.8 Blank last sentence → 400 and no partial entry in the database
+- [x] 4.9 Backfill `fr` onto a two-meaning entry writes two French translations
 
 ### Phase 5: Extension — meanings first (D-3)
 
@@ -1180,39 +1180,39 @@ home.
 
 #### Manual
 
-- [ ] 5.5 Capture `zamek`, check two meanings, pick sentences in each language, save
-- [ ] 5.6 Picking a sentence under one meaning does not clear the other meaning's pick in the same language
-- [ ] 5.7 Both meanings confirmed persisted via `GET`
+- [x] 5.5 Capture `zamek`, check two meanings, pick sentences in each language, save
+- [x] 5.6 Picking a sentence under one meaning does not clear the other meaning's pick in the same language
+- [x] 5.7 Both meanings confirmed persisted via `GET`
 
 ### Phase 6: Frontend and print (D-1)
 
 #### Automated
 
-- [x] 6.1 Frontend tests pass
-- [x] 6.2 Lint passes
-- [x] 6.3 Build passes
-- [x] 6.4 `printCssGeometry.test.ts` green — five widths, sum 100%, columns 4+5 above 40%
-- [x] 6.5 Browser tests pass on both engines
+- [x] 6.1 Frontend tests pass — 03caf71
+- [x] 6.2 Lint passes — 03caf71
+- [x] 6.3 Build passes — 03caf71
+- [x] 6.4 `printCssGeometry.test.ts` green — five widths, sum 100%, columns 4+5 above 40% — 03caf71
+- [x] 6.5 Browser tests pass on both engines — 03caf71
 
 #### Manual
 
-- [ ] 6.6 Printed PDF: three meanings own their rows, word spans the band, no unexpected page break
-- [ ] 6.7 Long-word translation does not break mid-word in either engine
-- [ ] 6.8 Sheet furniture reads in the native language, `Znaczenie` included
+- [x] 6.6 Printed PDF: three meanings own their rows, word spans the band, no unexpected page break
+- [x] 6.7 Long-word translation does not break mid-word in either engine
+- [x] 6.8 Sheet furniture reads in the native language, `Znaczenie` included
 
 ### Phase 7: Cleanup and live verification
 
 #### Automated
 
-- [ ] 7.1 Full backend suite passes
-- [ ] 7.2 Frontend and extension suites pass
-- [ ] 7.3 Final migration applies and reverses
-- [ ] 7.4 No read of `entry_sentences.language_code` remains under `backend/src/`
+- [x] 7.1 Full backend suite passes
+- [x] 7.2 Frontend and extension suites pass
+- [x] 7.3 Final migration applies and reverses
+- [x] 7.4 No read of `entry_sentences.language_code` remains under `backend/src/`
 
 #### Manual
 
-- [ ] 7.5 ≥12 live capture calls run; rate, cost, latency, token headroom recorded in `change.md`
-- [ ] 7.6 ≥12 live backfill calls run; same numbers recorded
-- [ ] 7.7 Retry justified by the re-measured rate, or removed
-- [ ] 7.8 Both deliberate-break checks confirmed failing, then restored
-- [ ] 7.9 End-to-end pass across extension, frontend, print and backfill
+- [x] 7.5 ≥12 live capture calls run; rate, cost, latency, token headroom recorded in `change.md`
+- [x] 7.6 ≥12 live backfill calls run; same numbers recorded
+- [x] 7.7 Retry justified by the re-measured rate, or removed
+- [x] 7.8 Both deliberate-break checks confirmed failing, then restored
+- [x] 7.9 End-to-end pass across extension, frontend, print and backfill

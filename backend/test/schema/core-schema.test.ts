@@ -145,8 +145,8 @@ test('entry_sentences.translation_id rejects null', async (t) => {
 
   await assert.rejects(
     app.sql.query(
-      'INSERT INTO entry_sentences (entry_id, translation_id, language_code, sentence_text) VALUES ($1, $2, $3, $4)',
-      [entryId, null, 'en', 'I like this food.']
+      'INSERT INTO entry_sentences (entry_id, translation_id, sentence_text) VALUES ($1, $2, $3)',
+      [entryId, null, 'I like this food.']
     )
   )
 })
@@ -159,8 +159,8 @@ test('entry_sentences.translation_id rejects a nonexistent translation', async (
 
   await assert.rejects(
     app.sql.query(
-      'INSERT INTO entry_sentences (entry_id, translation_id, language_code, sentence_text) VALUES ($1, $2, $3, $4)',
-      [entryId, randomUUID(), 'en', 'I like this food.']
+      'INSERT INTO entry_sentences (entry_id, translation_id, sentence_text) VALUES ($1, $2, $3)',
+      [entryId, randomUUID(), 'I like this food.']
     )
   )
 })
@@ -198,8 +198,8 @@ test('entry_sentences.sentence_text rejects null', async (t) => {
 
   await assert.rejects(
     app.sql.query(
-      'INSERT INTO entry_sentences (entry_id, translation_id, language_code, sentence_text) VALUES ($1, $2, $3, $4)',
-      [entryId, translationId, 'en', null]
+      'INSERT INTO entry_sentences (entry_id, translation_id, sentence_text) VALUES ($1, $2, $3)',
+      [entryId, translationId, null]
     )
   )
 })

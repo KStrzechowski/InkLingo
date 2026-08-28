@@ -235,18 +235,18 @@ export async function appendLanguage (
 }
 
 function translationStatements (sql: Sql, entry: Entry, sense: Sense, translation: SenseTranslation): Statement[] {
-  // `entry_sentences.language_code` is still NOT NULL and is written from the
-  // parent translation, never from anything a client sent — so the cross-wired
-  // sentence INV-12 exists to catch cannot be produced even by a bug here. The
-  // column is dead weight from this phase on and Phase 7 drops it.
+  // `entry_sentences` carries no `language_code` of its own (Phase 7 dropped
+  // the dead column): a sentence's language is its translation's, via
+  // `translation_id`, which is what makes the cross-wired sentence INV-12
+  // exists to catch unrepresentable rather than merely rejected.
   return [
     sql`
       INSERT INTO entry_translations (id, entry_id, sense_id, language_code, meaning_text, phonetic_transcription)
       VALUES (${translation.id}, ${entry.id}, ${sense.id}, ${translation.languageCode}, ${translation.meaningText}, ${translation.phoneticTranscription})
     `,
     ...translation.sentences.map((sentence) => sql`
-      INSERT INTO entry_sentences (id, entry_id, translation_id, language_code, sentence_text, native_gloss_text)
-      VALUES (${sentence.id}, ${entry.id}, ${translation.id}, ${translation.languageCode}, ${sentence.targetText}, ${sentence.nativeGlossText})
+      INSERT INTO entry_sentences (id, entry_id, translation_id, sentence_text, native_gloss_text)
+      VALUES (${sentence.id}, ${entry.id}, ${translation.id}, ${sentence.targetText}, ${sentence.nativeGlossText})
     `)
   ]
 }

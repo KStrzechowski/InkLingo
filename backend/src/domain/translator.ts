@@ -67,11 +67,14 @@ export class MalformedDraftError extends Error {
 // returning it is deliberate — a 200 that is useless to the user is invisible
 // to every other layer.
 //
-// `lessons.md:33-39` measured this at roughly 3 in 34 live calls, but **that
-// was against the language-first tool schema** this change replaced. A
-// different schema is a different prompt and therefore a different failure
-// distribution; the old rate says nothing about the new one. Phase 7
-// re-measures it against the real API.
+// `lessons.md:33-39` measured this at roughly 3 in 34 live calls against the
+// language-first tool schema this change replaced — a different schema is a
+// different prompt and therefore a different failure distribution, so that
+// rate was never evidence about this one. Phase 7 re-measured against the
+// meaning-first schema: 0 of 13 varied live calls were degenerate. See
+// `anthropicTranslator.ts`'s `EMPTY_DRAFT_RETRIES` comment for why the retry
+// this error backstops stays in place despite the improved sample, and for a
+// different, non-empty failure mode the same measurement surfaced.
 export class DegenerateDraftError extends Error {
   readonly languageCodes: readonly string[]
 

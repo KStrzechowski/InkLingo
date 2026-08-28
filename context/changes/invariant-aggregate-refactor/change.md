@@ -34,4 +34,146 @@ pass (the types are hand-copied and don't fail to compile), but
 `CollectionDetailPage`'s rendering of real entries and the backfill button are
 broken against a live backend from this phase until Phase 6 lands — the same
 window shape as the popup's Phase 2→5 gap, just for the web app and Phase 4→6.
-No frontend files were touched in Phase 4 as a result.
+No frontend files were touched in Phase 4 as a result. Resolved in Phase 6:
+`api/collections.ts`, `CollectionDetailPage.tsx` and `addEntryTranslation`'s
+return type were all reworked together.
+
+## Load-bearing names
+
+Registered here per design § 5.10, since `docs/reference/contract-surfaces.md`
+does not exist in this repo (no `docs/` directory). Names as actually built,
+not as first proposed — two index/constraint names below differ from the
+design doc's guess (`_key` suffix, not `_idx`, matching this project's existing
+Postgres naming).
+
+| Name | Kind | Note |
+| --- | --- | --- |
+| `Entry`, `Sense`, `SenseTranslation`, `Sentence` | Domain types (`backend/src/domain/`) | `Sense` is **entry-level**; `Sentence` deliberately has no `languageCode` |
+| `glossText` | Domain field | The meaning, in the collection's **native** language |
+| `senseKey()` | Domain function | The identity rule; the IL-24 seam |
+| `LanguageContract` | Value object | Required to construct an `Entry` — this *is* INV-9 |
+| `DomainError` + 8 named subclasses (`backend/src/domain/errors.ts`) | Error taxonomy | Mapped to HTTP in one place |
+| `mapDomainError` (`backend/src/routes/api/collections/mapDomainError.ts`) | Application helper | The only domain→HTTP translation site |
+| `entryRepository.{loadContract,contractFor,loadEntry,loadEntries,insertEntry,appendLanguage}` | Repository surface (`backend/src/repositories/entryRepository.ts`) | Non-interactive transactions only |
+| `entry_senses` (`gloss_text`, `sense_key`) | Table | The meaning as a first-class row; later grows `concept_id` for IL-24 |
+| `entry_translations.sense_id` | Column | Ties a word to the meaning it expresses |
+| `entry_sentences.translation_id` | Column | INV-12 as a foreign key |
+| `entry_senses_entry_id_sense_key_key` | Unique constraint | INV-13/14 as a database key |
+| `entry_translations_sense_id_language_code_key` | Unique constraint | INV-10, one level down |
+| `senses[]` (AI tool schema, request, response) | Wire contract | Replaces `languages[].variants[]` and the `translations[]`/`sentences[]` pair, in three clients and the tool schema |
+| `alignSenseTranslations`, `senseTranslationFromProviderPayload` | AI adapter surface (`backend/src/domain/translationDraft.ts`) | The second is D-2's crossing point — one already-known meaning, one language, one word |
+| `senseTranslationTool` (`backend/src/adapters/anthropicTranslator.ts`) | AI adapter surface | D-2's second tool schema; shares `TRANSLATION_TOOL_NAME` with the capture tool by design |
+
+`toLegacyLanguageShape` from the design's own table was never built — decision
+A3 ruled out version-skew shims outright, so there was never a legacy shape to
+project onto.
+
+## Phase 7: deliberate-break check (2026-08-27)
+
+Both preconditions confirmed load-bearing by removing each from
+`backend/src/domain/entry.ts`'s shared `buildTranslation` and re-running
+`entries.test.ts`:
+
+- **`LanguageNotTaughtError`** (INV-9): with the guard removed, `POST
+  /api/collections/:id/entries rejects a language the collection does not
+  teach with 400` failed as `201 == 400` (created instead of rejected). Every
+  other test in the file stayed green. Guard restored; full suite (190/190)
+  confirmed green again.
+- **`TranslationWithoutSentenceError`** (INV-12): with the guard removed,
+  `POST /api/collections/:id/entries rejects a translation with no sentences
+  with 400` failed the same way — `201 == 400`. Guard restored; full suite
+  confirmed green again.
+
+## Phase 7: dead column drop
+
+`entry_sentences.language_code` dropped via migration
+`1787851002435_drop-sentence-language-code`. Verified against the dev Neon
+branch: `up()` applied cleanly, backend suite went 190/190 green (24 tests
+failed first, before the migration was applied — `entryRepository.ts` had
+already stopped writing the column); `down()` re-added it nullable and
+backfilled from the parent translation with zero mismatches
+(`entry_sentences.language_code` vs `entry_translations.language_code` via
+`translation_id`, spot-checked with a direct query); `up()` re-applied
+cleanly.
+
+## Phase 7: live verification (2026-08-27, authorized)
+
+Run via `context/changes/invariant-aggregate-refactor/measure-capture.mjs`
+and `measure-backfill.mjs` against the real Anthropic API (`claude-haiku-4-5`),
+one raw attempt per case — bypassing the adapter's own `EMPTY_DRAFT_RETRIES`
+retry, since the retry's justification is exactly the raw rate these scripts
+measure.
+
+### Capture surface — 13 calls
+
+Ambiguous words, unambiguous words, two phrases, 1 and 5 target languages, a
+word captured from a target language rather than native, one obscure word.
+
+- **Degenerate/malformed rate: 0/13 (0%).** Down from the ~3-in-34 (~9%)
+  measured against the old language-first schema — but 13 trials is not
+  enough to conclude the true rate dropped that far; see the retry decision
+  below.
+- **Cost: $0.08022 total, $0.00617/call average.** 1,000 captures ≈ $6.17.
+- **Latency: 6,162ms average** (1,888ms for a 1-language unambiguous word up
+  to 11,503ms for a 5-language ambiguous one).
+- **Token headroom: 88.1% average** — `MAX_TOKENS_PER_SENSE_LANGUAGE *
+  MAX_BUDGETED_SENSES` (10,240 for 5 languages) is generously sized; actual
+  output ran 776-1,706 tokens on the 5-language cases.
+- **Grouping quality, eyeballed:** `zamek` correctly split into castle vs.
+  lock across all 5 languages under matching glosses; `bank` correctly split
+  into financial-institution vs. riverbank; unambiguous words and phrases
+  correctly stayed single-sense.
+- **Real finding — not caught by any automated check:** `kara` (Polish
+  "punishment/fine") returned a well-formed, non-degenerate, entirely wrong
+  answer three separate times (jewelry: "bransoleta"/bracelet, "bangle"; then
+  anatomy: "nape of the neck") — re-rolled twice specifically to check this
+  wasn't a one-off, and it reproduced with a *different* wrong answer each
+  time. This is a model-accuracy limit, not a system defect: the aggregate
+  correctly persists whatever the model asserts, and nothing in the pipeline
+  can distinguish a confident wrong answer from a correct one. Recorded here
+  because it is exactly the class of failure `lessons.md` says a stub cannot
+  reveal.
+
+### Backfill surface (D-2) — 12 calls
+
+Four sense-scoped pairs (`zamek` castle/lock × de/fr, `bank`
+financial/riverbank × de/es — the exact case D-2 exists for: does the model
+answer for THIS meaning and not drift to the word's others?), four
+unambiguous single-meaning words/phrases across four more languages.
+
+- **Failure rate: 0/12 (0%).**
+- **Sense-scoping, eyeballed: correct in all 8 sense-paired calls** — `zamek`
+  castle → `Festung`/`forteresse`, lock → `Verschluss`/`agrafe`; `bank`
+  financial → `Bank`/`banco`, riverbank → `Ufer`/`orilla`. No drift to the
+  word's other meaning in any call.
+- **Cost: $0.02316 total, $0.00193/call average.** 1,000 backfills ≈ $1.93.
+- **Latency: 2,001ms average** (1,605-2,322ms — a tight, predictable range,
+  as expected for a one-meaning-one-language ask).
+- **Token headroom: 60.7-74.8% of the 512 ceiling** — tighter than the
+  capture surface's, as expected for a smaller answer shape, with no case
+  close to the ceiling.
+
+### Combined
+
+- **25 live calls, $0.10338 total** — within the pre-authorization estimate
+  ($0.10-$0.25).
+- **Retry decision: `EMPTY_DRAFT_RETRIES` stays at 1.** The measured
+  degenerate rate (0/13) doesn't disprove a rate near the old ~9% — at that
+  true rate, 13 trials show zero failures about 30% of the time. The retry
+  only spends anything on an actual empty response, which is itself cheap
+  (`lessons.md`'s own number: ~167 tokens, ~1.3s), so the cost of keeping an
+  unexercised safety net is low against the cost of removing it and being
+  wrong.
+- **Comments updated** in `anthropicTranslator.ts` (`EMPTY_DRAFT_RETRIES`,
+  `MAX_TOKENS_PER_SENSE_LANGUAGE`) and `translator.ts`
+  (`DegenerateDraftError`) to carry these numbers instead of the stale
+  language-first ones.
+
+### Still open — needs a human
+
+- Deliberate-break checks were run and both preconditions confirmed
+  load-bearing (see the section above), but per this session's convention
+  that entry stays unchecked in Progress until the user confirms it.
+- End-to-end pass in the real extension + frontend + print (capture `zamek`
+  with several meanings, see it grouped in the frontend, print it, backfill a
+  sixth language) has not been run — needs a human with a browser.

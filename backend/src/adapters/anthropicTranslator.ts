@@ -35,25 +35,39 @@ export const TRANSLATION_TOOL_NAME = 'return_translation'
 // budget (2048 × 5) produced, re-derived on the axis that now drives the
 // output. `MAX_BUDGETED_SENSES` is a budgeting assumption, not a guarantee:
 // `maxItems` is advisory on a tool schema, so a word with more meanings than
-// this can still overrun. Phase 7 measures the real distribution against the
-// live API and this number moves to fit it.
+// this can still overrun. Measured against the real API in Phase 7
+// (`measure-capture.mjs`, 13 varied calls, 5-language cases): actual output
+// ran 776-1,706 tokens against a 10,240 ceiling — 83-92% headroom — so this
+// number has room before it needs to move.
 export const MAX_TOKENS_PER_SENSE_LANGUAGE = 512
 export const MAX_BUDGETED_SENSES = 4
 
-// The model intermittently returns a structurally-valid response carrying
-// nothing usable — measured at roughly 3 in 34 calls against the real API,
-// clustered rather than uniform, and not reproducible on demand.
-// Nothing in the request distinguishes a good roll from a bad one, so the
-// application retries rather than trying to prevent it. The empty response is
-// also the cheap, fast one (~167 output tokens, ~1.3s), so the retry costs
-// little and stays well inside the route's timeout.
+// The model can return a structurally-valid response carrying nothing usable
+// at all — `draft.isDegenerate()`. Phase 7 re-measured this against the
+// meaning-first schema (`measure-capture.mjs`, 13 varied calls: ambiguous
+// words, unambiguous words, phrases, 1 and 5 target languages, a word
+// captured from a target language, an obscure word): **zero** were
+// degenerate. The historical "~3 in 34" figure was measured against the
+// language-first schema this change replaced, whose per-language meaning
+// arrays could each come back empty independently; it was never evidence
+// about this schema, and the small sample here doesn't disprove a
+// similarly-rare rate either — 13 trials would show zero failures roughly
+// 30% of the time even if the true rate were still ~9%. The retry stays: it
+// only fires on an actual empty response, which is cheap when it does
+// (`lessons.md`'s own measurement — ~167 output tokens, ~1.3s), so the cost
+// of keeping a safety net the sample didn't reproduce is low, while the cost
+// of removing it and being wrong is a user-visible 502.
 //
-// **Those numbers were measured against the language-first schema**, whose
-// per-language meaning arrays all came back empty, and they are not evidence
-// about this one — a different tool schema is a different prompt and therefore
-// a different failure distribution.
-// Phase 7 re-measures the rate and decides on that number whether this retry
-// still pays for itself.
+// A different, non-empty failure mode Phase 7's measurement *did* surface:
+// the model can return something well-formed and entirely wrong. `kara`
+// (Polish "punishment/fine") came back three separate times, unprompted, as
+// jewelry or anatomy ("bransoleta"/bangle, "nape of the neck") — plausible
+// English translations for words that are not `kara`. `isDegenerate()`
+// cannot see this, because the response is not empty; nothing downstream can
+// see it either, because it is not malformed. A retry would not help — the
+// three rolls disagreed with each other, not just with the truth — so this is
+// recorded as a known model-accuracy limit, not something this retry is
+// positioned to catch.
 //
 // This lives in the adapter, not the route and not the value object, because
 // only the adapter knows a re-ask is cheap *for this provider*. A different
