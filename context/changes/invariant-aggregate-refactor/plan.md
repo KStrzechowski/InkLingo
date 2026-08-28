@@ -1121,7 +1121,7 @@ home.
 
 #### Manual
 
-- [x] 1.5 Each `entry.ts` precondition maps to one design §4.3 row and one named error
+- [x] 1.5 Each `entry.ts` precondition maps to one design §4.3 row and one named error — 76a9d69
 
 ### Phase 2: Invert the AI contract to meaning-first
 
@@ -1134,8 +1134,8 @@ home.
 
 #### Manual
 
-- [x] 2.5 `POST /:id/translate` returns the nested `senses[]` shape against `npm run dev`
-- [x] 2.6 `max_tokens` comment states the new budget derivation and its ceiling
+- [x] 2.5 `POST /:id/translate` returns the nested `senses[]` shape against `npm run dev` — 76a9d69
+- [x] 2.6 `max_tokens` comment states the new budget derivation and its ceiling — 76a9d69
 
 ### Phase 3: Schema migration
 
@@ -1165,9 +1165,9 @@ home.
 
 #### Manual
 
-- [x] 4.7 POST a two-meaning `zamek`, GET it back with both meanings intact
-- [x] 4.8 Blank last sentence → 400 and no partial entry in the database
-- [x] 4.9 Backfill `fr` onto a two-meaning entry writes two French translations
+- [x] 4.7 POST a two-meaning `zamek`, GET it back with both meanings intact — 76a9d69
+- [x] 4.8 Blank last sentence → 400 and no partial entry in the database — 76a9d69
+- [x] 4.9 Backfill `fr` onto a two-meaning entry writes two French translations — 76a9d69
 
 ### Phase 5: Extension — meanings first (D-3)
 
@@ -1180,9 +1180,9 @@ home.
 
 #### Manual
 
-- [x] 5.5 Capture `zamek`, check two meanings, pick sentences in each language, save
-- [x] 5.6 Picking a sentence under one meaning does not clear the other meaning's pick in the same language
-- [x] 5.7 Both meanings confirmed persisted via `GET`
+- [x] 5.5 Capture `zamek`, check two meanings, pick sentences in each language, save — 76a9d69
+- [x] 5.6 Picking a sentence under one meaning does not clear the other meaning's pick in the same language — 76a9d69
+- [x] 5.7 Both meanings confirmed persisted via `GET` — 76a9d69
 
 ### Phase 6: Frontend and print (D-1)
 
@@ -1196,23 +1196,23 @@ home.
 
 #### Manual
 
-- [x] 6.6 Printed PDF: three meanings own their rows, word spans the band, no unexpected page break
-- [x] 6.7 Long-word translation does not break mid-word in either engine
-- [x] 6.8 Sheet furniture reads in the native language, `Znaczenie` included
+- [x] 6.6 Printed PDF: three meanings own their rows, word spans the band, no unexpected page break — 76a9d69
+- [x] 6.7 Long-word translation does not break mid-word in either engine — 76a9d69
+- [x] 6.8 Sheet furniture reads in the native language, `Znaczenie` included — 76a9d69
 
 ### Phase 7: Cleanup and live verification
 
 #### Automated
 
-- [x] 7.1 Full backend suite passes
-- [x] 7.2 Frontend and extension suites pass
-- [x] 7.3 Final migration applies and reverses
-- [x] 7.4 No read of `entry_sentences.language_code` remains under `backend/src/`
+- [x] 7.1 Full backend suite passes — 76a9d69
+- [x] 7.2 Frontend and extension suites pass — 76a9d69
+- [x] 7.3 Final migration applies and reverses — 76a9d69
+- [x] 7.4 No read of `entry_sentences.language_code` remains under `backend/src/` — 76a9d69
 
 #### Manual
 
-- [x] 7.5 ≥12 live capture calls run; rate, cost, latency, token headroom recorded in `change.md`
-- [x] 7.6 ≥12 live backfill calls run; same numbers recorded
-- [x] 7.7 Retry justified by the re-measured rate, or removed
-- [x] 7.8 Both deliberate-break checks confirmed failing, then restored
-- [x] 7.9 End-to-end pass across extension, frontend, print and backfill
+- [x] 7.5 ≥12 live capture calls run; rate, cost, latency, token headroom recorded in `change.md` — 76a9d69
+- [x] 7.6 ≥12 live backfill calls run; same numbers recorded — 76a9d69
+- [x] 7.7 Retry justified by the re-measured rate, or removed — 76a9d69
+- [x] 7.8 Both deliberate-break checks confirmed failing, then restored — 76a9d69
+- [x] 7.9 End-to-end pass across extension, frontend, print and backfill — 76a9d69

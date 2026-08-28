@@ -1,9 +1,9 @@
 ---
 change_id: invariant-aggregate-refactor
 title: Invariant aggregate refactor
-status: implementing
+status: implemented
 created: 2026-08-25
-updated: 2026-08-27
+updated: 2026-08-29
 archived_at: null
 ---
 
@@ -169,11 +169,40 @@ unambiguous single-meaning words/phrases across four more languages.
   (`DegenerateDraftError`) to carry these numbers instead of the stale
   language-first ones.
 
-### Still open — needs a human
+### Manual verification (2026-08-28, user-confirmed)
 
-- Deliberate-break checks were run and both preconditions confirmed
-  load-bearing (see the section above), but per this session's convention
-  that entry stays unchecked in Progress until the user confirms it.
-- End-to-end pass in the real extension + frontend + print (capture `zamek`
-  with several meanings, see it grouped in the frontend, print it, backfill a
-  sixth language) has not been run — needs a human with a browser.
+Full end-to-end pass across the extension, frontend, print, and backfill,
+run by the user against the real dev backend:
+
+- Captured `zamek` in the extension, checked two meanings, picked a
+  sentence per language under each, confirmed picking a sentence under one
+  meaning does not clear the other meaning's pick in the same language,
+  saved. Confirmed both meanings persisted via the frontend's `GET`.
+- Printed the collection: `Znaczenie` column present, native-language
+  furniture, meanings own their rows, word spans the band.
+- **4.9's real gap, found during this pass**: the app has no way to add a
+  target language to an *existing* collection (create-only), and the
+  extension always requests every current target for a checked meaning, so
+  FR-018's "Add X" backfill button can't arise through ordinary use — only
+  through direct data manipulation, same as the fixtures the automated
+  suite already uses. Worked around by seeding one entry directly into the
+  user's own dev-branch collection (two meanings, `en`+`ru` only) so the
+  button had something to act on; clicking it produced two French
+  translations, one per meaning, confirming D-2 end to end through the real
+  UI. This gap is pre-existing (not introduced by this change) and out of
+  this plan's scope — worth its own change if it's worth closing.
+- **Two environment bugs found and fixed along the way, neither a defect in
+  this change's code**:
+  - The manual-verification walkthrough itself first told the user to
+    build the extension with `npm run build` (production, targets the
+    deployed API) while running the backend via `npm run dev`
+    (`localhost:3000`) — a mismatch that surfaced as a "Not Found" error
+    inside the popup (API Gateway's generic 404 body). Fixed by rebuilding
+    with `npm run dev` instead.
+  - `backend`'s `npm run dev` script (`fastify start -l info -P
+    src/app.ts`) has no watch flag despite `CLAUDE.md` describing it as
+    "start with hot reload" — a long-running dev session missed the
+    Phase 7 migration + `entryRepository.ts` change entirely and threw
+    `column "language_code" of relation "entry_sentences" does not exist`
+    until manually restarted. The doc/script mismatch is real but out of
+    this change's scope to fix.
