@@ -209,18 +209,18 @@ None. This changes test scaffolding and an internal call-routing detail; no requ
 
 #### Automated
 
-- [x] 1.1 New suite passes: `cd extension && npm test -- test/background/apiFetch.test.ts`
-- [x] 1.2 Full extension suite still green: `cd extension && npm test`
-- [x] 1.3 Lint passes: `cd extension && npm run lint`
+- [x] 1.1 New suite passes: `cd extension && npm test -- test/background/apiFetch.test.ts` — c48eb22
+- [x] 1.2 Full extension suite still green: `cd extension && npm test` — c48eb22
+- [x] 1.3 Lint passes: `cd extension && npm run lint` — c48eb22
 
 ### Phase 2: Introduce the fetch seam (http.ts)
 
 #### Automated
 
-- [ ] 2.1 New suite passes: `cd extension && npm test -- test/http.test.ts`
-- [ ] 2.2 Full extension suite still green: `cd extension && npm test`
-- [ ] 2.3 Lint passes: `cd extension && npm run lint`
-- [ ] 2.4 Type-checks and builds: `cd extension && npm run build`
+- [x] 2.1 New suite passes: `cd extension && npm test -- test/http.test.ts`
+- [x] 2.2 Full extension suite still green: `cd extension && npm test`
+- [x] 2.3 Lint passes: `cd extension && npm run lint`
+- [x] 2.4 Type-checks and builds: `cd extension && npm run build`
 
 ### Phase 3: Migrate apiFetch to the seam
 
