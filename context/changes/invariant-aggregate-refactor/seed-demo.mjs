@@ -170,9 +170,9 @@ try {
 
         for (const [targetText, nativeGloss] of translation.sentences) {
           await client.query(
-            `INSERT INTO entry_sentences (entry_id, translation_id, language_code, sentence_text, native_gloss_text)
-             VALUES ($1, $2, $3, $4, $5)`,
-            [entryId, translationId, translation.lang, targetText, nativeGloss]
+            `INSERT INTO entry_sentences (entry_id, translation_id, sentence_text, native_gloss_text)
+             VALUES ($1, $2, $3, $4)`,
+            [entryId, translationId, targetText, nativeGloss]
           )
           sentences += 1
         }

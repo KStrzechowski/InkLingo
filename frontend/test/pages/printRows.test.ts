@@ -243,4 +243,8 @@ describe('senseRowSpans', () => {
   it('produces nothing for no groups', () => {
     expect(senseRowSpans([])).toEqual([])
   })
+
+  it('drops a zero-row group instead of emitting a spurious entry', () => {
+    expect(senseRowSpans([2, 0, 3])).toEqual([2, null, 3, null, null])
+  })
 })

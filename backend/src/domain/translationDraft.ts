@@ -286,8 +286,8 @@ export class TranslationDraft {
   // So this is half of the counter the pivot needs. The other half — metering
   // submitted characters — belongs in the adapter, which knows the request,
   // alongside the per-call log line `03-anti-corruption-layer.md:1014`
-  // specifies and this change did not build. Recorded as a follow-up in
-  // change.md; until it exists, nothing reads this number.
+  // specifies and this change did not build. Not yet tracked as a follow-up
+  // anywhere; nothing reads this number today.
   producedCharacters (): number {
     return this.senses.reduce((senseTotal, sense) => (
       senseTotal + sense.glossText.length + sense.translations.reduce((translationTotal, translation) => (

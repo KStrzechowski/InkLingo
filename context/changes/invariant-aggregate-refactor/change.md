@@ -1,7 +1,7 @@
 ---
 change_id: invariant-aggregate-refactor
 title: Invariant aggregate refactor
-status: implemented
+status: impl_reviewed
 created: 2026-08-25
 updated: 2026-08-29
 archived_at: null

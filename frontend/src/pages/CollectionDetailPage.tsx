@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import axios from 'axios'
 import { addEntryTranslation, getCollection, type CollectionDetail, type Entry } from '../api/collections'
@@ -61,6 +61,13 @@ function CollectionDetailPage () {
   // Playback state lives entirely in the hook, so a failed utterance never
   // touches the load/backfill error above it.
   const speech = useSpeech()
+  // Guards handleAddLanguage's post-await state writes the same way the load
+  // effect's own `cancelled` flag does — the two are separate mechanisms
+  // because this one guards an event handler, not an effect.
+  const mountedRef = useRef(true)
+  useEffect(() => () => {
+    mountedRef.current = false
+  }, [])
 
   useEffect(() => {
     if (!id) {
@@ -111,14 +118,21 @@ function CollectionDetailPage () {
     setError(null)
     try {
       const updated = await addEntryTranslation(id, entry.id, languageCode)
+      if (!mountedRef.current) {
+        return
+      }
       setCollection((prev) => (prev === null ? prev : {
         ...prev,
         entries: prev.entries.map((candidate) => (candidate.id === entry.id ? updated : candidate))
       }))
     } catch (err) {
-      setError(extractErrorMessage(err))
+      if (mountedRef.current) {
+        setError(extractErrorMessage(err))
+      }
     } finally {
-      setAddingKey(null)
+      if (mountedRef.current) {
+        setAddingKey(null)
+      }
     }
   }
 

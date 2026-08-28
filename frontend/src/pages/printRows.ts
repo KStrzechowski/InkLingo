@@ -56,6 +56,10 @@ export function collatorFor (languageCode: string): Intl.Collator {
 export function senseRowSpans (senseRowCounts: readonly number[]): Array<number | null> {
   const spans: Array<number | null> = []
   for (const count of senseRowCounts) {
+    // A zero-row group contributes no rows to `PrintBand.rows`, so it must
+    // contribute nothing here either — otherwise `spans` outgrows `rows` and
+    // every later group's rowSpan lands on the wrong row.
+    if (count === 0) continue
     spans.push(count)
     for (let i = 1; i < count; i++) {
       spans.push(null)
