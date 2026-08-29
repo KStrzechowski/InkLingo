@@ -1,6 +1,5 @@
-// A seam for the extension's one outbound-fetch call site (background.ts's
-// apiFetch — see extension-http-seam's Phase 3 for the migration). Not yet
-// wired to anything in this phase.
+// A seam for the extension's one outbound-fetch call site — wired into
+// background.ts's apiFetch (extension-http-seam Phase 3).
 //
 // Mirrors observability/reporter.ts's resetForTests() test-seam convention:
 // a swappable-but-live-lookup reference. `override ?? fetch` resolves the
