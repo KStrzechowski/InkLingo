@@ -47,6 +47,22 @@ describe('success', () => {
     expect((init as RequestInit).body).toBeUndefined()
   })
 
+  it('sends the translate request with an abort signal, unlike a plain GET', async () => {
+    // C-03's incremental path step 3: the translate call is the one route on
+    // this seam that gets the long AI deadline (http.ts's
+    // AI_REQUEST_TIMEOUT_MS) rather than the default — both now attach a
+    // signal, but this pins that translate specifically goes through the
+    // timeout-bearing path rather than being accidentally left unbounded.
+    seedValidToken()
+    stubFetch(async () => new Response(JSON.stringify({ normalizedNativeText: 'dom', senses: [] }), { status: 200 }))
+
+    const response = await harness.invoke({ type: 'translate', collectionId: 'c1', text: 'dom' })
+
+    expect(response).toEqual({ ok: true, data: { normalizedNativeText: 'dom', senses: [] } })
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal)
+  })
+
   it('sends a POST with a JSON body and Content-Type when the message carries one', async () => {
     const idToken = seedValidToken()
     const saved = { id: 'e1', wordOrPhrase: 'dom', sourceLanguageCode: 'pl', createdAt: '2026-01-01' }

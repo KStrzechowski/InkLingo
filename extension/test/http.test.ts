@@ -4,6 +4,7 @@ import { doFetch, resetForTests, setFetchForTests } from '../src/http.ts'
 afterEach(() => {
   resetForTests()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 describe('doFetch', () => {
@@ -65,5 +66,75 @@ describe('doFetch', () => {
     await doFetch('https://example.test/a', init)
 
     expect(fetchMock).toHaveBeenCalledWith('https://example.test/a', init)
+  })
+
+  // C-03's incremental path step 3 (context/changes/refactor-opportunities/
+  // research.md): nothing in extension/src constructed an AbortController
+  // before this. timeoutMs is opt-in — the four tests above pin the
+  // no-timeout call shape byte-for-byte; these pin the deadline itself.
+  describe('timeoutMs', () => {
+    it('omits any signal when timeoutMs is not given, matching the tests above', async () => {
+      const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('ok'))
+      vi.stubGlobal('fetch', fetchMock)
+
+      await doFetch('https://example.test/a', { method: 'GET' })
+
+      const [, init] = fetchMock.mock.calls[0]
+      expect(init?.signal).toBeUndefined()
+    })
+
+    it('attaches an AbortSignal when timeoutMs is given', async () => {
+      const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('ok'))
+      vi.stubGlobal('fetch', fetchMock)
+
+      await doFetch('https://example.test/a', { method: 'GET' }, 8_000)
+
+      const [, init] = fetchMock.mock.calls[0]
+      expect(init?.signal).toBeInstanceOf(AbortSignal)
+      expect(init?.signal?.aborted).toBe(false)
+    })
+
+    it('aborts the signal once timeoutMs elapses, before the request settles', async () => {
+      vi.useFakeTimers()
+      let capturedSignal: AbortSignal | undefined
+      vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        capturedSignal = init?.signal ?? undefined
+        return await new Promise<Response>(() => {}) // never resolves on its own
+      }))
+
+      void doFetch('https://example.test/a', {}, 5_000)
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(capturedSignal?.aborted).toBe(false)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(capturedSignal?.aborted).toBe(true)
+    })
+
+    it('does not abort before timeoutMs elapses', async () => {
+      vi.useFakeTimers()
+      let capturedSignal: AbortSignal | undefined
+      vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        capturedSignal = init?.signal ?? undefined
+        return await new Promise<Response>(() => {})
+      }))
+
+      void doFetch('https://example.test/a', {}, 5_000)
+      await vi.advanceTimersByTimeAsync(4_999)
+
+      expect(capturedSignal?.aborted).toBe(false)
+    })
+
+    it('clears the timeout once the request settles, so it cannot abort a later call on the same signal object', async () => {
+      vi.useFakeTimers()
+      const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('ok'))
+      vi.stubGlobal('fetch', fetchMock)
+
+      const response = await doFetch('https://example.test/a', {}, 5_000)
+      const [, init] = fetchMock.mock.calls[0]
+
+      expect(response.status).toBe(200)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(init?.signal?.aborted).toBe(false)
+    })
   })
 })

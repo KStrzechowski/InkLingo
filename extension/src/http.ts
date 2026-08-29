@@ -20,6 +20,33 @@ export function resetForTests (): void {
   override = null
 }
 
-export async function doFetch (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  return await (override ?? fetch)(input, init)
+// Sized like frontend/src/api/client.ts:27-41's default axios timeout: every
+// route except the model-backed one below answers in well under a second, so
+// 8s is the point past which something is wrong, not slow.
+export const DEFAULT_TIMEOUT_MS = 8_000
+
+// Mirrors frontend/src/api/client.ts:27-41's AI_REQUEST_TIMEOUT_MS and the
+// same reasoning: bounded by the route's own TRANSLATE_TIMEOUT_MS (20s,
+// backend/src/routes/api/collections/index.ts) plus headroom for a cold
+// start and the round trip, so the server — not a client that quit early —
+// is always the one to decide the outcome of a generation that goes on to
+// succeed.
+export const AI_REQUEST_TIMEOUT_MS = 25_000
+
+// `timeoutMs` is opt-in: omitting it (as doFetch's own existing tests do)
+// passes `init` through byte-for-byte, exactly as before this deadline
+// existed. A caller that wants a bounded wait passes one explicitly —
+// background.ts's apiFetch always does, defaulting to DEFAULT_TIMEOUT_MS and
+// overriding to AI_REQUEST_TIMEOUT_MS for the translate route.
+export async function doFetch (input: RequestInfo | URL, init?: RequestInit, timeoutMs?: number): Promise<Response> {
+  if (timeoutMs === undefined) {
+    return await (override ?? fetch)(input, init)
+  }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => { controller.abort() }, timeoutMs)
+  try {
+    return await (override ?? fetch)(input, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
 }

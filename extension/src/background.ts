@@ -1,7 +1,7 @@
 import { API_BASE_URL } from './config.ts'
-import { doFetch } from './http.ts'
+import { AI_REQUEST_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, doFetch } from './http.ts'
 import { getIdToken, isAuthenticated, login, logout } from './auth.ts'
-import type { Message, MessageResponse } from './messages.ts'
+import type { Message, MessageResponse, MessageResults } from './messages.ts'
 import type { Collection, SavedEntry, TranslationResult } from './types.ts'
 import { bodyKeysOf } from './observability/bodyKeys.ts'
 import { flush, report, type BufferedReport } from './observability/reporter.ts'
@@ -53,7 +53,7 @@ function wasReported (err: unknown): boolean {
   return typeof err === 'object' && err !== null && alreadyReported.has(err)
 }
 
-async function apiFetch<T> (path: string, body?: unknown): Promise<T> {
+async function apiFetch<T> (path: string, body?: unknown, timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<T> {
   const idToken = await getIdToken()
   if (idToken === null) {
     throw new Error('Your session expired — log in again.')
@@ -77,7 +77,7 @@ async function apiFetch<T> (path: string, body?: unknown): Promise<T> {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body)
-    })
+    }, timeoutMs)
   } catch (err) {
     // No response at all. Nothing to correlate against, which is itself the
     // signal — this is the shape a blocked or dropped request takes.
@@ -121,7 +121,14 @@ async function apiFetch<T> (path: string, body?: unknown): Promise<T> {
   return await response.json() as T
 }
 
-async function run (message: Message): Promise<unknown> {
+// A new Message variant added to messages.ts without a matching case below
+// stops compiling here rather than silently returning undefined at runtime —
+// the failure mode run()'s old `Promise<unknown>` return type allowed.
+function assertNever (value: never): never {
+  throw new Error(`Unhandled message type: ${JSON.stringify(value)}`)
+}
+
+async function run (message: Message): Promise<MessageResults[Message['type']]> {
   switch (message.type) {
     case 'auth-status':
       return { authenticated: await isAuthenticated() }
@@ -136,7 +143,8 @@ async function run (message: Message): Promise<unknown> {
     case 'translate':
       return await apiFetch<TranslationResult>(
         `/api/collections/${message.collectionId}/translate`,
-        { text: message.text }
+        { text: message.text },
+        AI_REQUEST_TIMEOUT_MS
       )
     case 'save-entry':
       return await apiFetch<SavedEntry>(
@@ -149,6 +157,8 @@ async function run (message: Message): Promise<unknown> {
       // this file would ever have seen it.
       await report({ ...message.report })
       return null
+    default:
+      return assertNever(message)
   }
 }
 
