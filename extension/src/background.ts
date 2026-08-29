@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './config.ts'
+import { doFetch } from './http.ts'
 import { getIdToken, isAuthenticated, login, logout } from './auth.ts'
 import type { Message, MessageResponse } from './messages.ts'
 import type { Collection, SavedEntry, TranslationResult } from './types.ts'
@@ -72,7 +73,7 @@ async function apiFetch<T> (path: string, body?: unknown): Promise<T> {
 
   let response: Response
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await doFetch(`${API_BASE_URL}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body)

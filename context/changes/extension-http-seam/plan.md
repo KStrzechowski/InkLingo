@@ -217,21 +217,21 @@ None. This changes test scaffolding and an internal call-routing detail; no requ
 
 #### Automated
 
-- [x] 2.1 New suite passes: `cd extension && npm test -- test/http.test.ts`
-- [x] 2.2 Full extension suite still green: `cd extension && npm test`
-- [x] 2.3 Lint passes: `cd extension && npm run lint`
-- [x] 2.4 Type-checks and builds: `cd extension && npm run build`
+- [x] 2.1 New suite passes: `cd extension && npm test -- test/http.test.ts` — 5491ad9
+- [x] 2.2 Full extension suite still green: `cd extension && npm test` — 5491ad9
+- [x] 2.3 Lint passes: `cd extension && npm run lint` — 5491ad9
+- [x] 2.4 Type-checks and builds: `cd extension && npm run build` — 5491ad9
 
 ### Phase 3: Migrate apiFetch to the seam
 
 #### Automated
 
-- [ ] 3.1 Phase 1's characterization file is byte-for-byte unchanged: `git diff --exit-code extension/test/background/apiFetch.test.ts`
-- [ ] 3.2 Phase 1's suite still passes, unmodified: `cd extension && npm test -- test/background/apiFetch.test.ts`
-- [ ] 3.3 Full extension suite green: `cd extension && npm test`
-- [ ] 3.4 Lint passes: `cd extension && npm run lint`
-- [ ] 3.5 Type-checks and builds: `cd extension && npm run build`
+- [x] 3.1 Phase 1's characterization file is byte-for-byte unchanged: `git diff --exit-code extension/test/background/apiFetch.test.ts`
+- [x] 3.2 Phase 1's suite still passes, unmodified: `cd extension && npm test -- test/background/apiFetch.test.ts`
+- [x] 3.3 Full extension suite green: `cd extension && npm test`
+- [x] 3.4 Lint passes: `cd extension && npm run lint`
+- [x] 3.5 Type-checks and builds: `cd extension && npm run build`
 
 #### Manual
 
-- [ ] 3.6 Load the built extension in Firefox, confirm login + translate + save-entry all succeed with no console errors
+- [x] 3.6 Load the built extension in Firefox, confirm login + translate + save-entry all succeed with no console errors
