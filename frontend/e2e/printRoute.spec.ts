@@ -37,7 +37,15 @@ function buildCollection (id: string, name: string) {
         senses: [
           {
             id: `${id}-sense-1`,
-            glossText: 'threshold',
+            // Deliberately distinct from `wordOrPhrase` above. D-1's row-group
+            // gloss header (`PrintDocument.tsx`) is also a `<th scope="rowgroup">`,
+            // which the ARIA→HTML mapping exposes under the same `rowheader`
+            // role as the word column's `<th scope="row">` — a gloss that
+            // repeats the word text makes `getByRole('rowheader', { name:
+            // 'threshold' })` match both columns and fail Playwright's strict
+            // mode, which is exactly what happened here before this fixture
+            // was written to avoid it.
+            glossText: 'the sill of a doorway',
             translations: [
               {
                 id: `${id}-t1`,
@@ -64,8 +72,13 @@ function buildCollection (id: string, name: string) {
                 sentences: [
                   {
                     id: `${id}-s2`,
-                    sentenceText: 'Wir traten über die Schwelle.',
-                    nativeGlossText: 'We stepped over the threshold.'
+                    // Same reasoning as the Polish sentence above: repeating
+                    // 'Schwelle' here made the cell assertion below ambiguous
+                    // against the meaning cell's own 'Schwelle' text — added
+                    // when this fixture gained sentences (invariant-aggregate
+                    // -refactor p6) without carrying that constraint forward.
+                    sentenceText: 'Wir traten vorsichtig hinein.',
+                    nativeGlossText: 'We stepped in carefully.'
                   }
                 ]
               }
