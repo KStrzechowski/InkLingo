@@ -1,0 +1,155 @@
+{
+  "normalizedNativeText": "track",
+  "senses": [
+    {
+      "glossText": "ścieżka lub tor",
+      "translations": [
+        {
+          "languageCode": "en",
+          "meaningText": "track",
+          "phoneticTranscription": "/træk/",
+          "sentences": [
+            {
+              "targetText": "The train runs on a track.",
+              "nativeGlossText": "Pociąg jeździ po torze."
+            },
+            {
+              "targetText": "They followed the animal's track in the snow.",
+              "nativeGlossText": "Śledzili ślad zwierzęcia na śniegu."
+            }
+          ]
+        },
+        {
+          "languageCode": "ru",
+          "meaningText": "путь; колея; след",
+          "phoneticTranscription": "/put'; kɐ'lejə; slet/",
+          "sentences": [
+            {
+              "targetText": "Поезд ездит по рельсам.",
+              "nativeGlossText": "Pociąg jeździ po torze."
+            },
+            {
+              "targetText": "Они следили за следом животного в снегу.",
+              "nativeGlossText": "Śledzili ślad zwierzęcia na śniegu."
+            }
+          ]
+        },
+        {
+          "languageCode": "fr",
+          "meaningText": "piste; voie",
+          "phoneticTranscription": "/pist; vwa/",
+          "sentences": [
+            {
+              "targetText": "Le train roule sur une voie.",
+              "nativeGlossText": "Pociąg jeździ po torze."
+            },
+            {
+              "targetText": "Ils ont suivi la trace de l'animal dans la neige.",
+              "nativeGlossText": "Śledzili ślad zwierzęcia na śniegu."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "glossText": "piosenka na płycie lub albumie",
+      "translations": [
+        {
+          "languageCode": "en",
+          "meaningText": "track",
+          "phoneticTranscription": "/træk/",
+          "sentences": [
+            {
+              "targetText": "My favorite track on this album is the third one.",
+              "nativeGlossText": "Moja ulubiona piosenka na tym albumie to trzecia."
+            },
+            {
+              "targetText": "The album has twelve tracks.",
+              "nativeGlossText": "Album ma dwanaście piosenek."
+            }
+          ]
+        },
+        {
+          "languageCode": "ru",
+          "meaningText": "трек; музыкальное произведение",
+          "phoneticTranscription": "/trek; mʊ'zɪkəlnəjə prɐɪz'vɛdɛnɪjə/",
+          "sentences": [
+            {
+              "targetText": "Мой любимый трек на этом альбоме - третий.",
+              "nativeGlossText": "Moja ulubiona piosenka na tym albumie to trzecia."
+            },
+            {
+              "targetText": "Альбом содержит двенадцать треков.",
+              "nativeGlossText": "Album ma dwanaście piosenek."
+            }
+          ]
+        },
+        {
+          "languageCode": "fr",
+          "meaningText": "piste; morceau",
+          "phoneticTranscription": "/pist; mɔʁso/",
+          "sentences": [
+            {
+              "targetText": "Ma piste préférée sur cet album est la troisième.",
+              "nativeGlossText": "Moja ulubiona piosenka na tym albumie to trzecia."
+            },
+            {
+              "targetText": "L'album contient douze pistes.",
+              "nativeGlossText": "Album ma dwanaście piosenek."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "glossText": "śledzić; monitorować",
+      "translations": [
+        {
+          "languageCode": "en",
+          "meaningText": "to track",
+          "phoneticTranscription": "/tə træk/",
+          "sentences": [
+            {
+              "targetText": "We can track your package online.",
+              "nativeGlossText": "Możemy śledzić twoją paczkę online."
+            },
+            {
+              "targetText": "The police tracked the suspect's movements.",
+              "nativeGlossText": "Policja śledziła ruchy podejrzanego."
+            }
+          ]
+        },
+        {
+          "languageCode": "ru",
+          "meaningText": "отслеживать; следить",
+          "phoneticTranscription": "/ɐt'sledʒɪvət'; 'sledʲɪt'/",
+          "sentences": [
+            {
+              "targetText": "Мы можем отследить вашу посылку онлайн.",
+              "nativeGlossText": "Możemy śledzić twoją paczkę online."
+            },
+            {
+              "targetText": "Полиция следила за движениями подозреваемого.",
+              "nativeGlossText": "Policja śledziła ruchy podejrzanego."
+            }
+          ]
+        },
+        {
+          "languageCode": "fr",
+          "meaningText": "suivre; tracer",
+          "phoneticTranscription": "/sɥivr; trase/",
+          "sentences": [
+            {
+              "targetText": "Nous pouvons suivre votre colis en ligne.",
+              "nativeGlossText": "Możemy śledzić twoją paczkę online."
+            },
+            {
+              "targetText": "La police a suivi les mouvements du suspect.",
+              "nativeGlossText": "Policja śledziła ruchy podejrzanego."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

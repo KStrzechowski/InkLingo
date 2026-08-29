@@ -1,0 +1,155 @@
+{
+  "normalizedNativeText": "ślad",
+  "senses": [
+    {
+      "glossText": "oznaka lub linia pozostawiona przez przedmiot",
+      "translations": [
+        {
+          "languageCode": "en",
+          "meaningText": "mark or line left behind by something",
+          "phoneticTranscription": "/træk/",
+          "sentences": [
+            {
+              "targetText": "The dog's paw prints left tracks in the snow.",
+              "nativeGlossText": "Ślady łap psa były widoczne na śniegu."
+            },
+            {
+              "targetText": "We followed the tracks of the animal through the forest.",
+              "nativeGlossText": "Podążaliśmy za śladami zwierzęcia przez las."
+            }
+          ]
+        },
+        {
+          "languageCode": "ru",
+          "meaningText": "след",
+          "phoneticTranscription": "/træk/ → [trɛk]",
+          "sentences": [
+            {
+              "targetText": "На снеге видны следы животного.",
+              "nativeGlossText": "Na śniegu są widoczne ślady zwierzęcia."
+            },
+            {
+              "targetText": "Мы нашли следы преступника.",
+              "nativeGlossText": "Znaleźliśmy ślady przestępcy."
+            }
+          ]
+        },
+        {
+          "languageCode": "fr",
+          "meaningText": "trace",
+          "phoneticTranscription": "/tʁas/",
+          "sentences": [
+            {
+              "targetText": "Les empreintes laissent des traces dans le sable.",
+              "nativeGlossText": "Odciski pozostawiają ślady na piasku."
+            },
+            {
+              "targetText": "Nous avons suivi les traces du cerf.",
+              "nativeGlossText": "Podążaliśmy za śladami jelenia."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "glossText": "utwór muzyczny lub piosenka",
+      "translations": [
+        {
+          "languageCode": "en",
+          "meaningText": "recorded song or piece of music",
+          "phoneticTranscription": "/træk/",
+          "sentences": [
+            {
+              "targetText": "My favorite track on the album is the last one.",
+              "nativeGlossText": "Mój ulubiony utwór na albumie to ostatni."
+            },
+            {
+              "targetText": "She released a new track on streaming platforms.",
+              "nativeGlossText": "Wydała nowy utwór na platformach streamingowych."
+            }
+          ]
+        },
+        {
+          "languageCode": "ru",
+          "meaningText": "трек",
+          "phoneticTranscription": "[trɛk]",
+          "sentences": [
+            {
+              "targetText": "Этот трек очень популярен у молодежи.",
+              "nativeGlossText": "Ten utwór jest bardzo popularny wśród młodzieży."
+            },
+            {
+              "targetText": "На альбоме 12 треков.",
+              "nativeGlossText": "Na albumie jest 12 utworów."
+            }
+          ]
+        },
+        {
+          "languageCode": "fr",
+          "meaningText": "morceau de musique",
+          "phoneticTranscription": "/tʁæk/",
+          "sentences": [
+            {
+              "targetText": "Mon morceau préféré est le troisième du nouvel album.",
+              "nativeGlossText": "Mój ulubiony utwór to trzeci z nowego albumu."
+            },
+            {
+              "targetText": "L'artiste a sorti un nouveau track la semaine dernière.",
+              "nativeGlossText": "Artysta wydał nowy utwór w zeszłym tygodniu."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "glossText": "tor lub szyna dla pojazdów",
+      "translations": [
+        {
+          "languageCode": "en",
+          "meaningText": "rail or path for vehicles",
+          "phoneticTranscription": "/træk/",
+          "sentences": [
+            {
+              "targetText": "The train runs on metal tracks.",
+              "nativeGlossText": "Pociąg jeździ po metalowych torach."
+            },
+            {
+              "targetText": "We need to repair the railroad track.",
+              "nativeGlossText": "Musimy naprawić tor kolejowy."
+            }
+          ]
+        },
+        {
+          "languageCode": "ru",
+          "meaningText": "рельсы",
+          "phoneticTranscription": "[trɛk]",
+          "sentences": [
+            {
+              "targetText": "Поезд едет по железнодорожным путям.",
+              "nativeGlossText": "Pociąg jeździ po torach kolejowych."
+            },
+            {
+              "targetText": "Рабочие укладывают новые рельсы.",
+              "nativeGlossText": "Robotnicy układają nowe szyny."
+            }
+          ]
+        },
+        {
+          "languageCode": "fr",
+          "meaningText": "rail ou voie",
+          "phoneticTranscription": "/tʁæk/",
+          "sentences": [
+            {
+              "targetText": "Le train circule sur les rails en acier.",
+              "nativeGlossText": "Pociąg porusza się po stalowych szynach."
+            },
+            {
+              "targetText": "La voie ferrée a besoin d'être réparée.",
+              "nativeGlossText": "Tor kolejowy wymaga naprawy."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
