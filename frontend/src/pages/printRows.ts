@@ -68,6 +68,22 @@ export function senseRowSpans (senseRowCounts: readonly number[]): Array<number 
   return spans
 }
 
+// A phonetic transcription is sometimes more than one atomic unit: a meaning
+// with no single-word equivalent gets two (or more) pronunciation variants
+// joined by whitespace, e.g. "/ɐt'sledʒɪvət'; 'sledʲɪt'/". print.css keeps
+// each returned token `white-space: nowrap` (so the printed sheet never
+// fragments mid-symbol, same as a single transcription always has), but the
+// whitespace *between* tokens is rendered as plain text outside any span —
+// a real break opportunity, exactly like the one already kept between the
+// meaning and its transcription. That is what lets a compound transcription
+// wrap between its variants instead of silently overflowing the column the
+// way one indivisible nowrap span would if the whole string is wider than
+// the column even alone. A single-variant transcription has no whitespace to
+// split on, so this returns it unchanged as one token.
+export function phoneticTokens (transcription: string): string[] {
+  return transcription.split(/(\s+)/).filter((part) => part.length > 0)
+}
+
 export function buildBands (collection: CollectionDetail): PrintBand[] {
   const collator = collatorFor(collection.nativeLanguageCode)
   // A printed reference sheet is something you look things up in, so

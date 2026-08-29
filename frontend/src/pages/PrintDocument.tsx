@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { CollectionDetail } from '../api/collections'
 import { printLabels, printLanguageNamer } from './printLabels'
 import { measurePrintPages, packPrintPages } from './printPagination'
-import { buildBands, senseRowSpans } from './printRows'
+import { buildBands, phoneticTokens, senseRowSpans } from './printRows'
 import './print.css'
 
 // The printable document itself, given a collection that is already loaded.
@@ -38,6 +38,39 @@ function PrintDocument ({ collection }: { collection: CollectionDetail }) {
       document.body.classList.remove('print-mode')
     }
   }, [])
+
+  // A phonetic token is always rendered nowrap (print.css) so a compound
+  // transcription's variants each move as a unit rather than fragmenting
+  // mid-symbol — but that means a token wider than its own column, even
+  // alone, has nowhere to go and silently overflows instead of wrapping.
+  // This measures every rendered token against its cell's available width
+  // and marks only the ones that are actually too wide to ever fit unbroken,
+  // letting *just* those wrap internally — everything else keeps the
+  // "share the line when it fits, drop below when it doesn't" behaviour
+  // unchanged. Declared after the print-mode effect above (needs the sheet's
+  // real font metrics) and before the pagination effect below: a token that
+  // starts wrapping changes its row's height, which pagination must measure
+  // *after* this resolves, not before.
+  useLayoutEffect(() => {
+    const root = documentRef.current
+    if (root === null) {
+      return
+    }
+    for (const span of root.querySelectorAll<HTMLElement>('.print-phonetic')) {
+      // Reset first: a different collection swapped in must not inherit a
+      // wrap decision made for the previous one's content.
+      span.classList.remove('print-phonetic--wrap')
+      const cell = span.closest('td')
+      if (cell === null) {
+        continue
+      }
+      const style = getComputedStyle(cell)
+      const available = cell.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      if (span.getBoundingClientRect().width > available) {
+        span.classList.add('print-phonetic--wrap')
+      }
+    }
+  }, [collection])
 
   // A different collection is a different document, so its page breaks have to
   // be measured again rather than inherited.
@@ -194,8 +227,22 @@ function PrintDocument ({ collection }: { collection: CollectionDetail }) {
                                 {/* Rendered verbatim: stored transcriptions already
                                     carry their own delimiters, and inconsistently —
                                     '/ˈfuːd/' for English, '[ɪˈda]' for Russian.
-                                    Wrapping them again printed 'food //ˈfuːd//'. */}
-                                <span className="print-phonetic">{row.phoneticTranscription}</span>
+                                    Wrapping them again printed 'food //ˈfuːd//'.
+
+                                    A compound transcription (two variants joined by
+                                    whitespace, e.g. a meaning with no single-word
+                                    equivalent) is split into its own atomic nowrap
+                                    span per token — same reasoning as the space
+                                    above, extended between variants: keeping the
+                                    whitespace as plain text here (not inside a span)
+                                    is what lets it wrap between variants instead of
+                                    silently overflowing the column as one
+                                    indivisible run would. */}
+                                {phoneticTokens(row.phoneticTranscription).map((token, index) => (
+                                  /^\s+$/.test(token)
+                                    ? token
+                                    : <span className="print-phonetic" key={index}>{token}</span>
+                                ))}
                               </>
                             )}
                           </td>

@@ -278,6 +278,23 @@ body.print-mode .print-document {
   white-space: nowrap;
 }
 
+/* Applied by PrintDocument.tsx's measurement effect, and only to a token it
+   measured as wider than its own column even alone — never as a blanket
+   style. `display: block` is load-bearing, not decorative: merely making
+   the token wrappable (white-space: normal) while it stayed inline still let
+   the browser's line-breaking algorithm reconsider the *meaning word before
+   it* too, occasionally hyphenating it instead of leaving it whole — because
+   inline wrap opportunities are decided holistically across a shared line
+   box. A block box drops out of that shared inline flow entirely: it always
+   starts a fresh line (which such a token needed anyway — see above, it was
+   already too wide to ever share one) and its own wrapping decisions can no
+   longer influence anything before it. */
+.print-phonetic.print-phonetic--wrap {
+  display: block;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
 /* ---------- print ---------- */
 
 @media print {

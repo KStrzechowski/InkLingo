@@ -142,6 +142,28 @@ export const fixtures: Record<string, CollectionDetail> = {
           sentence: 'Независимость была объявлена после долгих переговоров.',
           gloss: 'Niepodległość ogłoszono po długich negocjacjach.'
         }
+      }),
+      // A compound transcription: two pronunciation variants for one meaning
+      // with no single Russian equivalent, joined by "; ". Reported live
+      // 2026-08-29 — this whole string is wider than the column even alone,
+      // so dropping it to its own line (the 'independence' fix above) does
+      // not help; it must be allowed to wrap between the two variants.
+      entry('śledzić', 'pl', {
+        de: {
+          meaning: 'verfolgen',
+          ipa: '/fɛɐ̯ˈfɔlɡn̩/',
+          sentence: 'Die Polizei verfolgt den Verdächtigen.',
+          gloss: 'Policja śledzi podejrzanego.'
+        },
+        // Meaning stays a single short word on purpose — the reported bug was
+        // specifically that the transcription overflowed while the
+        // translation itself rendered fine.
+        ru: {
+          meaning: 'следить',
+          ipa: "/ɐt'sledʒɪvət'; 'sledʲɪt'/",
+          sentence: 'Полиция следила за движениями подозреваемого.',
+          gloss: 'Policja śledziła ruchy podejrzanego.'
+        }
       })
     ]
   },

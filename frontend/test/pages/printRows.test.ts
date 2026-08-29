@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildBands, collatorFor, senseRowSpans } from '../../src/pages/printRows'
+import { buildBands, collatorFor, phoneticTokens, senseRowSpans } from '../../src/pages/printRows'
 import { createCollection, createEntry, createSense, createSentence, createTranslation } from '../helpers/collections'
 
 // The row model is the only real logic on the print page, and until now it was
@@ -246,5 +246,23 @@ describe('senseRowSpans', () => {
 
   it('drops a zero-row group instead of emitting a spurious entry', () => {
     expect(senseRowSpans([2, 0, 3])).toEqual([2, null, 3, null, null])
+  })
+})
+
+describe('phoneticTokens', () => {
+  it('returns a single transcription as one token', () => {
+    expect(phoneticTokens('/træk/')).toEqual(['/træk/'])
+  })
+
+  it('splits a compound transcription on its internal whitespace, keeping the whitespace as its own token', () => {
+    // The reported case: two pronunciation variants for a meaning with no
+    // single-word equivalent, joined by "; ".
+    expect(phoneticTokens("/ɐt'sledʒɪvət'; 'sledʲɪt'/")).toEqual([
+      "/ɐt'sledʒɪvət';", ' ', "'sledʲɪt'/"
+    ])
+  })
+
+  it('splits on every internal gap for three or more variants', () => {
+    expect(phoneticTokens('/a/; /b/; /c/')).toEqual(['/a/;', ' ', '/b/;', ' ', '/c/'])
   })
 })
