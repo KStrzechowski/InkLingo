@@ -15,6 +15,24 @@ export const createCollectionBodySchema = Type.Object({
 })
 export type CreateCollectionBody = Static<typeof createCollectionBodySchema>
 
+// `GET /api/collections`. Until this schema existed the route had no `schema`
+// block at all — refactor-opportunities' research.md names it as C-01's first
+// prerequisite step: the one read route with zero response contract on either
+// side of the wire.
+export const collectionSummarySchema = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  nativeLanguageCode: Type.String(),
+  targetLanguageCodes: Type.Array(Type.String()),
+  createdAt: Type.String()
+})
+export type CollectionSummary = Static<typeof collectionSummarySchema>
+
+export const collectionsListResponseSchema = Type.Object({
+  collections: Type.Array(collectionSummarySchema)
+})
+export type CollectionsListResponseBody = Static<typeof collectionsListResponseSchema>
+
 export const collectionParamsSchema = Type.Object({
   id: Type.String({ format: 'uuid' })
 })

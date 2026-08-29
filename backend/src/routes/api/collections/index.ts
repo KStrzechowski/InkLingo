@@ -12,6 +12,7 @@ import {
   translateResponseSchema,
   entryResponseSchema,
   collectionDetailResponseSchema,
+  collectionsListResponseSchema,
   type CreateEntryBody
 } from './schemas.ts'
 import {
@@ -160,7 +161,12 @@ const collections: FastifyPluginAsyncTypebox = async (fastify): Promise<void> =>
     }
   }
 
-  fastify.get('/', async (request) => {
+  fastify.get('/', {
+    schema: {
+      // Newly declared — see the note on collectionSummarySchema in schemas.ts.
+      response: { 200: collectionsListResponseSchema }
+    }
+  }, async (request) => {
     const rows = await fastify.sql`
       SELECT id, name, native_language_code, created_at
       FROM collections

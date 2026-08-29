@@ -53,9 +53,39 @@ export interface TranslationResult {
   senses: TranslationSense[]
 }
 
+// One saved word/sentence pair under a sense. Named separately from
+// `TranslationSentence` even though the fields match — that one is a draft's
+// shape, this one is a persisted row with an id.
+export interface SavedEntrySentence {
+  id: string
+  sentenceText: string
+  nativeGlossText: string
+}
+
+export interface SavedEntryTranslation {
+  id: string
+  languageCode: string
+  meaningText: string
+  phoneticTranscription: string | null
+  sentences: SavedEntrySentence[]
+}
+
+export interface SavedEntrySense {
+  id: string
+  glossText: string
+  translations: SavedEntryTranslation[]
+}
+
+// Source of truth: `entryResponseSchema` in
+// backend/src/routes/api/collections/schemas.ts, which both
+// `POST /:id/entries` and `GET /:id` serialize against. `senses` was missing
+// here until the response schema was checked against this file directly —
+// nothing failed at runtime because nothing in this popup reads it yet, but a
+// future caller trusting this type would have silently gotten `undefined`.
 export interface SavedEntry {
   id: string
   wordOrPhrase: string
   sourceLanguageCode: string
   createdAt: string
+  senses: SavedEntrySense[]
 }
