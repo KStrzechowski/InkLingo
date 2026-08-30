@@ -10,7 +10,8 @@
     "build": "tsc",
     "start": "node --env-file=.env dist/index.js",
     "typecheck": "tsc --noEmit && tsc -p test/tsconfig.json",
-    "test": "node --import tsx --test"
+    "test": "node --import tsx --test",
+    "review:ci": "node --import tsx src/ci-review.ts"
   },
   "dependencies": {
     "@openrouter/ai-sdk-provider": "^3.0.0",
