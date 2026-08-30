@@ -13,9 +13,14 @@ export interface CodeReviewAgent {
   review(input: CodeReviewInput): Promise<CodeReviewResult>;
 }
 
-const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5';
+// Cheap-tier default on purpose — this is a demonstration agent, not a
+// production reviewer, and OpenRouter bills per token regardless of result
+// quality. Override via the modelId parameter or OPENROUTER_MODEL env var.
+const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
 
-export function createCodeReviewAgent(modelId: string = DEFAULT_MODEL): CodeReviewAgent {
+export function createCodeReviewAgent(
+  modelId: string = process.env.OPENROUTER_MODEL || DEFAULT_MODEL,
+): CodeReviewAgent {
   const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 
   let capturedReview: CodeReviewResult | undefined;
