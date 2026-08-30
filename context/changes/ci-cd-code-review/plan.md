@@ -232,8 +232,8 @@ None — net-new workflow and package files, no existing state or behavior to mi
 
 #### Automated
 
-- [x] 1.1 `npm run typecheck` passes in `packages/code-reviewer/`
-- [x] 1.2 `npm test` passes in `packages/code-reviewer/`, including the new formatter test, with zero network access
+- [x] 1.1 `npm run typecheck` passes in `packages/code-reviewer/` — b8dac07
+- [x] 1.2 `npm test` passes in `packages/code-reviewer/`, including the new formatter test, with zero network access — b8dac07
 
 #### Manual
 
