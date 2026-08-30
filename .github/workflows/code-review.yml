@@ -1,0 +1,152 @@
+name: AI Code Review
+
+# Deliberately label-gated (fires only when `ai-cr:review` is added), not
+# automatic on every PR — OpenRouter bills per token per run and this repo's
+# established policy is to never spend real API money in CI automatically
+# (see the backend suite's ci-placeholder-key pattern in pr-diff.yml/deploy.yml).
+#
+# This job is intentionally NOT registered on the "PR-Needed" ruleset
+# (Settings -> Rules -> Rulesets). A required check that only runs when a
+# label is manually added would permanently block every PR that doesn't get
+# the label. Do not add it there "for consistency" with diff/print-tests.
+on:
+  pull_request:
+    types: [labeled]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write # label/comment APIs on PRs go through the Issues REST surface
+
+# Guards against a rapid label-remove-then-re-add running (and billing) two
+# reviews for the same PR at once.
+concurrency:
+  group: code-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    # types: [labeled] fires for ANY label added to the PR, not just
+    # ai-cr:review — GitHub Actions has no trigger-level way to filter by
+    # label name. This if: is the actual filter; removing it would silently
+    # defeat the whole cost-avoidance reason this workflow is label-gated.
+    if: github.event.label.name == 'ai-cr:review'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # Idempotent: ai-cr:review was just added to trigger this run, but its
+      # color/description (and the pass/fail labels) may not exist yet if it
+      # was created ad hoc. createLabel 422s when the label already exists.
+      - name: Ensure review labels exist
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const labels = [
+              { name: 'ai-cr:review', color: 'ededed', description: 'Add to request an AI code review' },
+              { name: 'ai-cr:passed', color: '2ea44f', description: 'AI code review passed' },
+              { name: 'ai-cr:failed', color: 'd73a4a', description: 'AI code review failed' },
+            ];
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({ owner: context.repo.owner, repo: context.repo.repo, ...label });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+            }
+
+      # gh pr diff has no pathspec filtering, so lockfiles/generated paths are
+      # dropped by splitting on `diff --git` header boundaries instead — this
+      # also avoids relying on fetch-depth/base-SHA availability in checkout.
+      - name: Fetch and filter PR diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr diff "${{ github.event.pull_request.number }}" > "$GITHUB_WORKSPACE/diff.txt"
+          awk '/^diff --git a\// { skip = ($0 ~ /package-lock\.json|\/dist\//) } !skip' \
+            "$GITHUB_WORKSPACE/diff.txt" > "$GITHUB_WORKSPACE/diff.filtered.txt"
+
+      # PR title/description are attacker-controlled (any PR author sets
+      # them). They reach the composite action only as `with:` inputs, which
+      # the action itself maps into `env:` before use — never spliced into a
+      # run: script body via ${{ }} interpolation. See action.yml.
+      - name: Run AI code review
+        id: review
+        uses: ./.github/actions/code-review
+        with:
+          pr-title: ${{ github.event.pull_request.title }}
+          pr-description: ${{ github.event.pull_request.body || '' }}
+          diff-file: ${{ github.workspace }}/diff.filtered.txt
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          openrouter-model: ${{ vars.OPENROUTER_MODEL }}
+
+      # Upsert via the <!-- ai-cr:review --> marker (packages/code-reviewer's
+      # format-review-comment.ts) so removing/re-adding the label updates the
+      # same comment instead of piling up duplicates.
+      - name: Upsert review comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          COMMENT_FILE: ${{ steps.review.outputs.comment-file }}
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- ai-cr:review -->';
+            const body = fs.readFileSync(process.env.COMMENT_FILE, 'utf8');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+            const existing = comments.find((comment) => comment.body?.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body,
+              });
+            }
+
+      - name: Swap ai-cr:passed / ai-cr:failed label
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RECOMMENDATION: ${{ steps.review.outputs.recommendation }}
+        with:
+          script: |
+            const passLabel = 'ai-cr:passed';
+            const failLabel = 'ai-cr:failed';
+            const toAdd = process.env.RECOMMENDATION === 'pass' ? passLabel : failLabel;
+            const toRemove = process.env.RECOMMENDATION === 'pass' ? failLabel : passLabel;
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                name: toRemove,
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: [toAdd],
+            });
+
+      # Must run last: reflects the verdict in the job's own status (visible
+      # in the PR checks list) without ever blocking merge, since this job is
+      # not on the PR-Needed ruleset. Running this before the comment/label
+      # steps above would skip posting the very comment that explains a
+      # failing verdict.
+      - name: Fail the job on a failing verdict
+        if: steps.review.outputs.recommendation == 'fail'
+        run: exit 1
