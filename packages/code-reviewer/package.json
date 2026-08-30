@@ -1,0 +1,25 @@
+{
+  "type": "module",
+  "name": "code-reviewer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI code-review agent for InkLingo pull requests (Module 5 team agent)",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx --env-file=.env src/index.ts",
+    "build": "tsc",
+    "start": "node --env-file=.env dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openrouter/ai-sdk-provider": "^3.0.0",
+    "ai": "^7.0.85",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/json-schema": "^7.0.15",
+    "@types/node": "^26.4.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
