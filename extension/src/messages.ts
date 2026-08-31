@@ -4,10 +4,22 @@ import type { Collection, SavedEntry, TranslationResult } from './types.ts'
 // the background script (see background.ts for why). This module is the
 // contract between the two.
 
+// Mirrors `createEntryBodySchema` (backend/src/routes/api/collections/schemas.ts):
+// meanings first, each with its own per-language words and their own
+// sentences. The pairing that exists correctly in the popup's picks
+// (App.tsx) now survives to the wire instead of being split into two arrays
+// joined only by languageCode.
 export interface CreateEntryBody {
   wordOrPhrase: string
-  translations: Array<{ languageCode: string, meaningText: string, phoneticTranscription: string | null }>
-  sentences: Array<{ languageCode: string, sentenceText: string, nativeGlossText: string }>
+  senses: Array<{
+    glossText: string
+    translations: Array<{
+      languageCode: string
+      meaningText: string
+      phoneticTranscription: string | null
+      sentences: Array<{ sentenceText: string, nativeGlossText: string }>
+    }>
+  }>
 }
 
 // What the popup can say about a failure it saw itself. Deliberately a subset

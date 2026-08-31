@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { reportFromPopup, sendMessage } from '../messages.ts'
 import { languageLabel } from '../languages.ts'
 import { useSpeech, type Speech } from '../useSpeech.ts'
-import type { Collection, TranslationLanguage } from '../types.ts'
+import type { Collection, TranslationSense } from '../types.ts'
 
 // FR-013's "default to the last-used collection" — the collection has to
 // be resolved before the input box is usable, since the native/target
@@ -20,21 +20,47 @@ interface Capture {
   // what gets persisted, because the backend stamps every entry's
   // source_language_code with the collection's native language.
   wordOrPhrase: string
-  languages: TranslationLanguage[]
+  senses: TranslationSense[]
 }
 
-// One pick per target language. Indices into that language's own arrays.
-interface Selection {
-  variant: number | null
-  sentence: number | null
+// This replaces `sameMeaning` (`one.trim().toLowerCase() === other...`) as
+// the identity rule for a meaning: a frozen local copy of
+// `backend/src/domain/senseKey.ts`, per this repo's no-shared-package
+// convention. Deliberately the same weak comparison — chosen for continuity,
+// not because it is right (see that file's own note on the limit).
+function senseKey (glossText: string): string {
+  return glossText.trim().toLowerCase()
+}
+
+// One picked sentence index per (senseKey, languageCode). A nested map
+// rather than a flat string-joined key, so there is nothing to parse and
+// nothing for a meaning's gloss text to accidentally collide with.
+type SentencePicks = Record<string, Record<string, number>>
+
+function pickFor (picks: SentencePicks, key: string, languageCode: string): number | undefined {
+  return picks[key]?.[languageCode]
+}
+
+function withPick (picks: SentencePicks, key: string, languageCode: string, index: number): SentencePicks {
+  return { ...picks, [key]: { ...picks[key], [languageCode]: index } }
+}
+
+// Unchecking a meaning drops its sentence picks — the same rule
+// `selectVariant` used to apply when a variant changed, and for the same
+// reason: a stale pick must not silently reappear if the meaning is
+// re-checked later.
+function withoutSense (picks: SentencePicks, key: string): SentencePicks {
+  const next = { ...picks }
+  delete next[key]
+  return next
+}
+
+function regenKeyOf (key: string, languageCode: string): string {
+  return `${key}::${languageCode}`
 }
 
 function errorText (err: unknown): string {
   return err instanceof Error ? err.message : 'Something went wrong'
-}
-
-function sameMeaning (one: string, other: string): boolean {
-  return one.trim().toLowerCase() === other.trim().toLowerCase()
 }
 
 function speakTitle (speech: Speech, languageCode: string, speaking: boolean): string {
@@ -82,11 +108,23 @@ function SpeakButton ({ speech, itemKey, text, languageCode }: {
   )
 }
 
-function initialSelections (languages: TranslationLanguage[]): Record<string, Selection> {
-  return Object.fromEntries(languages.map((language) => [
-    language.languageCode,
-    { variant: language.variants.length > 0 ? 0 : null, sentence: null }
-  ]))
+// D-3: every meaning starts checked, mirroring the old "the first variant is
+// preselected" default — the common case is a single meaning, and checking
+// it by hand for every capture would be pure friction. Nothing is checked
+// beneath that: sentences are still an active choice.
+function initialCheckedSenses (senses: TranslationSense[]): Set<string> {
+  return new Set(senses.map((sense) => senseKey(sense.glossText)))
+}
+
+// A checked meaning with every one of its languages' sentences picked.
+// Sparse spokes do not weaken this: `sense.translations` only ever lists the
+// languages this meaning actually has a word for.
+function isSenseReady (sense: TranslationSense, checked: ReadonlySet<string>, picks: SentencePicks): boolean {
+  const key = senseKey(sense.glossText)
+  if (!checked.has(key)) {
+    return false
+  }
+  return sense.translations.every((translation) => pickFor(picks, key, translation.languageCode) !== undefined)
 }
 
 function App () {
@@ -95,9 +133,10 @@ function App () {
   const [activeCollectionId, setActiveCollectionId] = useState('')
   const [text, setText] = useState('')
   const [capture, setCapture] = useState<Capture | null>(null)
-  const [selections, setSelections] = useState<Record<string, Selection>>({})
+  const [checkedSenses, setCheckedSenses] = useState<Set<string>>(new Set())
+  const [sentencePicks, setSentencePicks] = useState<SentencePicks>({})
   const [busy, setBusy] = useState<Busy>(null)
-  const [regeneratingCode, setRegeneratingCode] = useState<string | null>(null)
+  const [regeneratingKey, setRegeneratingKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
   // Playback state lives entirely in the hook, so a failed utterance never
@@ -112,7 +151,7 @@ function App () {
   const generationRef = useRef(0)
 
   const activeCollection = collections.find((collection) => collection.id === activeCollectionId)
-  const working = busy !== null || regeneratingCode !== null
+  const working = busy !== null || regeneratingKey !== null
 
   const loadCollections = useCallback(async () => {
     const list = await sendMessage({ type: 'list-collections' })
@@ -141,7 +180,8 @@ function App () {
 
   function resetCapture () {
     setCapture(null)
-    setSelections({})
+    setCheckedSenses(new Set())
+    setSentencePicks({})
   }
 
   // Abandons whatever is in flight: the continuation will see a newer
@@ -152,7 +192,7 @@ function App () {
   function abandonInFlight () {
     generationRef.current += 1
     setBusy(null)
-    setRegeneratingCode(null)
+    setRegeneratingKey(null)
   }
 
   async function rememberCollection (id: string) {
@@ -199,17 +239,19 @@ function App () {
     setSaved(null)
   }
 
-  function selectVariant (languageCode: string, index: number) {
-    // Sentences belong to a specific variant, so switching variant drops the
-    // sentence pick rather than carrying an index into a different list.
-    setSelections((prev) => ({ ...prev, [languageCode]: { variant: index, sentence: null } }))
+  function toggleSense (key: string) {
+    const next = new Set(checkedSenses)
+    if (next.has(key)) {
+      next.delete(key)
+      setSentencePicks((prev) => withoutSense(prev, key))
+    } else {
+      next.add(key)
+    }
+    setCheckedSenses(next)
   }
 
-  function selectSentence (languageCode: string, index: number) {
-    setSelections((prev) => ({
-      ...prev,
-      [languageCode]: { variant: prev[languageCode]?.variant ?? null, sentence: index }
-    }))
+  function pickSentence (key: string, languageCode: string, index: number) {
+    setSentencePicks((prev) => withPick(prev, key, languageCode, index))
   }
 
   async function handleTranslate (event: FormEvent<HTMLFormElement>) {
@@ -233,8 +275,9 @@ function App () {
       // is logged by the backend on every request rather than only by popups
       // that stayed open long enough to report. Counting it here too would
       // count one condition twice in two systems.
-      setCapture({ input, wordOrPhrase: result.normalizedNativeText, languages: result.languages })
-      setSelections(initialSelections(result.languages))
+      setCapture({ input, wordOrPhrase: result.normalizedNativeText, senses: result.senses })
+      setCheckedSenses(initialCheckedSenses(result.senses))
+      setSentencePicks({})
     } catch (err) {
       if (generationRef.current !== generation) {
         return
@@ -249,23 +292,22 @@ function App () {
     }
   }
 
-  // FR-012 regenerates sentences only, and only under the variant the user is
-  // looking at in one language. The backend has a single all-languages call,
-  // so this re-asks for everything and then keeps just this language's fresh
-  // sentences — every other language keeps what it was first shown.
-  async function handleRegenerate (languageCode: string) {
-    const language = capture?.languages.find((candidate) => candidate.languageCode === languageCode)
-    const selectedIndex = selections[languageCode]?.variant
-    const selected = selectedIndex === null || selectedIndex === undefined
-      ? undefined
-      : language?.variants[selectedIndex]
-    if (capture === null || activeCollection === undefined || selected === undefined) {
+  // FR-012 regenerates sentences only, for one (meaning, language) pair. The
+  // backend has a single all-languages, all-meanings call, so this re-asks
+  // for everything and keeps just this pair's fresh sentences — every other
+  // meaning and language keeps what it was first shown.
+  async function handleRegenerate (glossText: string, languageCode: string) {
+    const key = senseKey(glossText)
+    const sense = capture?.senses.find((candidate) => senseKey(candidate.glossText) === key)
+    const translation = sense?.translations.find((candidate) => candidate.languageCode === languageCode)
+    if (capture === null || activeCollection === undefined || translation === undefined) {
       return
     }
 
     generationRef.current += 1
     const generation = generationRef.current
-    setRegeneratingCode(languageCode)
+    const regenKey = regenKeyOf(key, languageCode)
+    setRegeneratingKey(regenKey)
     setError(null)
     try {
       const result = await sendMessage({ type: 'translate', collectionId: activeCollection.id, text: capture.input })
@@ -274,12 +316,11 @@ function App () {
       }
       // Generation is non-deterministic, so a fresh response can order the
       // senses differently or return a different set of them — pair by
-      // meaning, never by position. Attaching one sense's sentences to
-      // another is exactly the mismatch that nesting sentences under variants
-      // exists to prevent.
-      const fresh = result.languages
-        .find((candidate) => candidate.languageCode === languageCode)
-        ?.variants.find((candidate) => sameMeaning(candidate.meaningText, selected.meaningText))
+      // senseKey, never by position. A sense is now findable across
+      // languages, which is what the entry-level model buys.
+      const fresh = result.senses
+        .find((candidate) => senseKey(candidate.glossText) === key)
+        ?.translations.find((candidate) => candidate.languageCode === languageCode)
       if (fresh === undefined) {
         // A 200 that is useless to the user. Nothing else in the system can
         // see this: the request succeeded, so no interceptor fires, and the
@@ -288,8 +329,8 @@ function App () {
         // usable") — reporting it is the only way that number stays known.
         reportFromPopup({
           name: 'DegradedAiResult',
-          message: 'regenerate returned no matching sense for the selected meaning',
-          routePath: `ai:regenerate:${languageCode}`
+          message: 'regenerate returned no matching sense/language for the selected meaning',
+          routePath: `ai:regenerate:${key}:${languageCode}`
         })
         setError(`No new ${languageLabel(languageCode)} sentences came back for this meaning — try again.`)
         return
@@ -299,26 +340,30 @@ function App () {
       // that changed meanwhile.
       setCapture((prev) => (prev === null ? prev : {
         ...prev,
-        languages: prev.languages.map((candidate) => (
-          candidate.languageCode === languageCode
+        senses: prev.senses.map((candidate) => (
+          senseKey(candidate.glossText) === key
             ? {
                 ...candidate,
-                variants: candidate.variants.map((variant, index) => (
-                  index === selectedIndex ? { ...variant, sentences: fresh.sentences } : variant
+                translations: candidate.translations.map((candidateTranslation) => (
+                  candidateTranslation.languageCode === languageCode
+                    ? { ...candidateTranslation, sentences: fresh.sentences }
+                    : candidateTranslation
                 ))
               }
             : candidate
         ))
       }))
-      // The sentence pick is dropped because its list was just replaced — but
-      // only if the user is still on the meaning that was regenerated. Forcing
-      // selectedIndex back would silently undo a variant they picked while
-      // waiting.
-      setSelections((prev) => (
-        prev[languageCode]?.variant === selectedIndex
-          ? { ...prev, [languageCode]: { variant: selectedIndex, sentence: null } }
-          : prev
-      ))
+      // The old sentence index is now stale against a brand-new list. Unlike
+      // the old per-language "current variant" model there is no race to
+      // guard here: checking is independent per meaning, so nothing else —
+      // no other sense, language, or checked state — is touched by this
+      // write, regardless of what the user did elsewhere while it was
+      // in flight.
+      setSentencePicks((prev) => {
+        const forSense = { ...prev[key] }
+        delete forSense[languageCode]
+        return { ...prev, [key]: forSense }
+      })
     } catch (err) {
       if (generationRef.current !== generation) {
         return
@@ -326,28 +371,19 @@ function App () {
       setError(errorText(err))
     } finally {
       if (generationRef.current === generation) {
-        setRegeneratingCode(null)
+        setRegeneratingKey(null)
       }
     }
   }
 
-  // A language the model returned nothing for can't be picked, so it doesn't
-  // count towards "everything chosen" — but every language that does have
-  // variants must have a complete pick before the entry is saved.
-  const pickable = capture?.languages.filter((language) => language.variants.length > 0) ?? []
-  const picks = pickable.flatMap((language) => {
-    const selection = selections[language.languageCode]
-    const variant = selection?.variant === null || selection?.variant === undefined
-      ? undefined
-      : language.variants[selection.variant]
-    const sentence = selection?.sentence === null || selection?.sentence === undefined
-      ? undefined
-      : variant?.sentences[selection.sentence]
-    return variant !== undefined && sentence !== undefined
-      ? [{ languageCode: language.languageCode, variant, sentence }]
-      : []
-  })
-  const readyToSave = pickable.length > 0 && picks.length === pickable.length
+  // D-3's restated gate: at least one meaning is checked, and every checked
+  // meaning has a sentence chosen in each language it carries a word for. A
+  // meaning the model returned no word for in some language is a sparse
+  // spoke and must not block save — `sense.translations` already excludes
+  // that language, so `isSenseReady` never asks about it.
+  const checkedSenseList = capture?.senses.filter((sense) => checkedSenses.has(senseKey(sense.glossText))) ?? []
+  const readySenses = capture?.senses.filter((sense) => isSenseReady(sense, checkedSenses, sentencePicks)) ?? []
+  const readyToSave = checkedSenseList.length > 0 && readySenses.length === checkedSenseList.length
 
   async function handleSave () {
     if (capture === null || activeCollection === undefined || !readyToSave) {
@@ -364,22 +400,30 @@ function App () {
         collectionId: activeCollection.id,
         entry: {
           wordOrPhrase: capture.wordOrPhrase,
-          translations: picks.map(({ languageCode, variant }) => ({
-            languageCode,
-            meaningText: variant.meaningText,
-            phoneticTranscription: variant.phoneticTranscription
-          })),
-          sentences: picks.map(({ languageCode, sentence }) => ({
-            languageCode,
-            sentenceText: sentence.targetText,
-            nativeGlossText: sentence.nativeGlossText
-          }))
+          senses: checkedSenseList.map((sense) => {
+            const key = senseKey(sense.glossText)
+            return {
+              glossText: sense.glossText,
+              // readyToSave guarantees every translation of a checked sense
+              // has a pick, so this mapping is total.
+              translations: sense.translations.map((translation) => {
+                const index = pickFor(sentencePicks, key, translation.languageCode) as number
+                const sentence = translation.sentences[index]
+                return {
+                  languageCode: translation.languageCode,
+                  meaningText: translation.meaningText,
+                  phoneticTranscription: translation.phoneticTranscription,
+                  sentences: [{ sentenceText: sentence.targetText, nativeGlossText: sentence.nativeGlossText }]
+                }
+              })
+            }
+          })
         }
       })
-      const languageCount = picks.length === 1 ? '1 language' : `${picks.length} languages`
+      const meaningCount = checkedSenseList.length === 1 ? '1 meaning' : `${checkedSenseList.length} meanings`
       // Shown even if the user has moved on: it names the collection the entry
       // actually landed in, so it stays true either way.
-      setSaved(`Saved “${entry.wordOrPhrase}” to ${activeCollection.name} in ${languageCount}.`)
+      setSaved(`Saved “${entry.wordOrPhrase}” to ${activeCollection.name} in ${meaningCount}.`)
       if (generationRef.current !== generation) {
         // Switched collections while the save ran. The entry is safely stored,
         // but the last-used pointer and the input box belong to the new choice
@@ -470,106 +514,98 @@ function App () {
         <section className="results">
           <p className="normalized">{capture.wordOrPhrase}</p>
 
-          {capture.languages.map((language) => {
-            const selection = selections[language.languageCode]
-            const selectedVariant = selection?.variant === null || selection?.variant === undefined
-              ? undefined
-              : language.variants[selection.variant]
+          {capture.senses.map((sense) => {
+            const key = senseKey(sense.glossText)
+            const checked = checkedSenses.has(key)
 
             return (
-              <section className="language" key={language.languageCode}>
-                <h2>{languageLabel(language.languageCode)}</h2>
+              <section className="sense" key={key}>
+                <label className="sense-toggle">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleSense(key)}
+                  />
+                  <span className="meaning">{sense.glossText}</span>
+                </label>
 
-                {/* One reason line per language, not per row — the popup is
-                    380px wide and a block can hold several variants and
-                    several sentences. */}
-                {speech.loadFailed ? (
-                  <p className="muted">
-                    Audio playback is unavailable — the voice list could not be read.
-                  </p>
-                ) : speech.ready && !speech.hasVoice(language.languageCode) && (
-                  <p className="muted">
-                    No {languageLabel(language.languageCode)} voice is installed on this computer, so playback is unavailable here.
-                  </p>
-                )}
-                {speech.error !== null && speech.error.key.startsWith(`${language.languageCode}:`) && (
-                  <p className="error">{speech.error.message}</p>
-                )}
+                {checked && sense.translations.map((translation) => {
+                  const pickedIndex = pickFor(sentencePicks, key, translation.languageCode)
+                  const regenKey = regenKeyOf(key, translation.languageCode)
+                  const errorKeyPrefix = `${key}:${translation.languageCode}:`
 
-                {language.variants.length === 0 ? (
-                  <p className="muted">Nothing came back for this language — try translating again.</p>
-                ) : (
-                  <ul className="variants">
-                    {language.variants.map((candidate, index) => (
-                      <li key={`${candidate.meaningText}-${index}`}>
-                        <label>
-                          <input
-                            type="radio"
-                            name={`variant-${language.languageCode}`}
-                            checked={selection?.variant === index}
-                            onChange={() => selectVariant(language.languageCode, index)}
-                          />
-                          <span className="meaning">{candidate.meaningText}</span>
-                          {candidate.phoneticTranscription !== null && (
-                            <span className="phonetic">/{candidate.phoneticTranscription}/</span>
-                          )}
-                        </label>
+                  return (
+                    <section className="language" key={translation.languageCode}>
+                      <h3>
+                        {languageLabel(translation.languageCode)}: {translation.meaningText}
+                        {translation.phoneticTranscription !== null && (
+                          <span className="phonetic">/{translation.phoneticTranscription}/</span>
+                        )}
                         <SpeakButton
                           speech={speech}
-                          itemKey={`${language.languageCode}:variant:${index}`}
-                          text={candidate.meaningText}
-                          languageCode={language.languageCode}
+                          itemKey={`${errorKeyPrefix}word`}
+                          text={translation.meaningText}
+                          languageCode={translation.languageCode}
                         />
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                      </h3>
 
-                {selectedVariant !== undefined && (
-                  <>
-                    <div className="sentences-header">
-                      <h2>Example sentences</h2>
-                      <button
-                        type="button"
-                        className="link"
-                        onClick={() => void handleRegenerate(language.languageCode)}
-                        disabled={working}
-                      >
-                        {regeneratingCode === language.languageCode ? 'Regenerating…' : 'New sentences'}
-                      </button>
-                    </div>
-                    <ul className="sentences">
-                      {selectedVariant.sentences.map((candidate, index) => (
-                        <li key={`${candidate.targetText}-${index}`}>
-                          <label>
-                            <input
-                              type="radio"
-                              name={`sentence-${language.languageCode}`}
-                              checked={selection?.sentence === index}
-                              onChange={() => selectSentence(language.languageCode, index)}
+                      {speech.loadFailed ? (
+                        <p className="muted">
+                          Audio playback is unavailable — the voice list could not be read.
+                        </p>
+                      ) : speech.ready && !speech.hasVoice(translation.languageCode) && (
+                        <p className="muted">
+                          No {languageLabel(translation.languageCode)} voice is installed on this computer, so playback is unavailable here.
+                        </p>
+                      )}
+                      {speech.error !== null && speech.error.key.startsWith(errorKeyPrefix) && (
+                        <p className="error">{speech.error.message}</p>
+                      )}
+
+                      <div className="sentences-header">
+                        <h4>Example sentences</h4>
+                        <button
+                          type="button"
+                          className="link"
+                          onClick={() => void handleRegenerate(sense.glossText, translation.languageCode)}
+                          disabled={working}
+                        >
+                          {regeneratingKey === regenKey ? 'Regenerating…' : 'New sentences'}
+                        </button>
+                      </div>
+                      <ul className="sentences">
+                        {translation.sentences.map((candidate, index) => (
+                          <li key={`${candidate.targetText}-${index}`}>
+                            <label>
+                              <input
+                                type="radio"
+                                name={`sentence-${key}-${translation.languageCode}`}
+                                checked={pickedIndex === index}
+                                onChange={() => pickSentence(key, translation.languageCode, index)}
+                              />
+                              <span>
+                                <span className="target">{candidate.targetText}</span>
+                                <span className="gloss">{candidate.nativeGlossText}</span>
+                              </span>
+                            </label>
+                            <SpeakButton
+                              speech={speech}
+                              itemKey={`${errorKeyPrefix}sentence:${index}`}
+                              text={candidate.targetText}
+                              languageCode={translation.languageCode}
                             />
-                            <span>
-                              <span className="target">{candidate.targetText}</span>
-                              <span className="gloss">{candidate.nativeGlossText}</span>
-                            </span>
-                          </label>
-                          <SpeakButton
-                            speech={speech}
-                            itemKey={`${language.languageCode}:sentence:${index}`}
-                            text={candidate.targetText}
-                            languageCode={language.languageCode}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )
+                })}
               </section>
             )
           })}
 
-          {pickable.length > 1 && (
-            <p className="muted">{picks.length} of {pickable.length} languages chosen</p>
+          {capture.senses.length > 1 && (
+            <p className="muted">{readySenses.length} of {capture.senses.length} meanings chosen</p>
           )}
           <button
             type="button"

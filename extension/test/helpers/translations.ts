@@ -3,17 +3,16 @@
 // these rather than hand-rolling literals per test, so a change to
 // src/types.ts surfaces in one place.
 //
-// The degenerate shapes are first-class on purpose: a language the model
-// returned nothing for (empty `variants`) and a variant with no sentences are
-// both legal backend responses (src/types.ts:30-33) and are exactly what the
-// popup's "Nothing came back" and save-gating logic exist to handle.
+// The sparse-spoke shape is first-class on purpose: a meaning present in some
+// but not all target languages is a legal backend response (src/types.ts) and
+// is exactly what the popup's per-meaning gating exists to handle.
 
 import type {
   Collection,
-  TranslationLanguage,
+  SenseTranslation,
   TranslationResult,
-  TranslationSentence,
-  TranslationVariant
+  TranslationSense,
+  TranslationSentence
 } from '../../src/types.ts'
 
 let sequence = 0
@@ -33,38 +32,42 @@ export function createSentence (overrides: Partial<TranslationSentence> = {}): T
 }
 
 // `sentences` defaults to two, because picking a sentence is a required step
-// before saving — a variant with one is a special case, not the norm.
-export function createVariant (
-  meaningText: string,
-  options: { sentences?: TranslationSentence[], sentenceCount?: number, phoneticTranscription?: string | null } = {}
-): TranslationVariant {
+// before saving — a translation with one is a special case, not the norm.
+export function createSenseTranslation (
+  languageCode: string,
+  options: { meaningText?: string, sentences?: TranslationSentence[], sentenceCount?: number, phoneticTranscription?: string | null } = {}
+): SenseTranslation {
   const count = options.sentenceCount ?? 2
   return {
-    meaningText,
+    languageCode,
+    meaningText: options.meaningText ?? `meaning-${languageCode}`,
     phoneticTranscription: options.phoneticTranscription ?? null,
     sentences: options.sentences ?? Array.from({ length: count }, () => createSentence())
   }
 }
 
-// `meanings: []` builds the "model returned nothing for this language" case.
-export function createLanguage (
-  languageCode: string,
-  options: { meanings?: string[], variants?: TranslationVariant[] } = {}
-): TranslationLanguage {
-  const meanings = options.meanings ?? [`meaning one (${languageCode})`, `meaning two (${languageCode})`]
+// `languageCodes` is the shorthand for the common case: a meaning with a word
+// in every one of those languages. Tests exercising a sparse spoke pass
+// `translations` explicitly with fewer languages than the collection targets.
+export function createSense (
+  glossText: string,
+  options: { languageCodes?: string[], translations?: SenseTranslation[] } = {}
+): TranslationSense {
+  const codes = options.languageCodes ?? ['en']
   return {
-    languageCode,
-    variants: options.variants ?? meanings.map((meaning) => createVariant(meaning))
+    glossText,
+    translations: options.translations ?? codes.map((code) => createSenseTranslation(code))
   }
 }
 
 export function createTranslationResult (
-  options: { normalizedNativeText?: string, languages?: TranslationLanguage[], languageCodes?: string[] } = {}
+  options: { normalizedNativeText?: string, senses?: TranslationSense[], glossTexts?: string[], languageCodes?: string[] } = {}
 ): TranslationResult {
+  const glosses = options.glossTexts ?? ['meaning one']
   const codes = options.languageCodes ?? ['en']
   return {
     normalizedNativeText: options.normalizedNativeText ?? 'znormalizowane słowo',
-    languages: options.languages ?? codes.map((code) => createLanguage(code))
+    senses: options.senses ?? glosses.map((glossText) => createSense(glossText, { languageCodes: codes }))
   }
 }
 

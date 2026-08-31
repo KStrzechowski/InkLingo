@@ -4,10 +4,10 @@ import App from '../../src/popup/App.tsx'
 import { deferred, installFakeBrowser, uninstallFakeBrowser, type FakeBrowser } from '../helpers/webext.ts'
 import {
   createCollection,
-  createLanguage,
+  createSense,
+  createSenseTranslation,
   createSentence,
-  createTranslationResult,
-  createVariant
+  createTranslationResult
 } from '../helpers/translations.ts'
 import type { Collection, TranslationResult } from '../../src/types.ts'
 import type { CreateEntryBody } from '../../src/messages.ts'
@@ -59,6 +59,18 @@ function startTranslate (word = 'kot'): void {
 
 function saveButton (): HTMLElement {
   return screen.getByRole('button', { name: 'Save to collection' })
+}
+
+function meaningCheckbox (glossText: string): HTMLElement {
+  return screen.getByRole('checkbox', { name: glossText })
+}
+
+function sentenceRadio (targetText: string | RegExp): HTMLElement {
+  return screen.getByRole('radio', { name: targetText })
+}
+
+function regenerateButton (): HTMLElement {
+  return screen.getByRole('button', { name: 'New sentences' })
 }
 
 function savedEntry (): CreateEntryBody {
@@ -122,121 +134,121 @@ describe('popup bootstrap', () => {
   })
 })
 
-describe('popup variant and sentence selection', () => {
+describe('popup meaning and sentence selection (D-3)', () => {
   const meanings = ['cat (the animal)', 'cat (jazz slang)']
 
-  function oneLanguageResult (): TranslationResult {
-    return createTranslationResult({
-      languages: [createLanguage('en', { meanings })]
-    })
+  function twoMeaningResult (): TranslationResult {
+    return createTranslationResult({ glossTexts: meanings, languageCodes: ['en'] })
   }
 
-  // A sentence belongs to a specific variant, so nothing is picked for the
-  // user there — but a language with variants always opens on its first one.
-  it('preselects the first variant and no sentence, leaving save disabled', async () => {
+  // Every meaning starts checked — the common case is a single meaning, and
+  // requiring a click just to enable the common case would be pure friction.
+  // Nothing beneath that is picked yet, so save stays disabled.
+  it('checks every meaning by default and leaves every sentence unpicked', async () => {
     await renderReady([createCollection()])
-    fake.handlers.translate = () => oneLanguageResult()
+    fake.handlers.translate = () => twoMeaningResult()
 
     await translate()
 
-    expect(screen.getByRole('radio', { name: meanings[0] })).toBeChecked()
-    expect(screen.getByRole('radio', { name: meanings[1] })).not.toBeChecked()
-    expect(screen.getAllByRole('radio').filter((radio) => (radio as HTMLInputElement).checked)).toHaveLength(1)
+    expect(meaningCheckbox(meanings[0])).toBeChecked()
+    expect(meaningCheckbox(meanings[1])).toBeChecked()
+    expect(screen.getAllByRole('radio').filter((radio) => (radio as HTMLInputElement).checked)).toHaveLength(0)
     expect(saveButton()).toBeDisabled()
   })
 
-  // Sentences are nested under a variant precisely so one sense's sentences
-  // can never be attached to another. Carrying the index across would defeat
-  // that.
-  it('clears the sentence pick when the variant changes', async () => {
+  // Unchecking a meaning drops its sentence picks, so re-checking it starts
+  // over rather than silently resurrecting a stale pick.
+  it('drops sentence picks when a meaning is unchecked', async () => {
     const result = createTranslationResult({
-      languages: [createLanguage('en', {
-        variants: [
-          createVariant(meanings[0], { sentences: [createSentence({ targetText: 'The cat sleeps.' })] }),
-          createVariant(meanings[1], { sentences: [createSentence({ targetText: 'That cat can play.' })] })
-        ]
-      })]
+      senses: [
+        createSense(meanings[0], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })] })
+      ]
     })
     await renderReady([createCollection()])
     fake.handlers.translate = () => result
 
     await translate()
-    fireEvent.click(screen.getByRole('radio', { name: /The cat sleeps/ }))
+    fireEvent.click(sentenceRadio(/The cat sleeps/))
     expect(saveButton()).toBeEnabled()
 
-    fireEvent.click(screen.getByRole('radio', { name: meanings[1] }))
+    fireEvent.click(meaningCheckbox(meanings[0]))
+    expect(screen.queryByRole('radio', { name: /The cat sleeps/ })).not.toBeInTheDocument()
 
-    expect(screen.getByRole('radio', { name: /That cat can play/ })).not.toBeChecked()
+    fireEvent.click(meaningCheckbox(meanings[0]))
+    expect(sentenceRadio(/The cat sleeps/)).not.toBeChecked()
     expect(saveButton()).toBeDisabled()
   })
 
-  // The model can legally return nothing for a language (src/types.ts:30-33).
-  // That language cannot be picked, so it must not hold the save hostage.
-  it('excludes a language with no variants from the save gate', async () => {
+  // The model can legally omit a language from one meaning (a sparse spoke).
+  // That language simply has no row under this meaning, and must not hold the
+  // save gate hostage for the languages it does have.
+  it('a sparse spoke does not block save for a checked meaning', async () => {
     const result = createTranslationResult({
-      languages: [
-        createLanguage('en', {
-          variants: [createVariant('cat', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })]
-        }),
-        createLanguage('de', { meanings: [] })
+      senses: [
+        createSense('budowla obronna', {
+          translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'The castle stands.' })] })]
+        })
       ]
     })
     await renderReady([createCollection({ targetLanguageCodes: ['en', 'de'] })])
     fake.handlers.translate = () => result
 
     await translate()
+    // Only English is offered for this meaning — no German row exists to pick.
+    expect(screen.queryByRole('heading', { name: /German/i })).not.toBeInTheDocument()
 
-    expect(screen.getByText('Nothing came back for this language — try translating again.')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('radio', { name: /The cat sleeps/ }))
+    fireEvent.click(sentenceRadio(/The castle stands/))
 
     expect(saveButton()).toBeEnabled()
   })
 
-  it('counts only pickable languages in the progress line', async () => {
+  it('counts fully-picked meanings in the progress line', async () => {
     const result = createTranslationResult({
-      languages: [
-        createLanguage('en', { meanings: ['cat'] }),
-        createLanguage('de', { meanings: ['Katze'] }),
-        createLanguage('fr', { meanings: [] })
+      senses: [
+        createSense(meanings[0], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })] }),
+        createSense(meanings[1], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'That cat can play.' })] })] })
       ]
     })
-    await renderReady([createCollection({ targetLanguageCodes: ['en', 'de', 'fr'] })])
+    await renderReady([createCollection()])
     fake.handlers.translate = () => result
 
     await translate()
 
-    expect(screen.getByText('0 of 2 languages chosen')).toBeInTheDocument()
+    expect(screen.getByText('0 of 2 meanings chosen')).toBeInTheDocument()
+
+    fireEvent.click(sentenceRadio(/The cat sleeps/))
+
+    expect(screen.getByText('1 of 2 meanings chosen')).toBeInTheDocument()
   })
 
-  it('keeps save disabled when no language came back with anything', async () => {
+  it('keeps save disabled while any checked meaning still needs a sentence', async () => {
     const result = createTranslationResult({
-      languages: [
-        createLanguage('en', { meanings: [] }),
-        createLanguage('de', { meanings: [] })
+      senses: [
+        createSense(meanings[0], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })] }),
+        createSense(meanings[1], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'That cat can play.' })] })] })
       ]
     })
-    await renderReady([createCollection({ targetLanguageCodes: ['en', 'de'] })])
+    await renderReady([createCollection()])
     fake.handlers.translate = () => result
 
     await translate()
+    fireEvent.click(sentenceRadio(/The cat sleeps/))
 
-    expect(screen.getAllByText('Nothing came back for this language — try translating again.')).toHaveLength(2)
+    // The second meaning is still checked (default) but has no sentence pick.
     expect(saveButton()).toBeDisabled()
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
   })
 
-  // The pairing is the point: each language's saved sentence must be one of
-  // the sentences belonging to that language's saved meaning.
-  it('saves each language paired with its own chosen variant and sentence', async () => {
+  // The pairing is the point: each meaning's saved word and sentence are its
+  // own, not shared across languages or meanings.
+  it('saves each checked meaning with its own words and sentences per language', async () => {
     const result = createTranslationResult({
       normalizedNativeText: 'kot',
-      languages: [
-        createLanguage('en', {
-          variants: [createVariant('cat', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })]
-        }),
-        createLanguage('de', {
-          variants: [createVariant('Katze', { sentences: [createSentence({ targetText: 'Die Katze schläft.' })] })]
+      senses: [
+        createSense('zwierzę domowe', {
+          translations: [
+            createSenseTranslation('en', { meaningText: 'cat', sentences: [createSentence({ targetText: 'The cat sleeps.', nativeGlossText: 'Kot śpi.' })] }),
+            createSenseTranslation('de', { meaningText: 'Katze', sentences: [createSentence({ targetText: 'Die Katze schläft.', nativeGlossText: 'Kot śpi.' })] })
+          ]
         })
       ]
     })
@@ -251,59 +263,92 @@ describe('popup variant and sentence selection', () => {
     })
 
     await translate()
-    fireEvent.click(screen.getByRole('radio', { name: /The cat sleeps/ }))
-    fireEvent.click(screen.getByRole('radio', { name: /Die Katze schläft/ }))
+    fireEvent.click(sentenceRadio(/The cat sleeps/))
+    fireEvent.click(sentenceRadio(/Die Katze schläft/))
     fireEvent.click(saveButton())
 
     await screen.findByText(/Saved/)
     const entry = savedEntry()
     expect(entry.wordOrPhrase).toBe('kot')
-    expect(entry.translations.map((one) => [one.languageCode, one.meaningText])).toEqual([
-      ['en', 'cat'],
-      ['de', 'Katze']
-    ])
-    expect(entry.sentences.map((one) => [one.languageCode, one.sentenceText])).toEqual([
-      ['en', 'The cat sleeps.'],
-      ['de', 'Die Katze schläft.']
-    ])
+    expect(entry.senses).toEqual([{
+      glossText: 'zwierzę domowe',
+      translations: [
+        {
+          languageCode: 'en',
+          meaningText: 'cat',
+          phoneticTranscription: null,
+          sentences: [{ sentenceText: 'The cat sleeps.', nativeGlossText: 'Kot śpi.' }]
+        },
+        {
+          languageCode: 'de',
+          meaningText: 'Katze',
+          phoneticTranscription: null,
+          sentences: [{ sentenceText: 'Die Katze schläft.', nativeGlossText: 'Kot śpi.' }]
+        }
+      ]
+    }])
+  })
+
+  // Two meanings, each fully picked, both land in the save payload.
+  it('saves every fully-picked checked meaning, not just one', async () => {
+    const result = createTranslationResult({
+      senses: [
+        createSense(meanings[0], { translations: [createSenseTranslation('en', { meaningText: 'cat', sentences: [createSentence({ targetText: 'The cat sleeps.' })] })] }),
+        createSense(meanings[1], { translations: [createSenseTranslation('en', { meaningText: 'cool cat', sentences: [createSentence({ targetText: 'That cat can play.' })] })] })
+      ]
+    })
+    await renderReady([createCollection()])
+    fake.handlers.translate = () => result
+    fake.handlers['save-entry'] = () => ({
+      id: 'entry-1',
+      wordOrPhrase: 'znormalizowane słowo',
+      sourceLanguageCode: 'pl',
+      createdAt: '2026-08-01T00:00:00.000Z'
+    })
+
+    await translate()
+    fireEvent.click(sentenceRadio(/The cat sleeps/))
+    fireEvent.click(sentenceRadio(/That cat can play/))
+    fireEvent.click(saveButton())
+
+    await screen.findByText(/Saved/)
+    expect(savedEntry().senses.map((sense) => sense.glossText)).toEqual(meanings)
   })
 
   it('clears the capture and remembers the choice when the collection changes', async () => {
     const first = createCollection({ name: 'First' })
     const second = createCollection({ name: 'Second' })
     await renderReady([first, second])
-    fake.handlers.translate = () => oneLanguageResult()
+    fake.handlers.translate = () => createTranslationResult()
 
     await translate()
     fireEvent.change(screen.getByRole('combobox'), { target: { value: second.id } })
 
     expect(screen.queryByRole('button', { name: 'Save to collection' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(fake.store[LAST_COLLECTION_KEY]).toBe(second.id)
   })
 })
 
 describe('popup sentence regeneration', () => {
+  const meanings = ['cat (the animal)', 'cat (jazz slang)']
+
   // Generation is non-deterministic: a fresh response can order the senses
   // differently or return a different set. Pairing by position would attach
   // one sense's sentences to another.
   it('replaces the sentences of the same meaning even when the order changes', async () => {
     const first = createTranslationResult({
-      languages: [createLanguage('en', {
-        variants: [
-          createVariant('cat (the animal)', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] }),
-          createVariant('cat (jazz slang)', { sentences: [createSentence({ targetText: 'That cat can play.' })] })
-        ]
-      })]
+      senses: [
+        createSense(meanings[0], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })] }),
+        createSense(meanings[1], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'That cat can play.' })] })] })
+      ]
     })
     // Same two meanings, reversed, with new sentences.
     const second = createTranslationResult({
-      languages: [createLanguage('en', {
-        variants: [
-          createVariant('cat (jazz slang)', { sentences: [createSentence({ targetText: 'A cool cat indeed.' })] }),
-          createVariant('cat (the animal)', { sentences: [createSentence({ targetText: 'A cat crossed the road.' })] })
-        ]
-      })]
+      senses: [
+        createSense(meanings[1], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'A cool cat indeed.' })] })] }),
+        createSense(meanings[0], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'A cat crossed the road.' })] })] })
+      ]
     })
     let calls = 0
     await renderReady([createCollection()])
@@ -313,25 +358,24 @@ describe('popup sentence regeneration', () => {
     }
 
     await translate()
-    fireEvent.click(screen.getByRole('button', { name: 'New sentences' }))
+    // Both meanings are checked by default; regenerate the first one's sentences.
+    const regenerateButtons = screen.getAllByRole('button', { name: 'New sentences' })
+    fireEvent.click(regenerateButtons[0])
 
     expect(await screen.findByRole('radio', { name: /A cat crossed the road/ })).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: /The cat sleeps/ })).not.toBeInTheDocument()
-    // The jazz-slang sentences belong to a meaning the user is not looking at
-    // and must not leak into the selected one.
+    // The jazz-slang meaning was not the one regenerated, so its own
+    // (unrelated) sentence list must be untouched.
+    expect(screen.getByRole('radio', { name: /That cat can play/ })).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: /A cool cat indeed/ })).not.toBeInTheDocument()
   })
 
   it('reports a meaning the model no longer offers instead of silently keeping the old sentences', async () => {
     const first = createTranslationResult({
-      languages: [createLanguage('en', {
-        variants: [createVariant('cat (the animal)', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })]
-      })]
+      senses: [createSense(meanings[0], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })] })]
     })
     const second = createTranslationResult({
-      languages: [createLanguage('en', {
-        variants: [createVariant('feline', { sentences: [createSentence({ targetText: 'A feline appeared.' })] })]
-      })]
+      senses: [createSense('feline', { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'A feline appeared.' })] })] })]
     })
     let calls = 0
     await renderReady([createCollection()])
@@ -341,11 +385,45 @@ describe('popup sentence regeneration', () => {
     }
 
     await translate()
-    fireEvent.click(screen.getByRole('button', { name: 'New sentences' }))
+    fireEvent.click(regenerateButton())
 
     expect(await screen.findByText('No new English sentences came back for this meaning — try again.')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /The cat sleeps/ })).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: /A feline appeared/ })).not.toBeInTheDocument()
+  })
+
+  // Regenerating one meaning's language must not disturb an unrelated
+  // meaning's own checked state or sentence pick — independent by
+  // construction now that checking is per meaning, not a shared radio.
+  it('leaves an unrelated meaning\'s checked state and pick untouched by another meaning\'s regeneration', async () => {
+    const first = createTranslationResult({
+      senses: [
+        createSense(meanings[0], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })] }),
+        createSense(meanings[1], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'That cat can play.' })] })] })
+      ]
+    })
+    const pending = deferred<TranslationResult>()
+    let calls = 0
+    await renderReady([createCollection()])
+    fake.handlers.translate = () => {
+      calls += 1
+      return calls === 1 ? first : pending.promise
+    }
+
+    await translate()
+    fireEvent.click(sentenceRadio(/That cat can play/))
+    const regenerateButtons = screen.getAllByRole('button', { name: 'New sentences' })
+    fireEvent.click(regenerateButtons[0])
+
+    await act(async () => {
+      pending.resolve(createTranslationResult({
+        senses: [createSense(meanings[0], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'A cat crossed the road.' })] })] })]
+      }))
+      await pending.promise
+    })
+
+    expect(meaningCheckbox(meanings[1])).toBeChecked()
+    expect(sentenceRadio(/That cat can play/)).toBeChecked()
   })
 })
 
@@ -356,8 +434,6 @@ describe('popup sentence regeneration', () => {
 // churn in this file never surfaced them, and why the deferred responses in
 // test/helpers/webext.ts exist.
 describe('popup in-flight races', () => {
-  const meanings = ['cat (the animal)', 'cat (jazz slang)']
-
   // E-1. The backend only rejects the mismatch when the two collections'
   // target languages differ (backend/src/routes/api/collections/index.ts:289-296);
   // when they overlap — as here — it writes the entry, stamping the *new*
@@ -378,7 +454,7 @@ describe('popup in-flight races', () => {
       await pending.promise
     })
 
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save to collection' })).not.toBeInTheDocument()
     // And the abandoned call must not strand the form: dropping a result is
     // not the same as leaving the UI mid-request forever.
@@ -408,25 +484,26 @@ describe('popup in-flight races', () => {
     const first = createCollection({ name: 'First' })
     const second = createCollection({ name: 'Second' })
     const pending = deferred<TranslationResult>()
+    const meanings = ['cat (the animal)', 'cat (jazz slang)']
     let calls = 0
     await renderReady([first, second])
     fake.handlers.translate = () => {
       calls += 1
       return calls === 1
-        ? createTranslationResult({ languages: [createLanguage('en', { meanings })] })
+        ? createTranslationResult({ glossTexts: meanings, languageCodes: ['en'] })
         : pending.promise
     }
 
     await translate()
-    fireEvent.click(screen.getByRole('button', { name: 'New sentences' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'New sentences' })[0])
     fireEvent.change(screen.getByRole('combobox'), { target: { value: second.id } })
 
     await act(async () => {
-      pending.resolve(createTranslationResult({ languages: [createLanguage('en', { meanings })] }))
+      pending.resolve(createTranslationResult({ glossTexts: meanings, languageCodes: ['en'] }))
       await pending.promise
     })
 
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save to collection' })).not.toBeInTheDocument()
   })
 
@@ -438,15 +515,14 @@ describe('popup in-flight races', () => {
     const first = createCollection({ name: 'First' })
     const second = createCollection({ name: 'Second' })
     const pending = deferred<TranslationResult>()
+    const meanings = ['cat (the animal)', 'cat (jazz slang)']
     let calls = 0
     await renderReady([first, second])
     fake.handlers.translate = () => {
       calls += 1
       if (calls === 1) {
         return createTranslationResult({
-          languages: [createLanguage('en', {
-            variants: [createVariant(meanings[0], { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })]
-          })]
+          senses: [createSense(meanings[0], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })] })]
         })
       }
       if (calls === 2) {
@@ -454,28 +530,24 @@ describe('popup in-flight races', () => {
       }
       return createTranslationResult({
         normalizedNativeText: 'pies',
-        languages: [createLanguage('en', {
-          variants: [createVariant('dog', { sentences: [createSentence({ targetText: 'The dog barks.' })] })]
-        })]
+        senses: [createSense('dog', { translations: [createSenseTranslation('en', { meaningText: 'dog', sentences: [createSentence({ targetText: 'The dog barks.' })] })] })]
       })
     }
 
     await translate('kot')
-    fireEvent.click(screen.getByRole('button', { name: 'New sentences' }))
+    fireEvent.click(regenerateButton())
     // Abandons the regeneration and frees the form for the next word.
     fireEvent.change(screen.getByRole('combobox'), { target: { value: second.id } })
     await translate('pies')
 
     await act(async () => {
       pending.resolve(createTranslationResult({
-        languages: [createLanguage('en', {
-          variants: [createVariant(meanings[0], { sentences: [createSentence({ targetText: 'A cat crossed the road.' })] })]
-        })]
+        senses: [createSense(meanings[0], { translations: [createSenseTranslation('en', { sentences: [createSentence({ targetText: 'A cat crossed the road.' })] })] })]
       }))
       await pending.promise
     })
 
-    expect(screen.getByRole('radio', { name: 'dog' })).toBeInTheDocument()
+    expect(meaningCheckbox('dog')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /The dog barks/ })).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: /A cat crossed the road/ })).not.toBeInTheDocument()
   })
@@ -490,14 +562,12 @@ describe('popup in-flight races', () => {
     const pending = deferred<{ id: string, wordOrPhrase: string, sourceLanguageCode: string, createdAt: string }>()
     await renderReady([first, second])
     fake.handlers.translate = () => createTranslationResult({
-      languages: [createLanguage('en', {
-        variants: [createVariant('cat', { sentences: [createSentence({ targetText: 'The cat sleeps.' })] })]
-      })]
+      senses: [createSense('cat', { translations: [createSenseTranslation('en', { meaningText: 'cat', sentences: [createSentence({ targetText: 'The cat sleeps.' })] })] })]
     })
     fake.handlers['save-entry'] = () => pending.promise
 
     await translate('kot')
-    fireEvent.click(screen.getByRole('radio', { name: /The cat sleeps/ }))
+    fireEvent.click(sentenceRadio(/The cat sleeps/))
     fireEvent.click(saveButton())
     fireEvent.change(screen.getByRole('combobox'), { target: { value: second.id } })
 
@@ -515,47 +585,5 @@ describe('popup in-flight races', () => {
     // The entry still went to the collection that was active when it was saved.
     const sent = fake.sent.find((candidate) => candidate.type === 'save-entry')
     expect(sent !== undefined && sent.type === 'save-entry' && sent.collectionId).toBe(first.id)
-  })
-
-  // E-3. The tail of handleRegenerate used to write back the variant index it
-  // read before the await, silently undoing a pick made while waiting.
-  it('keeps a variant picked while its sentences were regenerating', async () => {
-    const pending = deferred<TranslationResult>()
-    let calls = 0
-    await renderReady([createCollection()])
-    fake.handlers.translate = () => {
-      calls += 1
-      return calls === 1
-        ? createTranslationResult({
-            languages: [createLanguage('en', {
-              variants: [
-                createVariant(meanings[0], { sentences: [createSentence({ targetText: 'The cat sleeps.' })] }),
-                createVariant(meanings[1], { sentences: [createSentence({ targetText: 'That cat can play.' })] })
-              ]
-            })]
-          })
-        : pending.promise
-    }
-
-    await translate()
-    fireEvent.click(screen.getByRole('button', { name: 'New sentences' }))
-    fireEvent.click(screen.getByRole('radio', { name: meanings[1] }))
-
-    await act(async () => {
-      pending.resolve(createTranslationResult({
-        languages: [createLanguage('en', {
-          variants: [createVariant(meanings[0], { sentences: [createSentence({ targetText: 'A cat crossed the road.' })] })]
-        })]
-      }))
-      await pending.promise
-    })
-
-    expect(screen.getByRole('radio', { name: meanings[1] })).toBeChecked()
-    expect(screen.getByRole('radio', { name: /That cat can play/ })).toBeInTheDocument()
-
-    // The regenerated sentences still landed under the meaning they were asked
-    // for — dropping the forced selection must not drop the fresh sentences.
-    fireEvent.click(screen.getByRole('radio', { name: meanings[0] }))
-    expect(screen.getByRole('radio', { name: /A cat crossed the road/ })).toBeInTheDocument()
   })
 })

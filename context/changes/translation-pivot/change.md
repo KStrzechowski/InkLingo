@@ -289,3 +289,25 @@ Investigate Open English WordNet synsets first.
 - `context/foundation/lessons.md:33-38` applies: this touches
   `backend/src/ai/`, so it needs real-API verification with recorded
   measurements, not just stubbed tests.
+
+**Confirming evidence (2026-08-29, live reproduction).** Captured "track" in
+the extension popup and hit regenerate against the real dev backend. The
+first response (`normalizedNativeText: "track"`, 3 senses: path/trail, song
+track, verb "to track") and the regenerate response
+(`normalizedNativeText: "ślad"`, 3 differently-framed senses: mark/trace left
+by something, song/piece of music, rail/track for vehicles) are not
+alternates of the same capture — the regenerate normalized the word
+differently, so the popup would render an entirely different word's senses
+under a "regenerate" action the user expects to vary *within* the same word.
+This is exactly the mechanism this section already names: the request the
+extension re-sends is identical, so nothing pins the second call to the
+first's identity, and the model is free to re-derive a different
+`normalizedNativeText` for a genuinely polysemous input. One added detail the
+theoretical note above doesn't cover: the regenerate response's first sense
+carries the phonetic transcription `/træk/` under the meaning "mark or line
+left behind by something" — a leftover from the first call's normalization
+bleeding into the second's unrelated sense, not just a different top-level
+word choice. Raw responses saved alongside this file as `translate_response.json`
+(first capture) and `translate_response_2.json` (regenerate).
+Recorded here as confirming evidence only — the fix is this change's job, not
+this note's.

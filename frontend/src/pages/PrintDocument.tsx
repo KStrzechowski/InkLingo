@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { CollectionDetail } from '../api/collections'
 import { printLabels, printLanguageNamer } from './printLabels'
 import { measurePrintPages, packPrintPages } from './printPagination'
-import { buildBands } from './printRows'
+import { buildBands, phoneticTokens, senseRowSpans } from './printRows'
 import './print.css'
 
 // The printable document itself, given a collection that is already loaded.
@@ -38,6 +38,39 @@ function PrintDocument ({ collection }: { collection: CollectionDetail }) {
       document.body.classList.remove('print-mode')
     }
   }, [])
+
+  // A phonetic token is always rendered nowrap (print.css) so a compound
+  // transcription's variants each move as a unit rather than fragmenting
+  // mid-symbol — but that means a token wider than its own column, even
+  // alone, has nowhere to go and silently overflows instead of wrapping.
+  // This measures every rendered token against its cell's available width
+  // and marks only the ones that are actually too wide to ever fit unbroken,
+  // letting *just* those wrap internally — everything else keeps the
+  // "share the line when it fits, drop below when it doesn't" behaviour
+  // unchanged. Declared after the print-mode effect above (needs the sheet's
+  // real font metrics) and before the pagination effect below: a token that
+  // starts wrapping changes its row's height, which pagination must measure
+  // *after* this resolves, not before.
+  useLayoutEffect(() => {
+    const root = documentRef.current
+    if (root === null) {
+      return
+    }
+    for (const span of root.querySelectorAll<HTMLElement>('.print-phonetic')) {
+      // Reset first: a different collection swapped in must not inherit a
+      // wrap decision made for the previous one's content.
+      span.classList.remove('print-phonetic--wrap')
+      const cell = span.closest('td')
+      if (cell === null) {
+        continue
+      }
+      const style = getComputedStyle(cell)
+      const available = cell.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      if (span.getBoundingClientRect().width > available) {
+        span.classList.add('print-phonetic--wrap')
+      }
+    }
+  }, [collection])
 
   // A different collection is a different document, so its page breaks have to
   // be measured again rather than inherited.
@@ -131,36 +164,55 @@ function PrintDocument ({ collection }: { collection: CollectionDetail }) {
               <thead>
                 <tr>
                   <th scope="col">{labels.word}</th>
-                  <th scope="col">{labels.language}</th>
+                  <th scope="col">{labels.meaning}</th>
                   <th scope="col">{labels.translation}</th>
                   <th scope="col">{labels.sentenceNative}</th>
                   <th scope="col">{labels.sentenceTarget}</th>
                 </tr>
               </thead>
               {bandIndexes.map((bandIndex) => {
-                const { entry, rows } = bands[bandIndex]
+                const { entry, rows, senseRowCounts } = bands[bandIndex]
+                // One entry per row, aligned with `rows`: the rowSpan for a row
+                // that opens its meaning's group, or null for one covered by an
+                // earlier row's rowSpan.
+                const glossSpans = senseRowSpans(senseRowCounts)
+
                 return (
                   <tbody key={entry.id}>
                     {rows.length === 0 ? (
-                      // No renderable language at all — still print the word, so
+                      // No renderable meaning at all — still print the word, so
                       // nothing silently vanishes from the sheet.
                       <tr>
-                        <th scope="row" lang={entry.sourceLanguageCode}>{entry.wordOrPhrase}</th>
+                        <th scope="row" lang={entry.sourceLanguageCode} className="print-word">{entry.wordOrPhrase}</th>
                         <td colSpan={4} />
                       </tr>
                     ) : (
                       rows.map((row, index) => (
-                        <tr key={`${entry.id}:${row.languageCode}`}>
+                        <tr key={`${entry.id}:${row.glossText}:${row.languageCode}`}>
                           {index === 0 && (
                             // The captured word is not necessarily in the native
                             // language — an entry can be captured in one of the
                             // collection's target languages too.
-                            <th scope="row" rowSpan={rows.length} lang={entry.sourceLanguageCode}>
+                            <th scope="row" rowSpan={rows.length} lang={entry.sourceLanguageCode} className="print-word">
                               {entry.wordOrPhrase}
                             </th>
                           )}
-                          <td className="print-language">{languageName(row.languageCode)}</td>
+                          {glossSpans[index] !== null && (
+                            // A meaning's gloss, written in the native language
+                            // like the word cell beside it — this is the row-group
+                            // header D-1 exists to add, spanning only this
+                            // meaning's own rows rather than the whole band.
+                            <th scope="rowgroup" rowSpan={glossSpans[index]} lang={collection.nativeLanguageCode}>
+                              {row.glossText}
+                            </th>
+                          )}
                           <td lang={row.languageCode}>
+                            {/* The language code stands in for the old Language
+                                column: with meanings now the row-group and
+                                languages the rows beneath them, this is what
+                                tells the two apart at a glance (design mockup:
+                                'EN castle' / 'DE Schloss'). */}
+                            <span className="print-language-code">{row.languageCode.toUpperCase()}</span>
                             {row.meaningText}
                             {row.phoneticTranscription !== null && (
                               <>
@@ -175,8 +227,22 @@ function PrintDocument ({ collection }: { collection: CollectionDetail }) {
                                 {/* Rendered verbatim: stored transcriptions already
                                     carry their own delimiters, and inconsistently —
                                     '/ˈfuːd/' for English, '[ɪˈda]' for Russian.
-                                    Wrapping them again printed 'food //ˈfuːd//'. */}
-                                <span className="print-phonetic">{row.phoneticTranscription}</span>
+                                    Wrapping them again printed 'food //ˈfuːd//'.
+
+                                    A compound transcription (two variants joined by
+                                    whitespace, e.g. a meaning with no single-word
+                                    equivalent) is split into its own atomic nowrap
+                                    span per token — same reasoning as the space
+                                    above, extended between variants: keeping the
+                                    whitespace as plain text here (not inside a span)
+                                    is what lets it wrap between variants instead of
+                                    silently overflowing the column as one
+                                    indivisible run would. */}
+                                {phoneticTokens(row.phoneticTranscription).map((token, index) => (
+                                  /^\s+$/.test(token)
+                                    ? token
+                                    : <span className="print-phonetic" key={index}>{token}</span>
+                                ))}
                               </>
                             )}
                           </td>

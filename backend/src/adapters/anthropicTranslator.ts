@@ -1,8 +1,14 @@
 import { Anthropic } from '@anthropic-ai/sdk'
-import { TranslationDraft, type RequestedLanguages } from '../domain/translationDraft.ts'
+import {
+  TranslationDraft,
+  senseTranslationFromProviderPayload,
+  type DraftSenseTranslation,
+  type RequestedLanguages
+} from '../domain/translationDraft.ts'
 import {
   type Translator,
   type TranslationRequest,
+  type SenseTranslationRequest,
   DegenerateDraftError,
   MalformedDraftError,
   TranslatorUnavailableError
@@ -17,19 +23,51 @@ import {
 export const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001'
 export const TRANSLATION_TOOL_NAME = 'return_translation'
 
-// One response now covers every target language the collection teaches, so
-// the output ceiling scales with how many were asked for. max_tokens is a cap,
-// not a charge — sizing it generously costs nothing and a too-small value
-// truncates the tool_use JSON mid-object, which fails to parse entirely.
-export const MAX_TOKENS_PER_LANGUAGE = 2048
+// The output ceiling. One response covers every target language the collection
+// teaches, and — since the meaning-first inversion — every distinct meaning of
+// the word, so the volume scales with **senses × languages**, not languages
+// alone. max_tokens is a cap, not a charge: sizing it generously costs nothing
+// and a too-small value truncates the tool_use JSON mid-object, which fails to
+// parse entirely.
+//
+// The ceiling is 512 × 4 × 5 = 10 240 tokens for the largest collection this
+// app allows (MAX_TARGET_LANGUAGES = 5) — the same ceiling the language-first
+// budget (2048 × 5) produced, re-derived on the axis that now drives the
+// output. `MAX_BUDGETED_SENSES` is a budgeting assumption, not a guarantee:
+// `maxItems` is advisory on a tool schema, so a word with more meanings than
+// this can still overrun. Measured against the real API in Phase 7
+// (`measure-capture.mjs`, 13 varied calls, 5-language cases): actual output
+// ran 776-1,706 tokens against a 10,240 ceiling — 83-92% headroom — so this
+// number has room before it needs to move.
+export const MAX_TOKENS_PER_SENSE_LANGUAGE = 512
+export const MAX_BUDGETED_SENSES = 4
 
-// The model intermittently returns a structurally-valid response whose
-// `variants` arrays are all empty — measured at roughly 3 in 34 calls against
-// the real API, clustered rather than uniform, and not reproducible on demand.
-// Nothing in the request distinguishes a good roll from a bad one, so the
-// application retries rather than trying to prevent it. The empty response is
-// also the cheap, fast one (~167 output tokens, ~1.3s), so the retry costs
-// little and stays well inside the route's timeout.
+// The model can return a structurally-valid response carrying nothing usable
+// at all — `draft.isDegenerate()`. Phase 7 re-measured this against the
+// meaning-first schema (`measure-capture.mjs`, 13 varied calls: ambiguous
+// words, unambiguous words, phrases, 1 and 5 target languages, a word
+// captured from a target language, an obscure word): **zero** were
+// degenerate. The historical "~3 in 34" figure was measured against the
+// language-first schema this change replaced, whose per-language meaning
+// arrays could each come back empty independently; it was never evidence
+// about this schema, and the small sample here doesn't disprove a
+// similarly-rare rate either — 13 trials would show zero failures roughly
+// 30% of the time even if the true rate were still ~9%. The retry stays: it
+// only fires on an actual empty response, which is cheap when it does
+// (`lessons.md`'s own measurement — ~167 output tokens, ~1.3s), so the cost
+// of keeping a safety net the sample didn't reproduce is low, while the cost
+// of removing it and being wrong is a user-visible 502.
+//
+// A different, non-empty failure mode Phase 7's measurement *did* surface:
+// the model can return something well-formed and entirely wrong. `kara`
+// (Polish "punishment/fine") came back three separate times, unprompted, as
+// jewelry or anatomy ("bransoleta"/bangle, "nape of the neck") — plausible
+// English translations for words that are not `kara`. `isDegenerate()`
+// cannot see this, because the response is not empty; nothing downstream can
+// see it either, because it is not malformed. A retry would not help — the
+// three rolls disagreed with each other, not just with the truth — so this is
+// recorded as a known model-accuracy limit, not something this retry is
+// positioned to catch.
 //
 // This lives in the adapter, not the route and not the value object, because
 // only the adapter knows a re-ask is cheap *for this provider*. A different
@@ -45,44 +83,60 @@ const EMPTY_DRAFT_RETRIES = 1
 const PROVIDER_MAX_RETRIES = 1
 const PROVIDER_TIMEOUT_MS = 15_000
 
-// Moved verbatim from ai/translate.ts:49-107. The bytes sent to the model are
-// unchanged by this refactor, which is what keeps translation-pivot's cost
-// baseline valid and this change free of a live-API gate. `strict: true` and a
-// required `detectedLanguageCode` are deliberate follow-ups, not omissions.
+// Meaning-first. The schema used to ask for one block per target language,
+// each holding its own list of that language's meanings, which made the model
+// enumerate meanings independently inside each language: with five target
+// languages there were five unrelated lists and no way to tell
+// which German word went with which English one. An entry-level sense cannot
+// be assembled from that after the fact — grouping it would mean pairing across
+// languages by position, the exact failure the nesting exists to prevent — so
+// the model does the grouping once, here.
+//
+// The tool NAME stays `return_translation`: `providerBoundary.test.ts:77-80`
+// asserts that string appears in this file and nowhere else, and a second name
+// would turn it red. `strict: true` and a required `detectedLanguageCode` are
+// deliberate follow-ups, not omissions.
 export const translationTool: Anthropic.Tool = {
   name: TRANSLATION_TOOL_NAME,
-  description: 'Return structured translation variants with IPA phonetics and bilingual example sentences for a captured word or phrase, for every requested target language.',
+  description: 'Return the distinct meanings of a captured word or phrase, each with its translation into every requested target language, with IPA phonetics and bilingual example sentences.',
   input_schema: {
     type: 'object',
-    required: ['normalizedNativeText', 'languages'],
+    required: ['normalizedNativeText', 'senses'],
     properties: {
       normalizedNativeText: {
         type: 'string',
         description: 'The input word/phrase normalized to its base form in the native language, regardless of which language it was typed in.'
       },
-      languages: {
+      senses: {
         type: 'array',
-        description: 'One entry per requested target language, in the order they were requested.',
+        // Both bounds are advisory on a tool schema rather than enforced.
+        // minItems costs nothing and states the intent the empty-result retry
+        // below exists to backstop; maxItems states the assumption
+        // MAX_BUDGETED_SENSES prices max_tokens against.
+        minItems: 1,
+        maxItems: MAX_BUDGETED_SENSES,
+        description: 'One entry per distinct meaning of the word. Never empty.',
         items: {
           type: 'object',
-          required: ['languageCode', 'variants'],
+          required: ['glossText', 'translations'],
           properties: {
-            languageCode: {
+            glossText: {
               type: 'string',
-              description: 'The target language code this entry covers, copied exactly from the requested list.'
+              description: 'This meaning named in the NATIVE language — a short phrase distinguishing it from the word\'s other meanings, not a translation of the word. The same meaning must carry the same wording here no matter which target languages it appears under.'
             },
-            variants: {
+            translations: {
               type: 'array',
-              // minItems is advisory on a tool schema rather than enforced,
-              // but it costs nothing and states the intent the empty-result
-              // retry below exists to backstop.
               minItems: 1,
-              description: 'The distinct meanings of the word in this target language. Never empty.',
+              description: 'One entry per requested target language that has a word for THIS meaning. Omit a language that has no word for it rather than inventing one.',
               items: {
                 type: 'object',
-                required: ['meaningText', 'phoneticTranscription', 'sentences'],
+                required: ['languageCode', 'meaningText', 'phoneticTranscription', 'sentences'],
                 properties: {
-                  meaningText: { type: 'string', description: 'This variant\'s translation in this target language.' },
+                  languageCode: {
+                    type: 'string',
+                    description: 'The target language code this translation is in, copied exactly from the requested list.'
+                  },
+                  meaningText: { type: 'string', description: 'This meaning\'s translation in this target language.' },
                   phoneticTranscription: {
                     type: ['string', 'null'],
                     description: 'IPA phonetic transcription of the target-language translation, or null if one cannot be produced.'
@@ -94,7 +148,7 @@ export const translationTool: Anthropic.Tool = {
                       type: 'object',
                       required: ['targetText', 'nativeGlossText'],
                       properties: {
-                        targetText: { type: 'string', description: 'An example sentence in this target language using this variant.' },
+                        targetText: { type: 'string', description: 'An example sentence in this target language using this meaning.' },
                         nativeGlossText: { type: 'string', description: 'That same sentence translated into the native language.' }
                       }
                     }
@@ -109,15 +163,82 @@ export const translationTool: Anthropic.Tool = {
   }
 }
 
-// Moved verbatim from ai/translate.ts:133-135, with the interpolation reading
-// from RequestedLanguages instead of loose parameters. Exported so
-// translation-pivot's measure-cost.mjs can stop carrying a second copy.
+// D-2's second tool: one already-known meaning, one language, one word.
+//
+// It lives here rather than beside the route that uses it because
+// `providerBoundary.test.ts` is not a style rule — `@anthropic-ai/sdk` is
+// importable from exactly two files (`:64-72`), and the string
+// `return_translation` may appear in this one and nowhere else (`:77-80`).
+// Reusing `TRANSLATION_TOOL_NAME` rather than typing a second name is what
+// keeps that assertion true; two tools never travel in the same request, so
+// sharing a name costs nothing.
+//
+// Note the shape: no `senses`, no `translations`, no `languageCode`. The
+// meaning is named in the prompt and the language is the one the caller asked
+// for, so neither is something the model gets to decide — the parser
+// (`senseTranslationFromProviderPayload`) stamps the requested code rather than
+// reading one back.
+export const senseTranslationTool: Anthropic.Tool = {
+  name: TRANSLATION_TOOL_NAME,
+  description: 'Return one target-language word for a single, already-identified meaning of a word, with IPA phonetics and bilingual example sentences.',
+  input_schema: {
+    type: 'object',
+    required: ['meaningText', 'phoneticTranscription', 'sentences'],
+    properties: {
+      meaningText: {
+        type: 'string',
+        description: 'The target-language word or phrase for THIS meaning, and only this meaning.'
+      },
+      phoneticTranscription: {
+        type: ['string', 'null'],
+        description: 'IPA phonetic transcription of the target-language translation, or null if one cannot be produced.'
+      },
+      sentences: {
+        type: 'array',
+        minItems: 1,
+        description: 'Example sentences using this meaning in the target language. Never empty.',
+        items: {
+          type: 'object',
+          required: ['targetText', 'nativeGlossText'],
+          properties: {
+            targetText: { type: 'string', description: 'An example sentence in the target language using this meaning.' },
+            nativeGlossText: { type: 'string', description: 'That same sentence translated into the native language.' }
+          }
+        }
+      }
+    }
+  }
+}
+
+// Rewritten with the tool schema it accompanies: a prompt still asking for one
+// block per language would contradict the shape the model is being handed.
+// Exported so translation-pivot's measure-cost.mjs can stop carrying a second
+// copy.
 export function systemPrompt (languages: RequestedLanguages): string {
   const targetList = languages.targetLanguageCodes.map((code) => `"${code}"`).join(', ')
 
-  return `You are a translation assistant inside a language-learning app. The active collection's native language is "${languages.nativeLanguageCode}" and its target (learning) languages are: ${targetList}. The user will type a word or phrase in the native language or in any one of the target languages — detect which one, then respond only via the provided tool call. Return one entry in "languages" for every requested target language, using the exact codes listed above. Within each language, give several translation variants covering distinct meanings if the word is ambiguous, each with an IPA phonetic transcription of that language's form, and a few example sentences per variant, each paired with a native-language gloss.
+  return `You are a translation assistant inside a language-learning app. The active collection's native language is "${languages.nativeLanguageCode}" and its target (learning) languages are: ${targetList}. The user will type a word or phrase in the native language or in any one of the target languages — detect which one, then respond only via the provided tool call.
 
-Every language entry must contain at least one variant, and every variant at least one example sentence. An empty "variants" array is never an acceptable answer — if the word is unfamiliar or you are unsure of it, still give your best single translation rather than returning nothing.`
+Group by MEANING first, never by language. Decide how many distinct meanings the word has, and return one entry in "senses" for each. Name every meaning in "glossText" using the native language "${languages.nativeLanguageCode}" — a short phrase that distinguishes it from the word's other meanings, not a translation of the word. The same meaning must carry the same "glossText" wording no matter which target languages it appears under; that wording is what pairs a meaning's translations together.
+
+Within each meaning, give one entry in "translations" for each of the target languages listed above that has a word for THAT meaning, using the exact codes listed, each with an IPA phonetic transcription of that language's form and a few example sentences, each paired with a native-language gloss. If a target language has no word for one of the meanings, omit that language from that meaning rather than inventing one.
+
+Every translation must carry at least one example sentence, and "senses" is never empty — if the word is unfamiliar or you are unsure of it, still give your best single meaning rather than returning nothing.`
+}
+
+// D-2's prompt. The meaning is stated, not asked for — the whole point is that
+// the caller already knows which of the entry's meanings this call is about, so
+// the model's only job is to name it in one language. Telling it *not* to
+// answer for the word's other meanings is the instruction that makes a
+// per-meaning backfill differ from N copies of the same generic translation.
+export function senseSystemPrompt (languages: RequestedLanguages, glossText: string): string {
+  const [targetLanguageCode] = languages.targetLanguageCodes
+
+  return `You are a translation assistant inside a language-learning app. The active collection's native language is "${languages.nativeLanguageCode}". The user will give you a word or phrase in that native language.
+
+That word has several distinct meanings. You are translating exactly ONE of them, described in the native language "${languages.nativeLanguageCode}" as: "${glossText}".
+
+Translate ONLY that meaning into "${targetLanguageCode}", and respond only via the provided tool call. Do not return a word for any of the word's other meanings — if the target language's usual translation of the word does not carry this meaning, give the word that does. Include an IPA phonetic transcription of the target-language form and at least one example sentence using this meaning, each paired with a native-language gloss.`
 }
 
 export interface AnthropicTranslatorOptions {
@@ -151,7 +272,7 @@ export function anthropicTranslatorOver (client: Pick<Anthropic, 'messages'>): T
 
     const message = await client.messages.create({
       model: ANTHROPIC_MODEL,
-      max_tokens: MAX_TOKENS_PER_LANGUAGE * Math.max(languages.targetLanguageCodes.length, 1),
+      max_tokens: MAX_TOKENS_PER_SENSE_LANGUAGE * MAX_BUDGETED_SENSES * Math.max(languages.targetLanguageCodes.length, 1),
       system: systemPrompt(languages),
       messages: [{ role: 'user', content: text }],
       tools: [translationTool],
@@ -169,6 +290,31 @@ export function anthropicTranslatorOver (client: Pick<Anthropic, 'messages'>): T
     // fromProviderPayload either returns a valid draft or raises, so no cast
     // happens here or anywhere downstream.
     return TranslationDraft.fromProviderPayload(toolUse.input, languages)
+  }
+
+  async function attemptSense (request: SenseTranslationRequest): Promise<DraftSenseTranslation> {
+    const { text, glossText, languages, signal } = request
+    const [targetLanguageCode] = languages.targetLanguageCodes
+
+    const message = await client.messages.create({
+      model: ANTHROPIC_MODEL,
+      // One meaning, one language — the single cell of the senses × languages
+      // grid `MAX_TOKENS_PER_SENSE_LANGUAGE` is named for.
+      max_tokens: MAX_TOKENS_PER_SENSE_LANGUAGE,
+      system: senseSystemPrompt(languages, glossText),
+      messages: [{ role: 'user', content: text }],
+      tools: [senseTranslationTool],
+      tool_choice: { type: 'tool', name: TRANSLATION_TOOL_NAME }
+    }, { signal })
+
+    const block = message.content.find(
+      (candidate): candidate is Anthropic.ToolUseBlock => candidate.type === 'tool_use' && candidate.name === TRANSLATION_TOOL_NAME
+    )
+    if (block === undefined) {
+      throw new TranslatorUnavailableError('provider response did not include the expected tool_use block')
+    }
+
+    return senseTranslationFromProviderPayload(block.input, targetLanguageCode)
   }
 
   return {
@@ -200,6 +346,28 @@ export function anthropicTranslatorOver (client: Pick<Anthropic, 'messages'>): T
         throw new DegenerateDraftError(draft.degenerateLanguageCodes())
       }
       return draft
+    },
+
+    // Same retry reasoning as `draft`, one level down: an answer carrying no
+    // word or no example is a bad roll rather than a statement that this
+    // meaning has no translation, and the empty answer is the cheap fast one.
+    // `senseTranslationFromProviderPayload` raises `DegenerateDraftError` for
+    // that case rather than returning something empty, so the retry hangs off
+    // the catch instead of a predicate.
+    async translateSense (request: SenseTranslationRequest): Promise<DraftSenseTranslation> {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await attemptSense(request)
+        } catch (err) {
+          if (err instanceof DegenerateDraftError && attempt < EMPTY_DRAFT_RETRIES) continue
+          if (
+            err instanceof TranslatorUnavailableError ||
+            err instanceof MalformedDraftError ||
+            err instanceof DegenerateDraftError
+          ) throw err
+          throw new TranslatorUnavailableError('the translator provider call failed', { cause: err })
+        }
+      }
     }
   }
 }

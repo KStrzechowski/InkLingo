@@ -5,7 +5,8 @@ import {
   anthropicTranslatorOver,
   TRANSLATION_TOOL_NAME,
   ANTHROPIC_MODEL,
-  MAX_TOKENS_PER_LANGUAGE,
+  MAX_TOKENS_PER_SENSE_LANGUAGE,
+  MAX_BUDGETED_SENSES,
   systemPrompt
 } from '../../src/adapters/anthropicTranslator.js'
 import { RequestedLanguages } from '../../src/domain/translationDraft.js'
@@ -22,35 +23,39 @@ import {
 
 const requested = RequestedLanguages.of('pl', ['en', 'de'])
 
-function sense (meaningText: string): unknown {
+function translation (languageCode: string, meaningText: string): unknown {
   return {
+    languageCode,
     meaningText,
     phoneticTranscription: `/${meaningText}/`,
     sentences: [{ targetText: `A sentence with ${meaningText}.`, nativeGlossText: 'Zdanie po polsku.' }]
   }
 }
 
+// Meaning-first, as of this change. `zamek` replaces `pies` as the fixture
+// word for a reason: the envelope now has to be able to carry two meanings, and
+// a word with only one cannot exercise the shape the inversion exists for.
 const POPULATED = {
-  normalizedNativeText: 'pies',
-  languages: [
-    { languageCode: 'en', variants: [sense('dog')] },
-    { languageCode: 'de', variants: [sense('Hund')] }
+  normalizedNativeText: 'zamek',
+  senses: [
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle'), translation('de', 'Burg')] },
+    { glossText: 'urzadzenie do zamykania', translations: [translation('en', 'lock'), translation('de', 'Schloss')] }
   ]
 }
 
+// What the retry exists for: structurally valid, and carrying nothing.
 const ALL_EMPTY = {
-  normalizedNativeText: 'pies',
-  languages: [
-    { languageCode: 'en', variants: [] },
-    { languageCode: 'de', variants: [] }
-  ]
+  normalizedNativeText: 'zamek',
+  senses: []
 }
 
+// A sparse spoke is NOT this — a language missing from one meaning is legal and
+// invisible here. This is `de` absent from every meaning, which is what
+// `degenerateLanguageCodes()` reports and what the route warns on.
 const PARTIALLY_EMPTY = {
-  normalizedNativeText: 'pies',
-  languages: [
-    { languageCode: 'en', variants: [sense('dog')] },
-    { languageCode: 'de', variants: [] }
+  normalizedNativeText: 'zamek',
+  senses: [
+    { glossText: 'budowla obronna', translations: [translation('en', 'castle')] }
   ]
 }
 
@@ -84,7 +89,7 @@ function failingClient (err: Error): Pick<Anthropic, 'messages'> {
 }
 
 function request (): { text: string, languages: RequestedLanguages, signal: AbortSignal } {
-  return { text: 'pies', languages: requested, signal: new AbortController().signal }
+  return { text: 'zamek', languages: requested, signal: new AbortController().signal }
 }
 
 test('a populated response becomes a domain draft with no provider shape left on it', async () => {
@@ -96,7 +101,10 @@ test('a populated response becomes a domain draft with no provider shape left on
   assert.equal(recorder.calls(), 1)
   assert.equal(draft.isDegenerate(), false)
   assert.deepStrictEqual(draft.degenerateLanguageCodes(), [])
-  assert.equal(draft.renderingFor('de')?.meaningText, 'Hund')
+  assert.deepStrictEqual(
+    draft.senses.map((sense) => sense.translations.map((tr) => tr.meaningText)),
+    [['castle', 'Burg'], ['lock', 'Schloss']]
+  )
 })
 
 test('the request carries the moved model id, token formula and system prompt', async () => {
@@ -106,7 +114,8 @@ test('the request carries the moved model id, token formula and system prompt', 
 
   const [body] = recorder.params()
   assert.equal(body.model, ANTHROPIC_MODEL)
-  assert.equal(body.max_tokens, MAX_TOKENS_PER_LANGUAGE * 2)
+  // Budgeted on senses x languages now, not languages alone.
+  assert.equal(body.max_tokens, MAX_TOKENS_PER_SENSE_LANGUAGE * MAX_BUDGETED_SENSES * 2)
   assert.equal(body.system, systemPrompt(requested))
   assert.deepStrictEqual(body.tool_choice, { type: 'tool', name: TRANSLATION_TOOL_NAME })
 })
@@ -119,7 +128,7 @@ test('an all-empty draft is re-asked exactly once, and the second answer is kept
 
   assert.equal(recorder.calls(), 2)
   assert.equal(draft.isDegenerate(), false)
-  assert.equal(draft.renderingFor('en')?.meaningText, 'dog')
+  assert.equal(draft.senses[0].translations[0].meaningText, 'castle')
 })
 
 // translate.test.ts:151 moving down — and where its 200-vs-502 question is
@@ -201,5 +210,92 @@ test('an unparseable payload surfaces as MalformedDraftError, not as unavailable
   await assert.rejects(
     async () => await anthropicTranslatorOver(client).draft(request()),
     MalformedDraftError
+  )
+})
+
+// --- D-2's second tool ------------------------------------------------------
+//
+// It shares the tool NAME with the capture tool, deliberately:
+// `providerBoundary.test.ts:77-80` asserts that name appears in the adapter and
+// nowhere else in the repo — including in this file, which is why every
+// reference below goes through `TRANSLATION_TOOL_NAME` rather than retyping the
+// string. A second tool name would turn that gate red. The two tools never
+// travel in the same request, so sharing one costs nothing.
+
+const ONE_TARGET = RequestedLanguages.of('pl', ['fr'])
+
+function senseRequest (glossText = 'budowla obronna'): {
+  text: string
+  glossText: string
+  languages: RequestedLanguages
+  signal: AbortSignal
+} {
+  return { text: 'zamek', glossText, languages: ONE_TARGET, signal: new AbortController().signal }
+}
+
+const ONE_WORD = {
+  meaningText: 'chateau',
+  phoneticTranscription: '/SAto/',
+  sentences: [{ targetText: 'Le chateau est sur une colline.', nativeGlossText: 'Zamek stoi na wzgorzu.' }]
+}
+
+test('translateSense asks for one meaning in one language and budgets one cell', async () => {
+  const { client, recorder } = stubClient([ONE_WORD])
+
+  const translation = await anthropicTranslatorOver(client).translateSense(senseRequest())
+
+  assert.equal(recorder.calls(), 1)
+  const [body] = recorder.params()
+  assert.equal(body.model, ANTHROPIC_MODEL)
+  // One meaning x one language — the single cell MAX_TOKENS_PER_SENSE_LANGUAGE
+  // is named for, not the whole senses x languages grid the capture call books.
+  assert.equal(body.max_tokens, MAX_TOKENS_PER_SENSE_LANGUAGE)
+  assert.deepStrictEqual(body.tool_choice, { type: 'tool', name: TRANSLATION_TOOL_NAME })
+  // The meaning is stated in the prompt rather than asked for, which is the
+  // whole difference between this call and a generic re-translation.
+  assert.ok(typeof body.system === 'string' && body.system.includes('budowla obronna'))
+
+  assert.equal(translation.languageCode, 'fr')
+  assert.equal(translation.meaningText, 'chateau')
+})
+
+test('translateSense re-asks exactly once when the first answer carries nothing', async () => {
+  const { client, recorder } = stubClient([{ meaningText: 'chateau', sentences: [] }, ONE_WORD])
+
+  const translation = await anthropicTranslatorOver(client).translateSense(senseRequest())
+
+  assert.equal(recorder.calls(), 2)
+  assert.equal(translation.meaningText, 'chateau')
+})
+
+test('translateSense gives up as DegenerateDraftError when every answer is empty', async () => {
+  const { client, recorder } = stubClient([{ meaningText: 'chateau', sentences: [] }])
+
+  await assert.rejects(
+    async () => await anthropicTranslatorOver(client).translateSense(senseRequest()),
+    DegenerateDraftError
+  )
+  assert.equal(recorder.calls(), 2)
+})
+
+test('translateSense surfaces a provider failure as TranslatorUnavailableError', async () => {
+  const client = failingClient(new Error('socket hang up'))
+
+  await assert.rejects(
+    async () => await anthropicTranslatorOver(client).translateSense(senseRequest()),
+    TranslatorUnavailableError
+  )
+})
+
+test('translateSense rejects a response with no tool_use block', async () => {
+  const client = {
+    messages: {
+      create: async () => ({ content: [{ type: 'text', text: 'I cannot translate that.' }] })
+    }
+  } as unknown as Pick<Anthropic, 'messages'>
+
+  await assert.rejects(
+    async () => await anthropicTranslatorOver(client).translateSense(senseRequest()),
+    TranslatorUnavailableError
   )
 })

@@ -3,7 +3,14 @@ import * as assert from 'node:assert'
 import { randomUUID } from 'node:crypto'
 import { build } from '../../helper.js'
 import { jwks, signToken } from '../../helpers/jwks.js'
-import { createUserRow, createCollectionRow, createEntryRow } from '../../helpers/fixtures.js'
+import {
+  createUserRow,
+  createCollectionRow,
+  createEntryRow,
+  createSenseRow,
+  createTranslationRow,
+  createSentenceRow
+} from '../../helpers/fixtures.js'
 
 async function authedUser (app: Awaited<ReturnType<typeof build>>, t: Parameters<typeof build>[0]): Promise<{ sub: string, token: string }> {
   app.jwtVerifier.cacheJwks(jwks)
@@ -229,29 +236,41 @@ test('GET /api/collections/:id returns an empty entries array for a collection w
   assert.deepStrictEqual(body.targetLanguageCodes, ['en'])
 })
 
-test('GET /api/collections/:id returns correctly nested translations/sentences for entries with more than one of each', async (t) => {
+interface ReadSense {
+  id: string
+  glossText: string
+  translations: Array<{
+    id: string
+    languageCode: string
+    meaningText: string
+    phoneticTranscription: string | null
+    sentences: Array<{ id: string, sentenceText: string, nativeGlossText: string }>
+  }>
+}
+
+interface ReadEntry {
+  id: string
+  wordOrPhrase: string
+  sourceLanguageCode: string
+  createdAt: string
+  senses: ReadSense[]
+}
+
+test('GET /api/collections/:id nests each sentence under the word it belongs to', async (t) => {
   const app = await build(t)
   const sub = randomUUID()
   const userId = await createUserRow(app, t, sub)
-  const collectionId = await createCollectionRow(app, userId, 'Nested contents test')
+  const collectionId = await createCollectionRow(app, userId, 'Nested contents test', 'pl', ['en', 'ru'])
   const entryId = await createEntryRow(app, collectionId, 'jedzenie')
 
-  await app.sql.query(
-    'INSERT INTO entry_translations (entry_id, language_code, meaning_text) VALUES ($1, $2, $3)',
-    [entryId, 'en', 'food']
-  )
-  await app.sql.query(
-    'INSERT INTO entry_translations (entry_id, language_code, meaning_text) VALUES ($1, $2, $3)',
-    [entryId, 'ru', 'eda']
-  )
-  await app.sql.query(
-    'INSERT INTO entry_sentences (entry_id, language_code, sentence_text) VALUES ($1, $2, $3)',
-    [entryId, 'en', 'I like this food.']
-  )
-  await app.sql.query(
-    'INSERT INTO entry_sentences (entry_id, language_code, sentence_text) VALUES ($1, $2, $3)',
-    [entryId, 'pl', 'Lubię to jedzenie.']
-  )
+  const senseId = await createSenseRow(app, entryId, 'jedzenie')
+  const enId = await createTranslationRow(app, entryId, senseId, 'en', 'food')
+  const ruId = await createTranslationRow(app, entryId, senseId, 'ru', 'eda')
+  // The `pl` sentence this fixture used to carry was a sentence in the
+  // collection's own native language with no translation to hang off — the
+  // exact orphan Phase 0 found in the live data, and now unrepresentable.
+  await createSentenceRow(app, entryId, enId, 'I like this food.', 'Lubię to jedzenie.')
+  await createSentenceRow(app, entryId, ruId, 'Мне нравится эта еда.', 'Lubię to jedzenie.')
 
   app.jwtVerifier.cacheJwks(jwks)
   const token = await signToken({ sub })
@@ -259,27 +278,112 @@ test('GET /api/collections/:id returns correctly nested translations/sentences f
   const res = await app.inject({ url: `/api/collections/${collectionId}`, headers: { authorization: `Bearer ${token}` } })
   assert.equal(res.statusCode, 200)
 
-  const body = JSON.parse(res.payload) as {
-    id: string
-    name: string
-    entries: Array<{
-      id: string
-      wordOrPhrase: string
-      translations: Array<{ languageCode: string, meaningText: string }>
-      sentences: Array<{ languageCode: string, sentenceText: string }>
-    }>
-  }
+  const body = JSON.parse(res.payload) as { id: string, entries: ReadEntry[] }
 
   assert.equal(body.id, collectionId)
   assert.equal(body.entries.length, 1)
   const [entry] = body.entries
   assert.equal(entry.wordOrPhrase, 'jedzenie')
+  assert.equal(entry.senses.length, 1)
+  const [sense] = entry.senses
+  assert.equal(sense.glossText, 'jedzenie')
+  assert.deepStrictEqual(sense.translations.map((tr) => tr.languageCode), ['en', 'ru'])
+  // The pairing, which is the whole point: each sentence sits under its own
+  // word rather than beside it in a sibling array joined by language code.
   assert.deepStrictEqual(
-    entry.translations.map((tr) => tr.languageCode).sort(),
-    ['en', 'ru']
+    sense.translations.map((tr) => tr.sentences.map((s) => s.sentenceText)),
+    [['I like this food.'], ['Мне нравится эта еда.']]
   )
+})
+
+// Design test 20's read-side twin: a word with two meanings comes back as two
+// meanings, each owning its own words and sentences.
+test('GET /api/collections/:id returns every meaning of a multi-meaning entry', async (t) => {
+  const app = await build(t)
+  const sub = randomUUID()
+  const userId = await createUserRow(app, t, sub)
+  const collectionId = await createCollectionRow(app, userId, 'Multi meaning read test', 'pl', ['en'])
+  const entryId = await createEntryRow(app, collectionId, 'zamek')
+
+  const castleId = await createSenseRow(app, entryId, 'budowla obronna')
+  const castleEn = await createTranslationRow(app, entryId, castleId, 'en', 'castle')
+  await createSentenceRow(app, entryId, castleEn, 'The castle stands on a hill.', 'Zamek stoi na wzgórzu.')
+
+  const lockId = await createSenseRow(app, entryId, 'zamknięcie drzwi')
+  const lockEn = await createTranslationRow(app, entryId, lockId, 'en', 'lock')
+  await createSentenceRow(app, entryId, lockEn, 'The lock is broken.', 'Zamek jest zepsuty.')
+
+  app.jwtVerifier.cacheJwks(jwks)
+  const token = await signToken({ sub })
+
+  const res = await app.inject({ url: `/api/collections/${collectionId}`, headers: { authorization: `Bearer ${token}` } })
+  assert.equal(res.statusCode, 200)
+  const body = JSON.parse(res.payload) as { entries: ReadEntry[] }
+
+  const [entry] = body.entries
+  assert.deepStrictEqual(entry.senses.map((sense) => sense.glossText), ['budowla obronna', 'zamknięcie drzwi'])
   assert.deepStrictEqual(
-    entry.sentences.map((s) => s.languageCode).sort(),
-    ['en', 'pl']
+    entry.senses.map((sense) => sense.translations[0].meaningText),
+    ['castle', 'lock']
   )
+})
+
+// `GET /:id` hand-built its payload with no response schema until this change,
+// so nothing was stripped and nothing could be. Now a field missing from
+// `collectionDetailResponseSchema` vanishes **silently**, and a full-body
+// deep-equal is the only shape of test that catches it.
+test('GET /api/collections/:id serializes the full body, stripping nothing', async (t) => {
+  const app = await build(t)
+  const sub = randomUUID()
+  const userId = await createUserRow(app, t, sub)
+  const collectionId = await createCollectionRow(app, userId, 'Detail serialization', 'pl', ['en'])
+  const entryId = await createEntryRow(app, collectionId, 'pies')
+  const senseId = await createSenseRow(app, entryId, 'zwierzę domowe')
+  const translationId = await createTranslationRow(app, entryId, senseId, 'en', 'dog')
+  const sentenceId = await createSentenceRow(app, entryId, translationId, 'The dog runs.', 'Pies biegnie.')
+
+  app.jwtVerifier.cacheJwks(jwks)
+  const token = await signToken({ sub })
+
+  const res = await app.inject({ url: `/api/collections/${collectionId}`, headers: { authorization: `Bearer ${token}` } })
+  assert.equal(res.statusCode, 200)
+  const body = JSON.parse(res.payload) as {
+    id: string
+    name: string
+    nativeLanguageCode: string
+    targetLanguageCodes: string[]
+    createdAt: string
+    entries: ReadEntry[]
+  }
+
+  assert.equal(typeof body.createdAt, 'string')
+  assert.equal(typeof body.entries[0].createdAt, 'string')
+  assert.deepStrictEqual(body, {
+    id: collectionId,
+    name: 'Detail serialization',
+    nativeLanguageCode: 'pl',
+    targetLanguageCodes: ['en'],
+    createdAt: body.createdAt,
+    entries: [{
+      id: entryId,
+      wordOrPhrase: 'pies',
+      sourceLanguageCode: 'pl',
+      createdAt: body.entries[0].createdAt,
+      senses: [{
+        id: senseId,
+        glossText: 'zwierzę domowe',
+        translations: [{
+          id: translationId,
+          languageCode: 'en',
+          meaningText: 'dog',
+          phoneticTranscription: null,
+          sentences: [{
+            id: sentenceId,
+            sentenceText: 'The dog runs.',
+            nativeGlossText: 'Pies biegnie.'
+          }]
+        }]
+      }]
+    }]
+  })
 })

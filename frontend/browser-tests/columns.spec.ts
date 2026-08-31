@@ -22,7 +22,11 @@ test.describe('the Translation column', () => {
           transcription: span.textContent ?? '',
           previousIsText: previous?.nodeType === Node.TEXT_NODE,
           previousText: previous?.textContent ?? '',
-          whiteSpace: getComputedStyle(span).whiteSpace
+          whiteSpace: getComputedStyle(span).whiteSpace,
+          // A token PrintDocument.tsx measured as wider than its column even
+          // alone gets `print-phonetic--wrap` instead — deliberately not
+          // nowrap, since nowrap would leave it no way to avoid overflowing.
+          measuredTooWideToStayNowrap: span.classList.contains('print-phonetic--wrap')
         }
       })
     })
@@ -30,7 +34,9 @@ test.describe('the Translation column', () => {
     expect(structure.length, 'fixture rendered no transcriptions').toBeGreaterThan(0)
 
     for (const node of structure) {
-      expect(node.whiteSpace, `${node.transcription} is not nowrap`).toBe('nowrap')
+      if (!node.measuredTooWideToStayNowrap) {
+        expect(node.whiteSpace, `${node.transcription} is not nowrap`).toBe('nowrap')
+      }
       expect(
         node.previousIsText && /\s$/.test(node.previousText),
         `the space before ${node.transcription} is not a separate text node outside the span — ` +
@@ -61,9 +67,21 @@ test.describe('the Translation column', () => {
         return { width: range.getBoundingClientRect().width, lines: range.getClientRects().length }
       }
 
-      return [...document.querySelectorAll('.print-phonetic')].map((span) => {
+      // A compound transcription now renders as several .print-phonetic spans
+      // (one per variant, split on internal whitespace) — only the first one
+      // in a cell sits next to the actual meaning text; a later one sits next
+      // to an earlier phonetic span instead, which is not what this test means
+      // by "the meaning".
+      const firstPerCell = [...document.querySelectorAll('.print-phonetic')].filter((span) => (
+        span.previousElementSibling === null || !span.previousElementSibling.matches('.print-phonetic')
+      ))
+
+      return firstPerCell.map((span) => {
         const cell = span.parentElement!
-        const meaningNode = cell.firstChild!
+        // Not `cell.firstChild`: since D-1 that is the language-code span
+        // ('EN'), not the meaning. The meaning is the text node right before
+        // the space that precedes this transcription span.
+        const meaningNode = span.previousSibling!.previousSibling!
         const style = getComputedStyle(cell)
         const available = cell.clientWidth -
           parseFloat(style.paddingLeft) -
@@ -75,13 +93,22 @@ test.describe('the Translation column', () => {
           meaningWidth: meaning.width,
           meaningLines: meaning.lines,
           transcriptionWidth: widthOf(span).width,
-          available
+          available,
+          // PrintDocument.tsx's own measurement already decided this token
+          // can never fit its column alone — a direct, reliable signal for
+          // exactly the "transcription is itself wider than the column"
+          // exclusion above. A width comparison can't be used for that
+          // exclusion here: once such a token wraps (print-phonetic--wrap),
+          // its Range bounding box reflects the post-wrap fragments, not its
+          // true unwrapped width, and would misreport it as fitting.
+          measuredTooWideToStayNowrap: span.classList.contains('print-phonetic--wrap')
         }
       })
     })
 
     const applicable = cells.filter(
-      (cell) => cell.meaningWidth <= cell.available &&
+      (cell) => !cell.measuredTooWideToStayNowrap &&
+        cell.meaningWidth <= cell.available &&
         cell.transcriptionWidth <= cell.available &&
         cell.meaningWidth + cell.transcriptionWidth > cell.available
     )
@@ -105,6 +132,40 @@ test.describe('the Translation column', () => {
       ).toBe(1)
     }
   })
+
+  test('does not let any phonetic transcription token overflow its column', async ({ page }) => {
+    // Reported live 2026-08-29: a compound transcription (two pronunciation
+    // variants joined by whitespace) is wider than the column even as one
+    // unbreakable run, so dropping it to its own line — the fix for the
+    // 'independence' case above — does not help. Each variant now renders as
+    // its own atomic nowrap span (phoneticTokens, printRows.ts) with real
+    // breakable whitespace between them, so the compound case wraps between
+    // variants instead of overflowing.
+    await openPreview(page, 'long-words')
+
+    const measurements = await page.evaluate(() => {
+      return [...document.querySelectorAll('.print-phonetic')].map((span) => {
+        const cell = span.closest('td')!
+        const style = getComputedStyle(cell)
+        const cellRight = cell.getBoundingClientRect().right - parseFloat(style.paddingRight)
+        return { text: span.textContent ?? '', overflowPx: span.getBoundingClientRect().right - cellRight }
+      })
+    })
+
+    // Tripwire: without a token ending in ';' the fixture no longer carries a
+    // split compound transcription, and the loop below would pass vacuously.
+    expect(
+      measurements.some((item) => item.text.endsWith(';')),
+      'fixture no longer contains a compound (multi-token) phonetic transcription'
+    ).toBe(true)
+
+    for (const item of measurements) {
+      expect(
+        item.overflowPx,
+        `"${item.text}" overflows its column by ${Math.round(item.overflowPx)}px`
+      ).toBeLessThanOrEqual(0)
+    }
+  })
 })
 
 test.describe('a single-target collection', () => {
@@ -125,9 +186,9 @@ test.describe('a single-target collection', () => {
       expect(band.rowSpan === null || band.rowSpan === '1').toBe(true)
     }
 
-    // The Language column still carries its value on every row rather than
-    // being collapsed away when there is only one target.
-    await expect(page.locator('.print-language')).toHaveCount(6)
+    // Every row still carries its language-code prefix rather than it being
+    // collapsed away when there is only one target.
+    await expect(page.locator('.print-language-code')).toHaveCount(6)
   })
 })
 
@@ -140,7 +201,7 @@ test.describe('a collection with a backfill gap', () => {
     const bands = await page.locator('.print-table tbody').evaluateAll(
       (bodies) => bodies.map((body) => ({
         word: body.querySelector('th[scope="row"]')?.textContent ?? '',
-        languages: [...body.querySelectorAll('.print-language')].map((c) => c.textContent ?? '')
+        languageCodes: [...body.querySelectorAll('.print-language-code')].map((c) => c.textContent ?? '')
       }))
     )
 
@@ -152,13 +213,13 @@ test.describe('a collection with a backfill gap', () => {
 
     // One row, for the one language it has — and matched despite the stored
     // code being uppercase 'EN' against the collection's lowercase 'en'.
-    expect(zamek!.languages).toHaveLength(1)
-    expect(woda!.languages).toHaveLength(2)
+    expect(zamek!.languageCodes).toHaveLength(1)
+    expect(woda!.languageCodes).toHaveLength(2)
 
-    // No cell in the table is an empty language name.
+    // No cell in the table is missing its language-code prefix.
     for (const band of bands) {
-      for (const language of band.languages) {
-        expect(language.trim(), `${band.word} has a blank language cell`).not.toBe('')
+      for (const languageCode of band.languageCodes) {
+        expect(languageCode.trim(), `${band.word} has a blank language-code cell`).not.toBe('')
       }
     }
   })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import axios from 'axios'
 import { addEntryTranslation, getCollection, type CollectionDetail, type Entry } from '../api/collections'
@@ -61,6 +61,13 @@ function CollectionDetailPage () {
   // Playback state lives entirely in the hook, so a failed utterance never
   // touches the load/backfill error above it.
   const speech = useSpeech()
+  // Guards handleAddLanguage's post-await state writes the same way the load
+  // effect's own `cancelled` flag does — the two are separate mechanisms
+  // because this one guards an event handler, not an effect.
+  const mountedRef = useRef(true)
+  useEffect(() => () => {
+    mountedRef.current = false
+  }, [])
 
   useEffect(() => {
     if (!id) {
@@ -96,9 +103,12 @@ function CollectionDetailPage () {
     }
   }, [id])
 
-  // FR-018: one entry, one language, on request. Splices the new rows into
-  // the entry in place rather than refetching the whole collection, so the
-  // other entries visibly stay as they were.
+  // FR-018: one entry, one language, on request. Replaces just that entry in
+  // place rather than refetching the whole collection, so the other entries
+  // visibly stay as they were. Simpler than it used to be: the backend now
+  // returns the whole updated entry (decision A9), so there is nothing left
+  // to splice by hand — under D-2 a backfill can add a word to several
+  // meanings at once, and the server is the one that knows which.
   async function handleAddLanguage (entry: Entry, languageCode: string) {
     if (!id) {
       return
@@ -107,23 +117,22 @@ function CollectionDetailPage () {
     setAddingKey(key)
     setError(null)
     try {
-      const added = await addEntryTranslation(id, entry.id, languageCode)
+      const updated = await addEntryTranslation(id, entry.id, languageCode)
+      if (!mountedRef.current) {
+        return
+      }
       setCollection((prev) => (prev === null ? prev : {
         ...prev,
-        entries: prev.entries.map((candidate) => (
-          candidate.id === entry.id
-            ? {
-                ...candidate,
-                translations: [...candidate.translations, added.translation],
-                sentences: [...candidate.sentences, added.sentence]
-              }
-            : candidate
-        ))
+        entries: prev.entries.map((candidate) => (candidate.id === entry.id ? updated : candidate))
       }))
     } catch (err) {
-      setError(extractErrorMessage(err))
+      if (mountedRef.current) {
+        setError(extractErrorMessage(err))
+      }
     } finally {
-      setAddingKey(null)
+      if (mountedRef.current) {
+        setAddingKey(null)
+      }
     }
   }
 
@@ -147,10 +156,9 @@ function CollectionDetailPage () {
   // entries in the same handful of languages, and legacy codes ('EN',
   // 'ENss') land here too — they resolve to no voice and read as their
   // uppercased selves.
-  const spokenCodes = [...new Set(collection.entries.flatMap((entry) => [
-    ...entry.translations.map((translation) => translation.languageCode),
-    ...entry.sentences.map((sentence) => sentence.languageCode)
-  ]))]
+  const spokenCodes = [...new Set(collection.entries.flatMap((entry) => (
+    entry.senses.flatMap((sense) => sense.translations.map((translation) => translation.languageCode))
+  )))]
   const silentCodes = speech.ready ? spokenCodes.filter((code) => !speech.hasVoice(code)) : []
 
   return (
@@ -189,42 +197,49 @@ function CollectionDetailPage () {
             // write, but collections created before that normalization landed
             // still hold codes like 'EN', which would otherwise never match a
             // saved 'en' translation and show a spurious "Add EN" button.
-            const have = new Set(entry.translations.map((translation) => translation.languageCode.toLowerCase()))
+            const have = new Set(entry.senses.flatMap((sense) => (
+              sense.translations.map((translation) => translation.languageCode.toLowerCase())
+            )))
             const missing = collection.targetLanguageCodes.filter((code) => !have.has(code.toLowerCase()))
 
             return (
               <li key={entry.id}>
                 <strong>{entry.wordOrPhrase}</strong> ({entry.sourceLanguageCode})
-                <ul>
-                  {entry.translations.map((translation) => (
-                    <li key={translation.id}>
-                      {translation.languageCode}: {translation.meaningText}
-                      {translation.phoneticTranscription && <em> {translation.phoneticTranscription}</em>}
-                      {' '}
-                      <SpeakButton
-                        speech={speech}
-                        itemKey={`${entry.id}:t:${translation.id}`}
-                        text={translation.meaningText}
-                        languageCode={translation.languageCode}
-                      />
-                    </li>
-                  ))}
-                </ul>
-                <ul>
-                  {entry.sentences.map((sentence) => (
-                    <li key={sentence.id}>
-                      {sentence.languageCode}: {sentence.sentenceText}
-                      {sentence.nativeGlossText && <em> — {sentence.nativeGlossText}</em>}
-                      {' '}
-                      <SpeakButton
-                        speech={speech}
-                        itemKey={`${entry.id}:s:${sentence.id}`}
-                        text={sentence.sentenceText}
-                        languageCode={sentence.languageCode}
-                      />
-                    </li>
-                  ))}
-                </ul>
+                {entry.senses.map((sense) => (
+                  <div key={sense.id}>
+                    <h3>{sense.glossText}</h3>
+                    <ul>
+                      {sense.translations.map((translation) => (
+                        <li key={translation.id}>
+                          {translation.languageCode}: {translation.meaningText}
+                          {translation.phoneticTranscription && <em> {translation.phoneticTranscription}</em>}
+                          {' '}
+                          <SpeakButton
+                            speech={speech}
+                            itemKey={`${entry.id}:t:${translation.id}`}
+                            text={translation.meaningText}
+                            languageCode={translation.languageCode}
+                          />
+                          <ul>
+                            {translation.sentences.map((sentence) => (
+                              <li key={sentence.id}>
+                                {sentence.sentenceText}
+                                {sentence.nativeGlossText && <em> — {sentence.nativeGlossText}</em>}
+                                {' '}
+                                <SpeakButton
+                                  speech={speech}
+                                  itemKey={`${entry.id}:s:${sentence.id}`}
+                                  text={sentence.sentenceText}
+                                  languageCode={translation.languageCode}
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
                 {speech.error !== null && speech.error.key.startsWith(`${entry.id}:`) && (
                   <p style={{ color: 'red' }}>{speech.error.message}</p>
                 )}

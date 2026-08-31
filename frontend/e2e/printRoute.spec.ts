@@ -34,20 +34,55 @@ function buildCollection (id: string, name: string) {
         wordOrPhrase: 'threshold',
         sourceLanguageCode: NATIVE_LANGUAGE,
         createdAt: '2026-08-12T10:01:00.000Z',
-        translations: [
-          { id: `${id}-t1`, languageCode: 'pl', meaningText: 'próg', phoneticTranscription: 'pruk' },
-          { id: `${id}-t2`, languageCode: 'de', meaningText: 'Schwelle', phoneticTranscription: null }
-        ],
-        sentences: [
+        senses: [
           {
-            id: `${id}-s1`,
-            languageCode: 'pl',
-            // Deliberately does not repeat the translation text: a sentence
-            // containing 'próg' makes the cell assertion below ambiguous, and
-            // loosening the locator to resolve that would weaken the test.
-            sentenceText: 'Weszliśmy do środka.',
-            nativeGlossText: 'We stepped inside.',
-            createdAt: '2026-08-12T10:01:00.000Z'
+            id: `${id}-sense-1`,
+            // Deliberately distinct from `wordOrPhrase` above. D-1's row-group
+            // gloss header (`PrintDocument.tsx`) is also a `<th scope="rowgroup">`,
+            // which the ARIA→HTML mapping exposes under the same `rowheader`
+            // role as the word column's `<th scope="row">` — a gloss that
+            // repeats the word text makes `getByRole('rowheader', { name:
+            // 'threshold' })` match both columns and fail Playwright's strict
+            // mode, which is exactly what happened here before this fixture
+            // was written to avoid it.
+            glossText: 'the sill of a doorway',
+            translations: [
+              {
+                id: `${id}-t1`,
+                languageCode: 'pl',
+                meaningText: 'próg',
+                phoneticTranscription: 'pruk',
+                sentences: [
+                  {
+                    id: `${id}-s1`,
+                    // Deliberately does not repeat the translation text: a
+                    // sentence containing 'próg' makes the cell assertion
+                    // below ambiguous, and loosening the locator to resolve
+                    // that would weaken the test.
+                    sentenceText: 'Weszliśmy do środka.',
+                    nativeGlossText: 'We stepped inside.'
+                  }
+                ]
+              },
+              {
+                id: `${id}-t2`,
+                languageCode: 'de',
+                meaningText: 'Schwelle',
+                phoneticTranscription: null,
+                sentences: [
+                  {
+                    id: `${id}-s2`,
+                    // Same reasoning as the Polish sentence above: repeating
+                    // 'Schwelle' here made the cell assertion below ambiguous
+                    // against the meaning cell's own 'Schwelle' text — added
+                    // when this fixture gained sentences (invariant-aggregate
+                    // -refactor p6) without carrying that constraint forward.
+                    sentenceText: 'Wir traten vorsichtig hinein.',
+                    nativeGlossText: 'We stepped in carefully.'
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
