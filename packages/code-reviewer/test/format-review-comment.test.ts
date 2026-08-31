@@ -47,3 +47,19 @@ test('renders a bold FAIL verdict when recommendation is fail', () => {
   const comment = formatReviewComment({ ...SAMPLE_REVIEW, recommendation: 'fail' });
   assert.match(comment, /\*\*Verdict: FAIL\*\*/);
 });
+
+test('escapes a pipe character in reasoning so it cannot split the table', () => {
+  const comment = formatReviewComment({
+    ...SAMPLE_REVIEW,
+    complexity: criterion(6, 'Uses a | in a match expression, e.g. `a | b`.'),
+  });
+  assert.match(comment, /Uses a \\\| in a match expression/);
+});
+
+test('collapses an embedded newline in reasoning to a space', () => {
+  const comment = formatReviewComment({
+    ...SAMPLE_REVIEW,
+    complexity: criterion(6, 'First line.\nSecond line.'),
+  });
+  assert.match(comment, /First line\. Second line\./);
+});

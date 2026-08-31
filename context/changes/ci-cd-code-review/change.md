@@ -1,7 +1,7 @@
 ---
 change_id: ci-cd-code-review
 title: Ci cd code review
-status: implemented
+status: impl_reviewed
 created: 2026-08-30
 updated: 2026-09-01
 archived_at: null
