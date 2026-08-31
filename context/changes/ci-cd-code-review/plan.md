@@ -237,20 +237,20 @@ None — net-new workflow and package files, no existing state or behavior to mi
 
 #### Manual
 
-- [ ] 1.3 Formatted comment renders sensibly as GitHub-flavored markdown
+- [x] 1.3 Formatted comment renders sensibly as GitHub-flavored markdown
 
 ### Phase 2: Composite action
 
 #### Manual
 
-- [ ] 2.1 Verified together with Phase 3's end-to-end trigger
+- [x] 2.1 Verified together with Phase 3's end-to-end trigger
 
 ### Phase 3: Workflow — trigger, diff handling, comment/label orchestration
 
 #### Manual
 
-- [ ] 3.1 `OPENROUTER_API_KEY` (secret) and `OPENROUTER_MODEL` (var, optional) configured at repo level
-- [ ] 3.2 Irrelevant label does not trigger the workflow
-- [ ] 3.3 `ai-cr:review` label triggers the workflow: comment posted with all six criteria + summary + recommendation, matching label applied
-- [ ] 3.4 Job status (green/red) matches recommendation and does not block merge
-- [ ] 3.5 Remove/re-add `ai-cr:review`: comment upserted in place (no duplicate), label swapped correctly
+- [x] 3.1 `OPENROUTER_API_KEY` (secret) and `OPENROUTER_MODEL` (var, optional) configured at repo level
+- [x] 3.2 Irrelevant label does not trigger the workflow
+- [x] 3.3 `ai-cr:review` label triggers the workflow: comment posted with all six criteria + summary + recommendation, matching label applied
+- [x] 3.4 Job status (green/red) matches recommendation and does not block merge
+- [x] 3.5 Remove/re-add `ai-cr:review`: comment upserted in place (no duplicate), label swapped correctly
