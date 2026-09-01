@@ -1,7 +1,7 @@
 ---
 change_id: code-review-evals
 title: Code review evals
-status: implemented
+status: impl_reviewed
 created: 2026-09-01
 updated: 2026-09-02
 archived_at: null
@@ -10,6 +10,15 @@ archived_at: null
 ## Notes
 
 <!-- Free-form notes for this change: links, ad-hoc context, decisions that don't belong in research/frame/plan. -->
+
+### Phase 1 implementation-time deviations (2026-09-01)
+
+- **`package.json`'s `eval`/`eval:validate` scripts don't match the plan's literal
+  `node_modules/.bin/promptfoo ...` command.** That path is a POSIX shebang shim (plus separate
+  `.cmd`/`.ps1` wrappers) and isn't directly `node`-executable on Windows. The scripts instead
+  invoke `node_modules/promptfoo/dist/src/entrypoint.js` directly — the same file promptfoo's own
+  `package.json` `bin` field points at — which works cross-platform via `node`. Verified working:
+  both live Phase 2 `npm run eval` runs succeeded through this path.
 
 ### Phase 2 live run findings (2026-09-01)
 

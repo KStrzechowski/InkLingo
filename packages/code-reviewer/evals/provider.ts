@@ -11,6 +11,9 @@ export default class CodeReviewProvider implements ApiProvider {
 
   constructor(options: ProviderOptions) {
     this.modelId = options.config?.modelId;
+    if (!this.modelId) {
+      throw new Error('CodeReviewProvider requires config.modelId (check promptfooconfig.yaml provider entries).');
+    }
     this.model = options.config?.model;
   }
 
