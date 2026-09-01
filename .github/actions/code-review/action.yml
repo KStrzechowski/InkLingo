@@ -1,0 +1,62 @@
+name: Code Review
+description: >-
+  Runs the packages/code-reviewer AI agent against a PR diff and produces a
+  formatted review comment plus a pass/fail recommendation. Pure input ->
+  output unit: makes no GitHub API calls of its own, so it stays testable in
+  isolation from the calling workflow's comment/label orchestration.
+
+inputs:
+  pr-title:
+    description: Pull request title.
+    required: true
+  pr-description:
+    description: Pull request description (may be empty).
+    required: true
+  diff-file:
+    description: Absolute path to the (already filtered) diff file to review.
+    required: true
+  openrouter-api-key:
+    description: OpenRouter API key used to run the review model.
+    required: true
+  openrouter-model:
+    description: OpenRouter model id override (falls back to the agent's built-in default).
+    required: false
+
+outputs:
+  recommendation:
+    description: The agent's verdict, "pass" or "fail".
+    value: ${{ steps.review.outputs.recommendation }}
+  comment-file:
+    description: Absolute path to the formatted review comment markdown file.
+    value: ${{ steps.review.outputs.comment-file }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: 24
+
+    - name: Install code-reviewer deps
+      shell: bash
+      working-directory: packages/code-reviewer
+      run: npm ci
+
+    # PR title/description/diff content is attacker-controlled (any PR author
+    # can set it). It must reach this script only via `env:`, never spliced
+    # into the run: body through ${{ }} interpolation — see the workflow's
+    # own comment for the full rationale.
+    - name: Run code review
+      id: review
+      shell: bash
+      working-directory: packages/code-reviewer
+      env:
+        PR_TITLE: ${{ inputs.pr-title }}
+        PR_DESCRIPTION: ${{ inputs.pr-description }}
+        DIFF_FILE: ${{ inputs.diff-file }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        OPENROUTER_MODEL: ${{ inputs.openrouter-model }}
+      run: |
+        recommendation=$(npm run --silent review:ci)
+        echo "recommendation=$recommendation" >> "$GITHUB_OUTPUT"
+        echo "comment-file=$(dirname "$DIFF_FILE")/review-comment.md" >> "$GITHUB_OUTPUT"
