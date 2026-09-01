@@ -245,7 +245,7 @@ None — this phase runs what Phase 1 built. No new files.
 
 ## Performance Considerations
 
-promptfoo's disk cache avoids repeat spend on unchanged provider/test-case pairs across re-runs. This first configuration has exactly one test case × 4 model calls per run (3 reviewers + 1 judge); cost is further bounded by the underlying agent's own `stopWhen: isStepCount(4)` cap on tool-loop steps per review.
+**Correction from Phase 2's live run (2026-09-01):** promptfoo's disk cache does **not** avoid repeat spend for this eval's architecture, contrary to this section's original assumption. Confirmed empirically and traced in `node_modules/promptfoo/dist/src/evaluator-*.js`'s `callActiveProvider`: promptfoo calls `activeProvider.callApi(...)` directly with no wrapping cache lookup — caching is opt-in per provider, via that provider's own use of promptfoo's `fetchWithCache`. Only promptfoo's own built-in providers (including the `openrouter:` judge provider used for the llm-rubric assertion) use it internally; `evals/provider.ts` goes through the Vercel AI SDK's own `fetch` via `createCodeReviewAgent`, which promptfoo has no visibility into. **Every `npm run eval` run re-bills all 3 review-model calls in full** — there is no free re-run. This first configuration has exactly one test case × 4 model calls per run (3 reviewers + 1 judge, the latter possibly cacheable, the former never); cost is further bounded only by the underlying agent's own `stopWhen: isStepCount(4)` cap on tool-loop steps per review. See `change.md`'s Notes for the full live-run findings.
 
 ## Migration Notes
 
@@ -266,21 +266,21 @@ None — net-new files and config, no existing behavior changed.
 
 #### Automated
 
-- [x] 1.1 `npm run typecheck` passes in `packages/code-reviewer/` (now covering `evals/**/*.ts`)
-- [x] 1.2 `npm test` passes in `packages/code-reviewer/`, including the new `eval-provider.test.ts`, with zero network access
-- [x] 1.3 `npm run eval:validate` passes (promptfoo's schema-only check, zero API calls)
+- [x] 1.1 `npm run typecheck` passes in `packages/code-reviewer/` (now covering `evals/**/*.ts`) — dabab01
+- [x] 1.2 `npm test` passes in `packages/code-reviewer/`, including the new `eval-provider.test.ts`, with zero network access — dabab01
+- [x] 1.3 `npm run eval:validate` passes (promptfoo's schema-only check, zero API calls) — dabab01
 
 #### Manual
 
-- [ ] 1.4 `evals/fixtures/react-migration.diff` plausibly represents a React 16→19 migration containing exactly the 3 documented flaws
+- [x] 1.4 `evals/fixtures/react-migration.diff` plausibly represents a React 16→19 migration containing exactly the 3 documented flaws
 
 ### Phase 2: Live verification
 
 #### Manual
 
-- [ ] 2.1 `OPENROUTER_API_KEY` set; explicit go-ahead given to spend
-- [ ] 2.2 `npm run eval` runs all 3 providers and produces a report
-- [ ] 2.3 Deterministic assertion passes for all 3 models
-- [ ] 2.4 Judge verdict spot-checked against at least one model's raw review text
-- [ ] 2.5 Re-run confirms caching avoids re-billing for unchanged inputs
-- [ ] 2.6 Actual cost/tokens/latency recorded
+- [x] 2.1 `OPENROUTER_API_KEY` set; explicit go-ahead given to spend
+- [x] 2.2 `npm run eval` runs all 3 providers and produces a report
+- [x] 2.3 Deterministic assertion passes for all 3 models (5/5 whenever the agent actually completed — see `change.md` for the one run where `glm-5.1` errored before reaching the assertion)
+- [x] 2.4 Judge verdict spot-checked against at least one model's raw review text
+- [x] 2.5 Re-run confirmed promptfoo's cache does NOT avoid re-billing for this custom-provider architecture — see corrected Performance Considerations above and `change.md`
+- [x] 2.6 Actual cost/tokens/latency recorded in `change.md` (with the caveat that promptfoo's reported token totals only cover the judge, not the 3 review models)
