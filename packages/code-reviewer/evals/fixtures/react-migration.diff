@@ -1,0 +1,55 @@
+diff --git a/src/components/UserProfileCard.jsx b/src/components/UserProfileCard.jsx
+index 1a2b3c4..5d6e7f8 100644
+--- a/src/components/UserProfileCard.jsx
++++ b/src/components/UserProfileCard.jsx
+@@ -1,32 +1,24 @@
+-import React from 'react';
++import { useEffect, useState } from 'react';
+
+-class UserProfileCard extends React.Component {
+-  static defaultProps = {
+-    avatarUrl: '/default-avatar.png',
+-  };
++function UserProfileCard({ userId, avatarUrl, displayName }) {
++  const [stats, setStats] = useState(null);
+
+-  componentDidMount() {
+-    this.fetchStats(this.props.userId);
+-  }
++  useEffect(() => {
++    fetchUserStats(userId).then(setStats);
++  }, []);
+
+-  componentDidUpdate(prevProps) {
+-    if (prevProps.userId !== this.props.userId) {
+-      this.fetchStats(this.props.userId);
+-    }
+-  }
+-
+-  fetchStats(userId) {
+-    fetchUserStats(userId).then((stats) => this.setState({ stats }));
+-  }
+-
+-  render() {
+-    return (
+-      <div className="profile-card">
+-        <img src={this.props.avatarUrl} alt={this.props.displayName} />
+-        <h2>{this.props.displayName}</h2>
+-        <StatsPanel stats={this.state?.stats} />
+-      </div>
+-    );
+-  }
++  return (
++    <div className="profile-card">
++      <img src={avatarUrl} alt={displayName} />
++      <h2>{displayName}</h2>
++      <StatsPanel stats={stats} />
++    </div>
++  );
+ }
+
+ export function mountUserProfileCard(container, props) {
+   ReactDOM.render(<UserProfileCard {...props} />, container);
+ }
+
+ export default UserProfileCard;

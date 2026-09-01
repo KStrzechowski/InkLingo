@@ -11,7 +11,9 @@
     "start": "node --env-file=.env dist/index.js",
     "typecheck": "tsc --noEmit && tsc -p test/tsconfig.json",
     "test": "node --import tsx --test",
-    "review:ci": "node --import tsx src/ci-review.ts"
+    "review:ci": "node --import tsx src/ci-review.ts",
+    "eval": "node --env-file=.env node_modules/promptfoo/dist/src/entrypoint.js eval -c evals/promptfooconfig.yaml",
+    "eval:validate": "node node_modules/promptfoo/dist/src/entrypoint.js validate config -c evals/promptfooconfig.yaml"
   },
   "dependencies": {
     "@openrouter/ai-sdk-provider": "^3.0.0",
@@ -21,6 +23,7 @@
   "devDependencies": {
     "@types/json-schema": "^7.0.15",
     "@types/node": "^26.4.0",
+    "promptfoo": "^0.122.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   }
