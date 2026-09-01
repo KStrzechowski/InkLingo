@@ -201,13 +201,13 @@ Not applicable — new package, no existing data or callers.
 
 #### Automated
 
-- [x] 2.1 `npm test` passes in `packages/code-reviewer/`
-- [x] 2.2 Typecheck still passes
-- [x] 2.3 No test opens a network connection
+- [x] 2.1 `npm test` passes in `packages/code-reviewer/` — a5d8a03
+- [x] 2.2 Typecheck still passes — a5d8a03
+- [x] 2.3 No test opens a network connection — a5d8a03
 
 #### Manual
 
-- [x] 2.4 Each test file's failure message clearly points at what broke
+- [x] 2.4 Each test file's failure message clearly points at what broke — a5d8a03
 
 ### Phase 3: Manual live verification (blocked on API key)
 
