@@ -1,5 +1,5 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const PACKAGE_ROOT = dirname(fileURLToPath(import.meta.url));
@@ -23,6 +23,13 @@ function upsertBlock(existingContent, block) {
 
 export function install(consumerRoot) {
   try {
+    if (resolve(consumerRoot) === resolve(PACKAGE_ROOT)) {
+      // `npm install`/`npm ci` run inside this package's own directory (local dev,
+      // or CI's own validate/publish jobs) also fires postinstall for the package
+      // itself — it isn't being installed as a dependency anywhere, so no-op.
+      return;
+    }
+
     const skillSrc = join(PACKAGE_ROOT, 'skills', 'code-review');
     const skillDest = join(consumerRoot, SKILL_REL_PATH);
     rmSync(skillDest, { recursive: true, force: true });

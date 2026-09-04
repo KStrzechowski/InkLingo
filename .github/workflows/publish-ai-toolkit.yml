@@ -1,0 +1,91 @@
+name: Publish AI Toolkit
+
+# Path-filtered (unlike this repo's other 3 workflows, which scope via
+# working-directory: in steps instead): this workflow does a real npm publish
+# on push, so it should not fire on every unrelated push to main.
+on:
+  push:
+    branches: [main]
+    paths: ['packages/ai-toolkit/**']
+  pull_request:
+    branches: [main]
+    paths: ['packages/ai-toolkit/**']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@kstrzechowski'
+
+      - name: Install
+        working-directory: packages/ai-toolkit
+        run: npm ci
+
+      - name: Validate package metadata
+        working-directory: packages/ai-toolkit
+        run: |
+          set -e
+          test -f pack.yaml
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            if (!pkg.name || !pkg.version || !pkg.publishConfig || !pkg.publishConfig.registry) {
+              console.error("package.json missing required fields (name/version/publishConfig.registry)");
+              process.exit(1);
+            }
+            const skillPath = "skills/code-review/SKILL.md";
+            const content = fs.readFileSync(skillPath, "utf8");
+            const match = content.match(/^---\n([\s\S]*?)\n---/);
+            if (!match) {
+              console.error(skillPath + " has no frontmatter");
+              process.exit(1);
+            }
+            const nameMatch = match[1].match(/^name:\s*(.+)$/m);
+            const descMatch = match[1].match(/^description:\s*(.+)$/m);
+            if (!nameMatch || !descMatch) {
+              console.error(skillPath + " frontmatter missing name/description");
+              process.exit(1);
+            }
+            if (nameMatch[1].trim() !== "code-review") {
+              console.error(skillPath + " frontmatter name does not match its directory (code-review)");
+              process.exit(1);
+            }
+            console.log("Package metadata OK");
+          '
+
+      - name: npm pack --dry-run
+        working-directory: packages/ai-toolkit
+        run: npm pack --dry-run
+
+  publish:
+    needs: validate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@kstrzechowski'
+
+      - name: Install
+        working-directory: packages/ai-toolkit
+        run: npm ci
+
+      - name: Publish
+        working-directory: packages/ai-toolkit
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { install } from '../install.js';
 import { uninstall } from '../uninstall.js';
+
+const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 function makeConsumerRoot() {
   return mkdtempSync(join(tmpdir(), 'ai-toolkit-test-'));
@@ -91,6 +94,13 @@ test('install() exits cleanly without throwing when it hits a filesystem error',
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('install() no-ops when consumerRoot is the package\'s own directory (self-install)', () => {
+  install(PACKAGE_ROOT);
+
+  assert.equal(existsSync(join(PACKAGE_ROOT, '.claude')), false);
+  assert.equal(existsSync(join(PACKAGE_ROOT, 'CLAUDE.md')), false);
 });
 
 test('uninstall() exits cleanly without throwing when there is nothing to uninstall', () => {

@@ -183,6 +183,22 @@ The CI workflow that validates every change to the package and publishes it to G
 
 **Contract**: `on: push` and `on: pull_request`, both filtered to `branches: [main]` and `paths: ['packages/ai-toolkit/**']` (a deliberate deviation from this repo's other 3 workflows, which use no path filtering — justified because this workflow does a real `npm publish` on push, unlike the label-gated or whole-app-deploy workflows already in the repo). `permissions: contents: read, packages: write`. Two jobs: `validate` (checkout, `actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0` with `registry-url: https://npm.pkg.github.com`, `scope: '@kstrzechowski'`, `node-version: 20`, `working-directory: packages/ai-toolkit` on every `run:` step, then `npm ci`, `npm pack --dry-run`, and the frontmatter/name-match checks from the spec's validation list as an inline script) and `publish` (`needs: validate`, `if: github.event_name == 'push'`, same checkout/setup-node steps, `npm ci`, `npm publish` with `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` — no `AWS_ACCOUNT_ID`, `AWS_ROLE_ARN`, or `id-token: write`). Both jobs use `actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0`.
 
+#### 2. Package-lock (addendum, added during implementation)
+
+**File**: `packages/ai-toolkit/package-lock.json`
+
+**Intent**: The `validate`/`publish` jobs both run `npm ci`, which requires a committed lockfile (errors otherwise) — matches this repo's existing convention (`backend/`, `frontend/`, `packages/code-reviewer/` all commit their own `package-lock.json`). Discovered missing when writing Phase 3's workflow.
+
+**Contract**: Generated via `npm install` in `packages/ai-toolkit/`; trivial (zero dependencies), but required for `npm ci` to run at all.
+
+#### 3. Self-install guard (addendum, added during implementation)
+
+**Files**: `packages/ai-toolkit/install.js`, `packages/ai-toolkit/test/install.test.js`, `packages/ai-toolkit/.gitignore`
+
+**Intent**: Discovered while generating the Phase 3 lockfile: running `npm install`/`npm ci` *inside* `packages/ai-toolkit/` itself (exactly what the CI workflow's `validate`/`publish` jobs do, and what a maintainer does for local dev) fires `postinstall` with `consumerRoot` resolving to the package's own directory — self-installing `.claude/skills/code-review/` and `CLAUDE.md` into the package. Reproduced locally: a plain `npm install` in `packages/ai-toolkit/` created both.
+
+**Contract**: `install()` no-ops when `resolve(consumerRoot) === resolve(PACKAGE_ROOT)`. Covered by a new test case. `.gitignore` gets anchored (`/.claude/`, `/CLAUDE.md`) backstop patterns — anchored so they don't also match the tracked `rules/CLAUDE.md`.
+
 ### Success Criteria:
 
 #### Automated Verification:
@@ -282,18 +298,18 @@ None — net-new package, net-new workflow, no existing behavior changed.
 
 #### Automated
 
-- [x] 2.1 `npm test` passes in `packages/ai-toolkit/`
-- [x] 2.2 `npm pack --dry-run` still succeeds and excludes `test/`
+- [x] 2.1 `npm test` passes in `packages/ai-toolkit/` — c2a0a3d
+- [x] 2.2 `npm pack --dry-run` still succeeds and excludes `test/` — c2a0a3d
 
 #### Manual
 
-- [x] 2.3 A real tarball install triggers `postinstall` correctly outside `node_modules`; manual `node .../uninstall.js` + `npm uninstall` cleanly removes everything (see Critical Implementation Details addendum — `preuninstall` itself never fires under npm v7+)
+- [x] 2.3 A real tarball install triggers `postinstall` correctly outside `node_modules`; manual `node .../uninstall.js` + `npm uninstall` cleanly removes everything (see Critical Implementation Details addendum — `preuninstall` itself never fires under npm v7+) — c2a0a3d
 
 ### Phase 3: GitHub Actions workflow
 
 #### Automated
 
-- [ ] 3.1 `npm pack --dry-run` still succeeds
+- [x] 3.1 `npm pack --dry-run` still succeeds
 
 #### Manual
 

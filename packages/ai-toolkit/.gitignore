@@ -1,1 +1,8 @@
 node_modules/
+
+# `npm install` run inside this directory (local dev, or CI's own npm ci)
+# self-installs into itself via postinstall — install.js no-ops on this now,
+# but these patterns are a backstop. Anchored (leading /) so they don't also
+# match rules/CLAUDE.md, which must stay tracked.
+/.claude/
+/CLAUDE.md
