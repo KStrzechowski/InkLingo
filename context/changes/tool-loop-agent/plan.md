@@ -213,5 +213,5 @@ Not applicable — new package, no existing data or callers.
 
 #### Manual
 
-- [ ] 3.1 Live CLI run produces a plausible `CodeReviewResult` for a real diff
-- [ ] 3.2 User confirms recommendation and reasoning look sane
+- [x] 3.1 Live CLI run produces a plausible `CodeReviewResult` for a real diff
+- [x] 3.2 User confirms recommendation and reasoning look sane
