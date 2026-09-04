@@ -1,10 +1,10 @@
 ---
 change_id: code-review-evals
 title: Code review evals
-status: impl_reviewed
+status: archived
 created: 2026-09-01
-updated: 2026-09-02
-archived_at: null
+updated: 2026-09-04
+archived_at: 2026-09-04T11:48:22Z
 ---
 
 ## Notes
