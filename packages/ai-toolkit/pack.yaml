@@ -1,0 +1,4 @@
+name: ai-toolkit
+version: 0.1.0
+description: Distributable AI toolkit (code-review Agent Skill + rules) for InkLingo and consumer repos
+namespace: kstrzechowski

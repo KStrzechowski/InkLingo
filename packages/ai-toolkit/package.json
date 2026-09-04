@@ -1,0 +1,25 @@
+{
+  "type": "module",
+  "name": "@kstrzechowski/ai-toolkit",
+  "version": "0.1.0",
+  "description": "Distributable AI toolkit (code-review Agent Skill + rules) for InkLingo and consumer repos, published via GitHub Packages",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "skills/",
+    "rules/",
+    "install.js",
+    "uninstall.js",
+    "README.md"
+  ],
+  "scripts": {
+    "postinstall": "node install.js",
+    "preuninstall": "node uninstall.js",
+    "test": "node --test"
+  }
+}
