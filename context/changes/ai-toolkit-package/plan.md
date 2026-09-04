@@ -48,6 +48,8 @@ Four phases: (1) everything that can be authored and verified with zero registry
 
 **`uninstall.js` must be wired to `preuninstall`, not `postuninstall`.** npm runs `preuninstall` while the package's own files — including the manifest `uninstall.js` needs to read — are still present on disk; by `postuninstall`, npm has already removed the package directory.
 
+**Addendum (discovered during Phase 2 manual verification, 2026-09-05): neither hook actually fires.** A real tarball install/uninstall round-trip against npm 11.16 confirmed `postinstall` runs correctly but `npm uninstall` never invokes `preuninstall` at all — the skill directory, `CLAUDE.md` block, and manifest were all left behind. npm's own current docs confirm this is not a local misconfiguration: **npm v7 removed uninstall lifecycle scripts entirely** ("Due to the lack of necessary context, `uninstall` lifecycle scripts are not implemented and will not function"). This applies to every npm version the package will ever run under. `uninstall.js` keeps its `preuninstall` wiring in `package.json` (harmless, and other package managers may still honor it) but consumers on npm must invoke it directly and manually, before running `npm uninstall`: `node node_modules/@kstrzechowski/ai-toolkit/uninstall.js && npm uninstall @kstrzechowski/ai-toolkit`. This doesn't require a `bin/cli.js` (the "What We're NOT Doing" decision against one still stands) — `uninstall.js`'s existing direct-run guard already makes it callable this way with zero new files. The README documents this. Phase 2's manual check 2.3 is revised accordingly.
+
 ## Phase 1: Package skeleton and skill authoring
 
 ### Overview
@@ -160,7 +162,8 @@ The installer/uninstaller logic itself — idempotent, manifest-tracked, and nev
 
 #### Manual Verification:
 
-- A real `npm pack` tarball, installed into a scratch local directory outside any `node_modules`, actually triggers `postinstall` (skill copied, `CLAUDE.md` sentinel block created, manifest written) when installed, and `npm uninstall` actually triggers `preuninstall` (clean removal) — the `node:test` suite exercises the exported functions directly and cannot verify that npm's real lifecycle-hook wiring fires them correctly
+- A real `npm pack` tarball, installed into a scratch local directory outside any `node_modules`, actually triggers `postinstall` (skill copied, `CLAUDE.md` sentinel block created, manifest written) when installed — the `node:test` suite exercises the exported functions directly and cannot verify that npm's real lifecycle-hook wiring fires them correctly.
+- ~~`npm uninstall` actually triggers `preuninstall`~~ — **superseded**: confirmed via a real round-trip that npm v7+ never invokes uninstall lifecycle scripts at all (see Critical Implementation Details addendum). Verify instead: `node node_modules/@kstrzechowski/ai-toolkit/uninstall.js` run manually, followed by `npm uninstall @kstrzechowski/ai-toolkit`, cleanly removes the skill directory, the `CLAUDE.md` sentinel block, and the manifest.
 
 ---
 
@@ -266,25 +269,25 @@ None — net-new package, net-new workflow, no existing behavior changed.
 
 #### Automated
 
-- [x] 1.1 `npm pack --dry-run` succeeds in `packages/ai-toolkit/`
-- [x] 1.2 `package.json` parses as valid JSON
-- [x] 1.3 `pack.yaml` exists
-- [x] 1.4 `skills/code-review/SKILL.md` has valid frontmatter (`name`/`description`) and `name` matches the directory name
+- [x] 1.1 `npm pack --dry-run` succeeds in `packages/ai-toolkit/` — 407386e
+- [x] 1.2 `package.json` parses as valid JSON — 407386e
+- [x] 1.3 `pack.yaml` exists — 407386e
+- [x] 1.4 `skills/code-review/SKILL.md` has valid frontmatter (`name`/`description`) and `name` matches the directory name — 407386e
 
 #### Manual
 
-- [x] 1.5 `skills/code-review/SKILL.md`'s categories and output contract faithfully match the specs, no InkLingo-specific substitutions
+- [x] 1.5 `skills/code-review/SKILL.md`'s categories and output contract faithfully match the specs, no InkLingo-specific substitutions — 407386e
 
 ### Phase 2: Installer, uninstaller, and their tests
 
 #### Automated
 
-- [ ] 2.1 `npm test` passes in `packages/ai-toolkit/`
-- [ ] 2.2 `npm pack --dry-run` still succeeds and excludes `test/`
+- [x] 2.1 `npm test` passes in `packages/ai-toolkit/`
+- [x] 2.2 `npm pack --dry-run` still succeeds and excludes `test/`
 
 #### Manual
 
-- [ ] 2.3 A real tarball install/uninstall triggers `postinstall`/`preuninstall` correctly outside `node_modules`
+- [x] 2.3 A real tarball install triggers `postinstall` correctly outside `node_modules`; manual `node .../uninstall.js` + `npm uninstall` cleanly removes everything (see Critical Implementation Details addendum — `preuninstall` itself never fires under npm v7+)
 
 ### Phase 3: GitHub Actions workflow
 

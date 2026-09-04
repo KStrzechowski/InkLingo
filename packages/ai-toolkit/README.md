@@ -24,9 +24,10 @@ Installing adds, into your project root:
 
 Re-running `npm install` updates the managed block and manifest in place rather than duplicating them.
 
-To remove everything the package installed:
+To remove everything the package installed, run the uninstaller **before** removing the dependency — npm v7+ no longer runs `preuninstall`/`postuninstall` for any package, so this step can't be automatic:
 
 ```bash
+node node_modules/@kstrzechowski/ai-toolkit/uninstall.js
 npm uninstall @kstrzechowski/ai-toolkit
 ```
 

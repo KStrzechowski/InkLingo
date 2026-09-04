@@ -1,7 +1,7 @@
 ---
 change_id: ai-toolkit-package
 title: Package the AI toolkit for GitHub Packages distribution (Module 5, Lesson 4)
-status: impl_reviewed
+status: implementing
 created: 2026-09-04
 updated: 2026-09-05
 archived_at: null
