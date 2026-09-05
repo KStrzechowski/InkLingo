@@ -319,7 +319,7 @@ None — net-new package, net-new workflow, no existing behavior changed.
 
 #### Manual
 
-- [x] 4.1 Explicit go-ahead given to push to `main` and trigger a real publish
-- [x] 4.2 Real publish succeeds; package appears in GitHub Packages
-- [x] 4.3 Scratch consumer install/uninstall round-trip verified
-- [x] 4.4 Three badge-evidence artifacts captured
+- [x] 4.1 Explicit go-ahead given to push to `main` and trigger a real publish — 93cc45d
+- [x] 4.2 Real publish succeeds; package appears in GitHub Packages — 93cc45d
+- [x] 4.3 Scratch consumer install/uninstall round-trip verified — 93cc45d
+- [x] 4.4 Three badge-evidence artifacts captured — 93cc45d
