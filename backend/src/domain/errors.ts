@@ -6,7 +6,7 @@
 // aggregate is the only guardian, which is the whole point of the refactor
 // (`context/domain/02-invariant-aggregate-refactor.md` § 4.3).
 //
-// Deliberately separate from `translator.ts`'s taxonomy: those describe what a
+// Deliberately separate from `translatorErrors.ts`'s taxonomy: those describe what a
 // *provider* did to us, these describe what a *request* asked us to do. Only
 // the latter are mapped to 4xx by `mapDomainError` (Phase 4).
 
