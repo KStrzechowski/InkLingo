@@ -31,3 +31,30 @@ Source specs (read fully before planning):
 Local skills that may help scaffold parts of this (originally built for the
 AWS/Terraform path, so check applicability before reusing as-is):
 `.claude/skills/pack-init/`, `.claude/skills/setup-cicd/`.
+
+### Phase 4 — live verification (2026-09-05)
+
+Merged PR #15 into `main`; the `publish` job on `.github/workflows/publish-ai-toolkit.yml`
+ran and succeeded (run `33932720555`). `@kstrzechowski/ai-toolkit@0.1.0` is live at
+`https://npm.pkg.github.com` and listed at
+`https://github.com/KStrzechowski/InkLingo/pkgs/npm/ai-toolkit`. Version history
+confirmed via API: exactly one version, `0.1.0`, published 2026-09-05T00:22:11Z.
+
+Scratch-consumer round-trip (outside this repo): `npm install @kstrzechowski/ai-toolkit`
+against a `.npmrc` with the documented registry mapping plus a `gh auth token`
+(`read:packages` scope) correctly installed `.claude/skills/code-review/SKILL.md`,
+the `CLAUDE.md` sentinel block, and `.claude/.ai-toolkit-manifest.json`. Manual
+`node node_modules/@kstrzechowski/ai-toolkit/uninstall.js` followed by
+`npm uninstall @kstrzechowski/ai-toolkit` cleanly removed everything, including
+deleting `CLAUDE.md` outright once stripping the sentinel block left it empty —
+matches `uninstall.js`'s actual behavior, not previously called out in the plan.
+
+Surprise: this machine's default `gh` OAuth token lacked `read:packages`, so both
+the scratch install and the after-the-fact package/version API checks needed
+`gh auth refresh -h github.com -s read:packages` first (interactive browser
+step — not something that can be scripted headlessly).
+
+Badge-evidence artifacts:
+1. Publish flow — Actions run `https://github.com/KStrzechowski/InkLingo/actions/runs/33932720555` (validate + publish, both green) and the Packages listing above.
+2. Package definition — `packages/ai-toolkit/package.json`, `packages/ai-toolkit/pack.yaml`.
+3. Released versions — `0.1.0` (only version to date), confirmed via `gh api user/packages/npm/ai-toolkit/versions`.
