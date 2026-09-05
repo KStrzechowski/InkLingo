@@ -1,0 +1,46 @@
+description: 'Code review agent — multi-model comparison against one fixed, deliberately-flawed React 16→19 migration diff'
+
+prompts:
+  - 'Review the attached pull request diff.'
+
+providers:
+  - id: file://provider.ts
+    label: glm-5.1
+    config:
+      modelId: z-ai/glm-5.1
+  - id: file://provider.ts
+    label: deepseek-v4-flash
+    config:
+      modelId: deepseek/deepseek-v4-flash
+  - id: file://provider.ts
+    label: claude-sonnet-4.5
+    config:
+      modelId: anthropic/claude-sonnet-4.5
+
+defaultTest:
+  vars:
+    prTitle: 'Migrate UserProfileCard from React 16 class component to React 19 function component'
+    prDescription: 'Converts UserProfileCard to a function component using hooks, ahead of the React 19 upgrade.'
+    diff: file://fixtures/react-migration.diff
+  assert:
+    - type: javascript
+      value: "context.metadata?.recommendation === 'fail'"
+    - type: llm-rubric
+      provider: openrouter:openai/gpt-5.1
+      value: |
+        The review below must explicitly call out ALL THREE of the following flaws in the diff it reviewed.
+        Missing even one flaw means the review FAILS this check, regardless of how many other valid points it raises.
+
+        1. Hooks correctness: the `useEffect` fetching stats has an empty dependency array (`[]`) but reads `userId`
+           from the component's props/closure — stats never refetch when a different user is viewed
+           (stale closure / missing dependency).
+        2. Prop regression: `defaultProps` (which defaulted `avatarUrl` to `/default-avatar.png`) was dropped when
+           converting to a function component, with no default-parameter or fallback replacement — callers that
+           previously relied on the default now render a broken/undefined avatar.
+        3. Legacy API removal: `mountUserProfileCard` still calls `ReactDOM.render`, which is removed in React 19
+           in favor of `createRoot(container).render(...)` — this throws/fails at runtime.
+
+        Pass only if the review's text unambiguously identifies all three issues above. Fail otherwise.
+
+tests:
+  - vars: {}
