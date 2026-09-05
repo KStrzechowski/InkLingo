@@ -1,10 +1,10 @@
 ---
 change_id: depcruise-ci
 title: Wire dependency-cruiser into CI
-status: impl_reviewed
+status: archived
 created: 2026-09-05
 updated: 2026-09-05
-archived_at: null
+archived_at: 2026-09-05T20:33:00Z
 ---
 
 ## Notes
