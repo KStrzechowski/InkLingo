@@ -187,10 +187,10 @@ Not applicable — no data, no schema, no deployed system state.
 
 #### Automated
 
-- [x] 2.1 Dependency cruise passes clean: `node scripts/depcruise.mjs` exits 0
-- [x] 2.2 `pr-diff.yml` stays valid YAML after the edit
-- [x] 2.3 `deploy.yml` stays valid YAML after the edit
-- [x] 2.4 The gate actually gates — deliberate break and revert proves a violation fails the check and the revert is clean
+- [x] 2.1 Dependency cruise passes clean: `node scripts/depcruise.mjs` exits 0 — 6d8c600b
+- [x] 2.2 `pr-diff.yml` stays valid YAML after the edit — 6d8c600b
+- [x] 2.3 `deploy.yml` stays valid YAML after the edit — 6d8c600b
+- [x] 2.4 The gate actually gates — deliberate break and revert proves a violation fails the check and the revert is clean — 6d8c600b
 
 #### Manual
 
