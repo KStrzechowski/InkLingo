@@ -309,17 +309,17 @@ None — net-new package, net-new workflow, no existing behavior changed.
 
 #### Automated
 
-- [x] 3.1 `npm pack --dry-run` still succeeds
+- [x] 3.1 `npm pack --dry-run` still succeeds — e757797
 
 #### Manual
 
-- [ ] 3.2 A PR touching `packages/ai-toolkit/**` triggers `validate` (not `publish`) and it passes
+- [x] 3.2 A PR touching `packages/ai-toolkit/**` triggers `validate` (not `publish`) and it passes — verified via PR #15: `validate` ran (npm ci, inline frontmatter check printed "Package metadata OK", npm pack --dry-run) and passed in 8s; `publish` correctly showed `skipping` — e757797
 
 ### Phase 4: Live verification
 
 #### Manual
 
-- [ ] 4.1 Explicit go-ahead given to push to `main` and trigger a real publish
-- [ ] 4.2 Real publish succeeds; package appears in GitHub Packages
-- [ ] 4.3 Scratch consumer install/uninstall round-trip verified
-- [ ] 4.4 Three badge-evidence artifacts captured
+- [x] 4.1 Explicit go-ahead given to push to `main` and trigger a real publish — 93cc45d
+- [x] 4.2 Real publish succeeds; package appears in GitHub Packages — 93cc45d
+- [x] 4.3 Scratch consumer install/uninstall round-trip verified — 93cc45d
+- [x] 4.4 Three badge-evidence artifacts captured — 93cc45d
