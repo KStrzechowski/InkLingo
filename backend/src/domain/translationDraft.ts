@@ -1,4 +1,4 @@
-import { DegenerateDraftError, MalformedDraftError } from './translator.ts'
+import { DegenerateDraftError, MalformedDraftError } from './translatorErrors.ts'
 import type { TranslateResponseBody } from '../routes/api/collections/schemas.ts'
 
 // A type-only import, erased at runtime. The domain gains a compile-time
