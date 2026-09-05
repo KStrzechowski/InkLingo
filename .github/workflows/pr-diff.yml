@@ -193,6 +193,19 @@ jobs:
           npm run lint
           npm run build
 
+      # Enforces the cross-app boundaries declared in .dependency-cruiser.cjs
+      # (e.g. frontend/ must not reach into backend/).
+      - name: Dependency cruise (architectural boundaries)
+        run: node scripts/depcruise.mjs
+
+      - name: Surface dependency-cruise violations in step summary
+        if: failure()
+        run: |
+          echo '## Dependency Cruise' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          node scripts/depcruise.mjs >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Write frontend env from deployed stack outputs
         working-directory: infra
         run: node scripts/write-frontend-env.mjs
