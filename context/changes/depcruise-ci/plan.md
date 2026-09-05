@@ -179,9 +179,9 @@ Not applicable — no data, no schema, no deployed system state.
 
 #### Automated
 
-- [x] 1.1 Dependency cruise passes clean after the extraction: `node scripts/depcruise.mjs` exits 0
-- [x] 1.2 Backend typecheck passes: `cd backend && npm run build:ts`
-- [x] 1.3 Backend test suite passes unchanged: `cd backend && npm test`
+- [x] 1.1 Dependency cruise passes clean after the extraction: `node scripts/depcruise.mjs` exits 0 — 0c7d98c5
+- [x] 1.2 Backend typecheck passes: `cd backend && npm run build:ts` — 0c7d98c5
+- [x] 1.3 Backend test suite passes unchanged: `cd backend && npm test` — 0c7d98c5
 
 ### Phase 2: Wire the cruise into both CI workflows
 
