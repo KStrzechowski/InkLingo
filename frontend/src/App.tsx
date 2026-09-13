@@ -21,7 +21,7 @@ function CallbackPage () {
     void completeLogin()
   }, [navigate, refresh])
 
-  return <p>Loading…</p>
+  return <p className="loading-state">Loading…</p>
 }
 
 // Risk #4's "clean re-authentication prompt". Without it, a token the API
@@ -36,7 +36,7 @@ function ConnectionIssueBanner () {
         We can&apos;t reach the server. This is usually a connection problem, but
         your session may also have ended.
       </p>
-      <button type="button" onClick={() => void login()}>Sign in again</button>
+      <button type="button" className="btn btn-primary btn-sm" onClick={() => void login()}>Sign in again</button>
     </div>
   )
 }
@@ -45,26 +45,32 @@ function AuthenticatedLayout () {
   const { user, loading, connectionIssue } = useAuth()
 
   if (loading) {
-    return <p>Loading…</p>
+    return <p className="loading-state">Loading…</p>
   }
 
   if (!user) {
     return (
       <section id="center">
         <h1>InkLingo</h1>
-        <button type="button" onClick={() => void login()}>Log in</button>
+        <button type="button" className="btn btn-primary" onClick={() => void login()}>Log in</button>
       </section>
     )
   }
 
   return (
-    <section id="center">
-      <h1>InkLingo</h1>
+    <div className="app-shell">
+      <header className="topbar">
+        <h1>InkLingo</h1>
+        <div className="topbar-status">
+          <p className="signed-in">Signed in as {user.profile.email}</p>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void logout()}>Log out</button>
+        </div>
+      </header>
       {connectionIssue && <ConnectionIssueBanner />}
-      <p>Signed in as {user.profile.email}</p>
-      <button type="button" onClick={() => void logout()}>Log out</button>
-      <Outlet />
-    </section>
+      <main className="page">
+        <Outlet />
+      </main>
+    </div>
   )
 }
 
@@ -75,14 +81,14 @@ function PrintLayout () {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return <p>Loading…</p>
+    return <p className="loading-state">Loading…</p>
   }
 
   if (!user) {
     return (
       <section id="center">
         <h1>InkLingo</h1>
-        <button type="button" onClick={() => void login()}>Log in</button>
+        <button type="button" className="btn btn-primary" onClick={() => void login()}>Log in</button>
       </section>
     )
   }

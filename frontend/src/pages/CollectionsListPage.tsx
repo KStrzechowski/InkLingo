@@ -101,7 +101,7 @@ function CollectionsListPage () {
   return (
     <section>
       <h2>Your collections</h2>
-      <form onSubmit={(event) => void handleSubmit(event)}>
+      <form className="card-form" onSubmit={(event) => void handleSubmit(event)}>
         <input
           type="text"
           value={name}
@@ -116,7 +116,7 @@ function CollectionsListPage () {
             ))}
           </select>
         </label>
-        <fieldset>
+        <fieldset className="target-languages">
           <legend>
             I'm learning ({targetLanguageCodes.length} of {MAX_TARGET_LANGUAGES})
           </legend>
@@ -135,13 +135,13 @@ function CollectionsListPage () {
             )
           })}
         </fieldset>
-        <button type="submit" disabled={submitting || targetLanguageCodes.length === 0}>Create</button>
+        <button type="submit" className="btn btn-primary" disabled={submitting || targetLanguageCodes.length === 0}>Create</button>
       </form>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <p className="error-text">{error}</p>}
       {loadError !== null && (
-        <p style={{ color: 'red' }}>
+        <p className="error-text">
           {loadError}{' '}
-          <button type="button" onClick={() => void handleRetry()} disabled={retrying}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void handleRetry()} disabled={retrying}>
             {retrying ? 'Retrying…' : 'Try again'}
           </button>
         </p>
@@ -149,9 +149,9 @@ function CollectionsListPage () {
       {loadError !== null ? null : collections.length === 0 ? (
         <p>No collections yet.</p>
       ) : (
-        <ul>
+        <ul className="list-reset">
           {collections.map((collection) => (
-            <li key={collection.id}>
+            <li key={collection.id} className="card-item">
               <Link to={`/collections/${collection.id}`}>{collection.name}</Link>
               {' '}
               <small>{collection.nativeLanguageCode} → {collection.targetLanguageCodes.join(', ')}</small>

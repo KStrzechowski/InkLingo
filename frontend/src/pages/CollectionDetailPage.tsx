@@ -163,8 +163,9 @@ function CollectionDetailPage () {
 
   return (
     <section>
+      <Link to="/" className="back-link">← Back to collections</Link>
       <h2>{collection.name}</h2>
-      <p>
+      <p className="detail-meta">
         <small>{collection.nativeLanguageCode} → {collection.targetLanguageCodes.join(', ')}</small>
       </p>
       {speech.loadFailed ? (
@@ -184,13 +185,13 @@ function CollectionDetailPage () {
         </p>
       )}
       <p>
-        <Link to={`/collections/${id}/print`}>Print</Link>
+        <Link to={`/collections/${id}/print`} className="btn btn-ghost btn-sm">Print</Link>
       </p>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <p className="error-text">{error}</p>}
       {collection.entries.length === 0 ? (
         <p>No entries yet.</p>
       ) : (
-        <ul>
+        <ul className="list-reset">
           {collection.entries.map((entry) => {
             // Languages the collection teaches that this entry predates.
             // Compared case-insensitively: POST /api/collections lowercases on
@@ -203,12 +204,12 @@ function CollectionDetailPage () {
             const missing = collection.targetLanguageCodes.filter((code) => !have.has(code.toLowerCase()))
 
             return (
-              <li key={entry.id}>
+              <li key={entry.id} className="entry-card">
                 <strong>{entry.wordOrPhrase}</strong> ({entry.sourceLanguageCode})
                 {entry.senses.map((sense) => (
-                  <div key={sense.id}>
+                  <div key={sense.id} className="sense-block">
                     <h3>{sense.glossText}</h3>
-                    <ul>
+                    <ul className="translations-list">
                       {sense.translations.map((translation) => (
                         <li key={translation.id}>
                           {translation.languageCode}: {translation.meaningText}
@@ -220,7 +221,7 @@ function CollectionDetailPage () {
                             text={translation.meaningText}
                             languageCode={translation.languageCode}
                           />
-                          <ul>
+                          <ul className="sentences-list">
                             {translation.sentences.map((sentence) => (
                               <li key={sentence.id}>
                                 {sentence.sentenceText}
@@ -241,15 +242,16 @@ function CollectionDetailPage () {
                   </div>
                 ))}
                 {speech.error !== null && speech.error.key.startsWith(`${entry.id}:`) && (
-                  <p style={{ color: 'red' }}>{speech.error.message}</p>
+                  <p className="error-text">{speech.error.message}</p>
                 )}
                 {missing.length > 0 && (
-                  <p>
+                  <p className="missing-actions">
                     <small>Missing: </small>
                     {missing.map((languageCode) => (
                       <button
                         key={languageCode}
                         type="button"
+                        className="btn btn-ghost btn-sm"
                         disabled={addingKey !== null}
                         onClick={() => void handleAddLanguage(entry, languageCode)}
                       >
